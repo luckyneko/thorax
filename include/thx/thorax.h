@@ -9,10 +9,7 @@
 #ifndef _THORAX_H_
 #define _THORAX_H_
 
-
-namespace thx
-{
-
-} // namespace multi
+#include <thx/service_id.h>
+#include <thx/version.h>
 
 #endif // _THORAX_H_

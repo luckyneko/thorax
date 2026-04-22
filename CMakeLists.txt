@@ -27,16 +27,31 @@ if(THORAX_BUILD_TESTING)
     include(addcatch2)
 endif()
 
+# Generate version header from project VERSION field
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/thx/version.h.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/include/thx/version.h"
+    @ONLY
+)
+
 # Static Library Target
 find_package(Threads REQUIRED)
-add_library(${PROJECT_NAME} STATIC 
+add_library(${PROJECT_NAME} STATIC
     # Headers
+    include/thx/detail/hash.h
+    include/thx/detail/semver.h
     include/thx/thorax.h
+    include/thx/service_id.h
+    include/thx/version_type.h
+    include/thx/version.h.in
 
     # Source
     src/thorax.cpp
 )
-target_include_directories(${PROJECT_NAME} PUBLIC include)
+target_include_directories(${PROJECT_NAME} PUBLIC
+    include
+    "${CMAKE_CURRENT_BINARY_DIR}/include"
+)
 #target_link_libraries(${PROJECT_NAME} PUBLIC)
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
 if(MSVC)
@@ -51,6 +66,8 @@ if(THORAX_BUILD_TESTING)
     enable_testing()
     add_executable(test-${PROJECT_NAME}
         test/thorax.cpp
+        test/test_service_id.cpp
+        test/test_version.cpp
     )
     target_link_libraries(test-${PROJECT_NAME} ${PROJECT_NAME} Catch2::Catch2WithMain)
     catch_discover_tests(test-${PROJECT_NAME} TEST_PREFIX "(${PROJECT_NAME}) ")
