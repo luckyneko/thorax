@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <thx/version_type.h>
+#include "thx/version_type.h"
 
 namespace thx
 {

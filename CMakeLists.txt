@@ -40,13 +40,18 @@ add_library(${PROJECT_NAME} STATIC
     # Headers
     include/thx/detail/hash.h
     include/thx/detail/semver.h
+    include/thx/detail/type_name.h
     include/thx/thorax.h
     include/thx/service_id.h
     include/thx/version_type.h
     include/thx/version.h.in
+    include/thx/iservice.h
+    include/thx/service.h
+    include/thx/service_manager.h
 
     # Source
     src/thorax.cpp
+    src/service_manager.cpp
 )
 target_include_directories(${PROJECT_NAME} PUBLIC
     include
@@ -68,6 +73,7 @@ if(THORAX_BUILD_TESTING)
         test/thorax.cpp
         test/test_service_id.cpp
         test/test_version.cpp
+        test/test_service_manager.cpp
     )
     target_link_libraries(test-${PROJECT_NAME} ${PROJECT_NAME} Catch2::Catch2WithMain)
     catch_discover_tests(test-${PROJECT_NAME} TEST_PREFIX "(${PROJECT_NAME}) ")

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "thx/detail/hash.h"
+#include "thx/detail/type_name.h"
 
 namespace thx
 {
@@ -24,6 +25,12 @@ namespace thx
 			: hash_(detail::fnv1a_hash(name))
 			, name_(name)
 		{
+		}
+
+		template <typename T>
+		static constexpr ServiceID from() noexcept
+		{
+			return ServiceID(detail::TypeName<T>::value.data());
 		}
 
 		constexpr bool operator==(ServiceID const& other) const noexcept
