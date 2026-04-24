@@ -259,15 +259,21 @@ TEST_CASE("PluginLoader::discover_and_load - loads real plugin from directory",
 	thx::ServiceManager sm;
 	thx::PluginLoader   loader(sm);
 
-	auto r = loader.discover_and_load(tmp.string());
-
-	// Service should be registered whether or not discover_and_load returns ok,
-	// since copy + load may succeed. Release before cleanup.
+	auto r   = loader.discover_and_load(tmp.string());
 	auto svc = sm.get_service<thx_mock::MockService>();
+
+	bool r_ok    = r.is_ok();
+	bool svc_ok  = (svc != nullptr);
+	bool ping_ok = svc_ok && (svc->ping() == 42);
+
+	// On Windows a loaded DLL's file is locked until FreeLibrary; unload the
+	// plugin (and release the service handle) before removing the temp dir.
+	svc.reset();
+	loader.unload(dst.string());
 
 	fs::remove_all(tmp);
 
-	REQUIRE(r.is_ok());
-	REQUIRE(svc != nullptr);
-	REQUIRE(svc->ping() == 42);
+	REQUIRE(r_ok);
+	REQUIRE(svc_ok);
+	REQUIRE(ping_ok);
 }

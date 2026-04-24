@@ -14,10 +14,9 @@
 
 // Detect compiler support for builtin source-location default arguments.
 // These let thx::log() capture the caller's file/line/function without a macro.
-#if defined(__has_builtin) && \
-    __has_builtin(__builtin_FILE) && \
-    __has_builtin(__builtin_LINE) && \
-    __has_builtin(__builtin_FUNCTION)
+// __builtin_FILE/LINE/FUNCTION are GCC/Clang builtins; MSVC does not expose them
+// and its __has_builtin operator emits C4067 when querying unknown builtins.
+#if defined(__GNUC__) || defined(__clang__)
 #  define THX_DETAIL_HAS_BUILTIN_LOCATION 1
 #endif
 

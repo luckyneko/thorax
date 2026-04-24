@@ -51,6 +51,13 @@ namespace thx
 // Plugin-side export helpers
 // ---------------------------------------------------------------------------
 
+// On Windows, symbols must be explicitly marked for export from a DLL.
+#if defined(_WIN32)
+#  define THX_PLUGIN_EXPORT __declspec(dllexport)
+#else
+#  define THX_PLUGIN_EXPORT
+#endif
+
 // THX_DEFINE_PLUGIN(Type) emits the three C-linkage symbols that every thorax
 // plugin shared library must export:
 //
@@ -69,16 +76,16 @@ namespace thx
 // The create function uses placement-new with std::nothrow so that allocation
 // failure returns nullptr rather than throwing; ServiceManager already rejects
 // a null result from the factory.
-#define THX_DEFINE_PLUGIN(Type)                              \
-	extern "C" thx::IService* thx_create()                   \
-	{                                                        \
-		return new (std::nothrow) Type();                    \
-	}                                                        \
-	extern "C" void thx_destroy(thx::IService* p)            \
-	{                                                        \
-		delete p;                                            \
-	}                                                        \
-	extern "C" uint32_t thx_abi_version()                    \
-	{                                                        \
-		return thx::THORAX_VERSION.major;                    \
+#define THX_DEFINE_PLUGIN(Type)                                       \
+	extern "C" THX_PLUGIN_EXPORT thx::IService* thx_create()          \
+	{                                                                  \
+		return new (std::nothrow) Type();                              \
+	}                                                                  \
+	extern "C" THX_PLUGIN_EXPORT void thx_destroy(thx::IService* p)   \
+	{                                                                  \
+		delete p;                                                      \
+	}                                                                  \
+	extern "C" THX_PLUGIN_EXPORT uint32_t thx_abi_version()           \
+	{                                                                  \
+		return thx::THORAX_VERSION.major;                              \
 	}

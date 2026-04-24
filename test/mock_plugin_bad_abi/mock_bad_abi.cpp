@@ -9,9 +9,7 @@
 // Intentionally exports thx_abi_version() returning 999 to trigger the
 // PluginHandle::open() version-mismatch rejection path.
 
-#include <thx/iservice.h>
-#include <thx/service_id.h>
-#include <thx/version_type.h>
+#include <thx/platform.h>
 
 #include <cstdint>
 #include <new>
@@ -27,6 +25,6 @@ struct BadAbiService : thx::IService
 
 } // namespace
 
-extern "C" thx::IService* thx_create()             { return new (std::nothrow) BadAbiService(); }
-extern "C" void           thx_destroy(thx::IService* p) { delete p; }
-extern "C" uint32_t       thx_abi_version()         { return 999u; }
+extern "C" THX_PLUGIN_EXPORT thx::IService* thx_create()                { return new (std::nothrow) BadAbiService(); }
+extern "C" THX_PLUGIN_EXPORT void           thx_destroy(thx::IService* p) { delete p; }
+extern "C" THX_PLUGIN_EXPORT uint32_t       thx_abi_version()             { return 999u; }
