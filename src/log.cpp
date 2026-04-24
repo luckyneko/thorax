@@ -9,6 +9,7 @@
 #include "thx/log.h"
 
 #include <cstdio>
+#include <mutex>
 #include <shared_mutex>
 
 namespace thx
