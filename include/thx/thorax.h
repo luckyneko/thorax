@@ -9,10 +9,13 @@
 #ifndef _THORAX_H_
 #define _THORAX_H_
 
+#include "thx/string_view.h"
+#include "thx/span.h"
+#include "thx/service_id.h"
+#include "thx/version.h"
 #include "thx/iservice.h"
 #include "thx/service.h"
-#include "thx/service_id.h"
 #include "thx/service_manager.h"
-#include "thx/version.h"
+#include "thx/platform.h"
 
 #endif // _THORAX_H_

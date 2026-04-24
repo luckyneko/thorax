@@ -9,24 +9,29 @@
 #pragma once
 
 #include "thx/detail/semver.h"
+#include "thx/string_view.h"
 
 namespace thx
 {
 	// Semantic version following semver.org 2.0.
 	// build_metadata is stored but ignored for all precedence comparisons.
+	//
+	// pre_release and build_metadata use thx::StringView (not std::string_view)
+	// so that Version has a guaranteed binary layout when passed through virtual
+	// methods across DSO boundaries.
 	struct Version
 	{
-		uint32_t major{0};
-		uint32_t minor{0};
-		uint32_t patch{0};
-		std::string_view pre_release{};	   // empty string means release version
-		std::string_view build_metadata{}; // ignored for precedence per semver 2.0
+		uint32_t   major{0};
+		uint32_t   minor{0};
+		uint32_t   patch{0};
+		StringView pre_release{};    // empty means release version
+		StringView build_metadata{}; // ignored for precedence per semver 2.0
 
 		constexpr Version() noexcept = default;
 
 		constexpr Version(uint32_t maj, uint32_t min, uint32_t pat,
-						  std::string_view pre = {},
-						  std::string_view build = {}) noexcept
+						  StringView pre   = {},
+						  StringView build = {}) noexcept
 			: major(maj)
 			, minor(min)
 			, patch(pat)
@@ -44,7 +49,9 @@ namespace thx
 				return minor < other.minor ? -1 : 1;
 			if (patch != other.patch)
 				return patch < other.patch ? -1 : 1;
-			return detail::compare_pre_release(pre_release, other.pre_release);
+			return detail::compare_pre_release(
+				static_cast<std::string_view>(pre_release),
+				static_cast<std::string_view>(other.pre_release));
 		}
 
 		constexpr bool operator==(Version const& o) const noexcept { return compare(o) == 0; }
@@ -56,8 +63,8 @@ namespace thx
 	};
 
 	constexpr Version make_version(uint32_t major, uint32_t minor, uint32_t patch,
-								   std::string_view pre_release = {},
-								   std::string_view build_metadata = {}) noexcept
+								   StringView pre_release    = {},
+								   StringView build_metadata = {}) noexcept
 	{
 		return {major, minor, patch, pre_release, build_metadata};
 	}
