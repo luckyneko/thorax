@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "macOS · Clang · Release"
+            os: macos-latest
+            build_type: Release
+            sanitize: "OFF"
+
+          - name: "Linux · GCC · Release"
+            os: ubuntu-latest
+            cc: gcc
+            cxx: g++
+            build_type: Release
+            sanitize: "OFF"
+
+          - name: "Linux · Clang · Debug + ASan/UBSan"
+            os: ubuntu-latest
+            cc: clang
+            cxx: clang++
+            build_type: Debug
+            sanitize: "ON"
+
+          - name: "Windows · MSVC · Release"
+            os: windows-latest
+            build_type: Release
+            sanitize: "OFF"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure (explicit compiler)
+        if: ${{ matrix.cc != '' }}
+        run: >
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          -DTHORAX_SANITIZE=${{ matrix.sanitize }}
+          -DCMAKE_C_COMPILER=${{ matrix.cc }}
+          -DCMAKE_CXX_COMPILER=${{ matrix.cxx }}
+
+      - name: Configure (default compiler)
+        if: ${{ matrix.cc == '' }}
+        run: >
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          -DTHORAX_SANITIZE=${{ matrix.sanitize }}
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        working-directory: build
+        run: ctest --output-on-failure
