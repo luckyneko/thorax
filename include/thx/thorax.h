@@ -17,5 +17,8 @@
 #include "thx/service.h"
 #include "thx/service_manager.h"
 #include "thx/platform.h"
+#include "thx/result.h"
+#include "thx/plugin_handle.h"
+#include "thx/plugin_loader.h"
 
 #endif // _THORAX_H_

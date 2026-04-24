@@ -19,6 +19,15 @@ namespace thx
 	using ServiceCreateFn  = IService* (*)();
 	using ServiceDestroyFn = void (*)(IService*);
 
+	// Platform plugin file extension, used by PluginLoader::discover().
+#if defined(_WIN32)
+	inline constexpr const char* kPluginExtension = ".dll";
+#elif defined(__APPLE__)
+	inline constexpr const char* kPluginExtension = ".dylib";
+#else
+	inline constexpr const char* kPluginExtension = ".so";
+#endif
+
 	// Wraps a raw IService pointer (produced by a plugin's thx_create export)
 	// in a shared_ptr whose deleter calls the paired thx_destroy export from the
 	// same DSO. This ensures allocate and free always happen on the same side of

@@ -51,16 +51,28 @@ add_library(${PROJECT_NAME} STATIC
     include/thx/service.h
     include/thx/service_manager.h
     include/thx/platform.h
+    include/thx/result.h
+    include/thx/plugin_handle.h
+    include/thx/plugin_loader.h
 
     # Source
     src/thorax.cpp
     src/service_manager.cpp
+    src/plugin_handle.cpp
+    src/plugin_loader.cpp
 )
 target_include_directories(${PROJECT_NAME} PUBLIC
     include
     "${CMAKE_CURRENT_BINARY_DIR}/include"
 )
-#target_link_libraries(${PROJECT_NAME} PUBLIC)
+target_link_libraries(${PROJECT_NAME} PUBLIC
+    Threads::Threads
+    ${CMAKE_DL_LIBS}
+)
+# GCC < 9 requires explicit linking for std::filesystem.
+if(CMAKE_COMPILER_IS_GNUCXX AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS "9.0")
+    target_link_libraries(${PROJECT_NAME} PUBLIC stdc++fs)
+endif()
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
 if(MSVC)
     string(REGEX REPLACE "/W[0-4]" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
@@ -72,13 +84,28 @@ endif()
 # Testing Target
 if(THORAX_BUILD_TESTING)
     enable_testing()
+
+    # Mock plugin shared library for PluginLoader integration tests.
+    add_library(mock_plugin SHARED
+        test/mock_plugin/mock_plugin.cpp
+    )
+    target_link_libraries(mock_plugin PRIVATE ${PROJECT_NAME})
+    target_include_directories(mock_plugin PRIVATE test/mock_plugin)
+
     add_executable(test-${PROJECT_NAME}
         test/thorax.cpp
         test/test_service_id.cpp
         test/test_version.cpp
         test/test_service_manager.cpp
         test/test_abi_types.cpp
+        test/test_plugin_loader.cpp
     )
     target_link_libraries(test-${PROJECT_NAME} ${PROJECT_NAME} Catch2::Catch2WithMain)
+    target_include_directories(test-${PROJECT_NAME} PRIVATE test/mock_plugin)
+    # Provide the built mock plugin path at compile time.
+    target_compile_definitions(test-${PROJECT_NAME} PRIVATE
+        THX_MOCK_PLUGIN_PATH="$<TARGET_FILE:mock_plugin>"
+    )
+    add_dependencies(test-${PROJECT_NAME} mock_plugin)
     catch_discover_tests(test-${PROJECT_NAME} TEST_PREFIX "(${PROJECT_NAME}) ")
 endif()
