@@ -21,6 +21,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 
 # Options
 option(THORAX_BUILD_TESTING "Build UnitTesting project" ${NOT_SUBPROJECT})
+option(THORAX_SANITIZE "Enable AddressSanitizer and UndefinedBehaviorSanitizer (Clang/GCC only)" OFF)
 
 # Load Catch2
 if(THORAX_BUILD_TESTING)
@@ -71,16 +72,31 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
     Threads::Threads
     ${CMAKE_DL_LIBS}
 )
+
 # GCC < 9 requires explicit linking for std::filesystem.
 if(CMAKE_COMPILER_IS_GNUCXX AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS "9.0")
     target_link_libraries(${PROJECT_NAME} PUBLIC stdc++fs)
 endif()
+
+# Force C++17
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
+
+# Enable Warnings as errors
 if(MSVC)
     string(REGEX REPLACE "/W[0-4]" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
     target_compile_options(${PROJECT_NAME} PRIVATE /WX /W4)
 else()
     target_compile_options(${PROJECT_NAME} PRIVATE -Werror -Wall -Wextra)
+endif()
+
+# Handle Sanitization
+if(THORAX_SANITIZE)
+    if(MSVC)
+        message(WARNING "THORAX_SANITIZE is not supported with MSVC; ignored.")
+    else()
+        add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
+        add_link_options(-fsanitize=address,undefined)
+    endif()
 endif()
 
 # Testing Target
