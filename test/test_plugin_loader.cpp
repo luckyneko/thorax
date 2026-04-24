@@ -18,6 +18,10 @@
 #  error "THX_MOCK_PLUGIN_PATH not defined — set via target_compile_definitions in CMakeLists.txt"
 #endif
 
+#ifndef THX_MOCK_BAD_ABI_PLUGIN_PATH
+#  error "THX_MOCK_BAD_ABI_PLUGIN_PATH not defined — set via target_compile_definitions in CMakeLists.txt"
+#endif
+
 // ---------------------------------------------------------------------------
 // Result<T, Error>
 // ---------------------------------------------------------------------------
@@ -80,6 +84,13 @@ TEST_CASE("PluginHandle::open - valid mock plugin", "[plugin_handle]")
 	REQUIRE(bool(r.value()));
 	REQUIRE(r.value().create_fn()  != nullptr);
 	REQUIRE(r.value().destroy_fn() != nullptr);
+}
+
+TEST_CASE("PluginHandle::open - mismatched ABI version returns VersionMismatch", "[plugin_handle]")
+{
+	auto r = thx::PluginHandle::open(THX_MOCK_BAD_ABI_PLUGIN_PATH);
+	REQUIRE(!r);
+	REQUIRE(r.error().code == thx::ErrorCode::VersionMismatch);
 }
 
 // ---------------------------------------------------------------------------

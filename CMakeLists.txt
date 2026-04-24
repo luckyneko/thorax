@@ -94,6 +94,12 @@ if(THORAX_BUILD_TESTING)
     target_link_libraries(mock_plugin PRIVATE ${PROJECT_NAME})
     target_include_directories(mock_plugin PRIVATE test/mock_plugin)
 
+    # Mock plugin that exports thx_abi_version() = 999 to test version-mismatch rejection.
+    add_library(mock_plugin_bad_abi SHARED
+        test/mock_plugin_bad_abi/mock_bad_abi.cpp
+    )
+    target_link_libraries(mock_plugin_bad_abi PRIVATE ${PROJECT_NAME})
+
     add_executable(test-${PROJECT_NAME}
         test/thorax.cpp
         test/test_service_id.cpp
@@ -105,10 +111,11 @@ if(THORAX_BUILD_TESTING)
     )
     target_link_libraries(test-${PROJECT_NAME} ${PROJECT_NAME} Catch2::Catch2WithMain)
     target_include_directories(test-${PROJECT_NAME} PRIVATE test/mock_plugin)
-    # Provide the built mock plugin path at compile time.
+    # Provide the built mock plugin paths at compile time.
     target_compile_definitions(test-${PROJECT_NAME} PRIVATE
         THX_MOCK_PLUGIN_PATH="$<TARGET_FILE:mock_plugin>"
+        THX_MOCK_BAD_ABI_PLUGIN_PATH="$<TARGET_FILE:mock_plugin_bad_abi>"
     )
-    add_dependencies(test-${PROJECT_NAME} mock_plugin)
+    add_dependencies(test-${PROJECT_NAME} mock_plugin mock_plugin_bad_abi)
     catch_discover_tests(test-${PROJECT_NAME} TEST_PREFIX "(${PROJECT_NAME}) ")
 endif()

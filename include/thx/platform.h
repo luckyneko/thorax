@@ -9,15 +9,18 @@
 #pragma once
 
 #include "thx/iservice.h"
+#include "thx/version.h"
 
+#include <cstdint>
 #include <memory>
 #include <new>
 
 namespace thx
 {
-	// Function pointer types for the two required plugin exports.
-	using ServiceCreateFn  = IService* (*)();
-	using ServiceDestroyFn = void (*)(IService*);
+	// Function pointer types for the required plugin exports.
+	using ServiceCreateFn  = IService*   (*)();
+	using ServiceDestroyFn = void        (*)(IService*);
+	using AbiVersionFn     = uint32_t    (*)();
 
 	// Platform plugin file extension, used by PluginLoader::discover().
 #if defined(_WIN32)
@@ -48,15 +51,20 @@ namespace thx
 // Plugin-side export helpers
 // ---------------------------------------------------------------------------
 
-// THX_DEFINE_PLUGIN(Type) emits the two C-linkage symbols that every thorax
+// THX_DEFINE_PLUGIN(Type) emits the three C-linkage symbols that every thorax
 // plugin shared library must export:
 //
 //   extern "C" thx::IService* thx_create();
 //   extern "C" void           thx_destroy(thx::IService*);
+//   extern "C" uint32_t       thx_abi_version();
 //
 // Place this macro once in a .cpp file (not a header). It is a macro because
 // extern "C" and fixed symbol names cannot be expressed in standard C++
 // without one.
+//
+// thx_abi_version() embeds the major component of THORAX_VERSION at plugin
+// compile time. PluginHandle::open() checks this against the host's major
+// version and rejects mismatches before any service is registered.
 //
 // The create function uses placement-new with std::nothrow so that allocation
 // failure returns nullptr rather than throwing; ServiceManager already rejects
@@ -69,4 +77,8 @@ namespace thx
 	extern "C" void thx_destroy(thx::IService* p)            \
 	{                                                        \
 		delete p;                                            \
+	}                                                        \
+	extern "C" uint32_t thx_abi_version()                    \
+	{                                                        \
+		return thx::THORAX_VERSION.major;                    \
 	}

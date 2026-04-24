@@ -7,6 +7,7 @@
  */
 
 #include "thx/plugin_handle.h"
+#include "thx/version.h"
 
 #if defined(_WIN32)
 #  define WIN32_LEAN_AND_MEAN
@@ -76,14 +77,22 @@ Result<PluginHandle, Error> PluginHandle::open(std::string const& path)
 		return Result<PluginHandle, Error>::err({ErrorCode::FileNotFound, buf});
 	}
 
-	auto create  = reinterpret_cast<ServiceCreateFn> (GetProcAddress(h, "thx_create"));
-	auto destroy = reinterpret_cast<ServiceDestroyFn>(GetProcAddress(h, "thx_destroy"));
+	auto create     = reinterpret_cast<ServiceCreateFn> (GetProcAddress(h, "thx_create"));
+	auto destroy    = reinterpret_cast<ServiceDestroyFn>(GetProcAddress(h, "thx_destroy"));
+	auto abi_ver_fn = reinterpret_cast<AbiVersionFn>    (GetProcAddress(h, "thx_abi_version"));
 
 	if (!create || !destroy)
 	{
 		FreeLibrary(h);
 		return Result<PluginHandle, Error>::err({ErrorCode::SymbolNotFound,
 			"thx_create or thx_destroy not found in: " + path});
+	}
+
+	if (abi_ver_fn && abi_ver_fn() != thx::THORAX_VERSION.major)
+	{
+		FreeLibrary(h);
+		return Result<PluginHandle, Error>::err({ErrorCode::VersionMismatch,
+			"ABI major version mismatch in: " + path});
 	}
 #else
 	void* h = dlopen(path.c_str(), RTLD_LAZY | RTLD_LOCAL);
@@ -96,14 +105,22 @@ Result<PluginHandle, Error> PluginHandle::open(std::string const& path)
 
 	// Casting void* to function pointer is implementation-defined but universally
 	// supported and the only portable way to use dlsym in C++.
-	auto create  = reinterpret_cast<ServiceCreateFn> (dlsym(h, "thx_create"));
-	auto destroy = reinterpret_cast<ServiceDestroyFn>(dlsym(h, "thx_destroy"));
+	auto create     = reinterpret_cast<ServiceCreateFn> (dlsym(h, "thx_create"));
+	auto destroy    = reinterpret_cast<ServiceDestroyFn>(dlsym(h, "thx_destroy"));
+	auto abi_ver_fn = reinterpret_cast<AbiVersionFn>    (dlsym(h, "thx_abi_version"));
 
 	if (!create || !destroy)
 	{
 		dlclose(h);
 		return Result<PluginHandle, Error>::err({ErrorCode::SymbolNotFound,
 			"thx_create or thx_destroy not found in: " + path});
+	}
+
+	if (abi_ver_fn && abi_ver_fn() != thx::THORAX_VERSION.major)
+	{
+		dlclose(h);
+		return Result<PluginHandle, Error>::err({ErrorCode::VersionMismatch,
+			"ABI major version mismatch in: " + path});
 	}
 #endif
 
