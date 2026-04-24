@@ -9,17 +9,26 @@
 #pragma once
 
 #include "thx/iservice.h"
+#include "thx/log.h"
 
 #include <functional>
 #include <memory>
 #include <shared_mutex>
 #include <unordered_map>
+#include <vector>
 
 namespace thx
 {
 
 	// Factory callable type used by register_service.
 	using ServiceFactory = std::function<std::shared_ptr<IService>()>;
+
+	// Snapshot entry returned by ServiceManager::list_services().
+	struct ServiceInfo
+	{
+		ServiceID id;
+		int       ref_count;
+	};
 
 	// Central registry that owns the lifetime of all registered services.
 	//
@@ -39,6 +48,10 @@ namespace thx
 
 		// Returns the process-wide singleton instance.
 		static ServiceManager& instance();
+
+		// Replaces the global log sink used by all thorax diagnostics.
+		// Equivalent to calling thx::set_log_sink() directly.
+		static void set_log_sink(std::shared_ptr<ILogSink> sink);
 
 		// Registers a service by ID, version, and a factory callable.
 		//
@@ -81,6 +94,10 @@ namespace thx
 		// Type-deducing unregister. Requires T to provide T::static_id().
 		template <typename T>
 		bool unregister_service();
+
+		// Returns a point-in-time snapshot of all registered service IDs and
+		// their reference counts. Useful for diagnostics and test assertions.
+		std::vector<ServiceInfo> list_services() const;
 
 	private:
 		struct Entry

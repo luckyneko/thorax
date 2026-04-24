@@ -54,9 +54,11 @@ add_library(${PROJECT_NAME} STATIC
     include/thx/result.h
     include/thx/plugin_handle.h
     include/thx/plugin_loader.h
+    include/thx/log.h
 
     # Source
     src/thorax.cpp
+    src/log.cpp
     src/service_manager.cpp
     src/plugin_handle.cpp
     src/plugin_loader.cpp
@@ -99,6 +101,7 @@ if(THORAX_BUILD_TESTING)
         test/test_service_manager.cpp
         test/test_abi_types.cpp
         test/test_plugin_loader.cpp
+        test/test_diagnostics.cpp
     )
     target_link_libraries(test-${PROJECT_NAME} ${PROJECT_NAME} Catch2::Catch2WithMain)
     target_include_directories(test-${PROJECT_NAME} PRIVATE test/mock_plugin)

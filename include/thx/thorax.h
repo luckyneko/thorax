@@ -20,5 +20,6 @@
 #include "thx/result.h"
 #include "thx/plugin_handle.h"
 #include "thx/plugin_loader.h"
+#include "thx/log.h"
 
 #endif // _THORAX_H_

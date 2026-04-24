@@ -10,9 +10,6 @@
 #include "thx/platform.h"
 
 #include <filesystem>
-#include <iostream>
-
-// TODO(M5): replace std::cerr with thx::log() routed through ILogSink.
 
 namespace thx
 {
@@ -135,8 +132,8 @@ Result<void, Error> PluginLoader::discover_and_load(std::string const& directory
 		}
 		else
 		{
-			std::cerr << "[thorax] Failed to load plugin " << p
-			          << ": " << r.error().message << '\n';
+			thx::log(LogLevel::Warn,
+			    "discover_and_load: failed to load '" + p + "': " + r.error().message);
 			last_err = std::move(r);
 		}
 	}
@@ -144,6 +141,15 @@ Result<void, Error> PluginLoader::discover_and_load(std::string const& directory
 	if (loaded == 0 && !paths.empty())
 		return last_err;
 	return Result<void, Error>::ok();
+}
+
+std::vector<LoadedPluginInfo> PluginLoader::list_plugins() const
+{
+	std::vector<LoadedPluginInfo> result;
+	result.reserve(plugins_.size());
+	for (auto const& [path, entry] : plugins_)
+		result.push_back({path, entry.service_id});
+	return result;
 }
 
 } // namespace thx

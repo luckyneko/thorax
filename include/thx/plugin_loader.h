@@ -12,6 +12,7 @@
 #include "thx/result.h"
 #include "thx/service_id.h"
 #include "thx/service_manager.h"
+#include "thx/log.h"
 
 #include <string>
 #include <unordered_map>
@@ -19,6 +20,13 @@
 
 namespace thx
 {
+	// Snapshot entry returned by PluginLoader::list_plugins().
+	struct LoadedPluginInfo
+	{
+		std::string path;
+		ServiceID   service_id;
+	};
+
 	// Loads, unloads, and discovers plugin shared libraries.
 	//
 	// Owns the DSO handles and integrates with a ServiceManager. Each loaded
@@ -57,9 +65,13 @@ namespace thx
 		std::vector<std::string> discover(std::string const& directory) const;
 
 		// Discovers all plugins in directory and loads each one.
-		// Per-file errors are logged to stderr and skipped.
+		// Per-file errors are logged via thx::log() and skipped.
 		// Returns ok unless no plugins were found or all failed to load.
 		Result<void, Error> discover_and_load(std::string const& directory);
+
+		// Returns a snapshot of currently loaded plugins and the service ID each
+		// registered. Useful for diagnostics and test assertions.
+		std::vector<LoadedPluginInfo> list_plugins() const;
 
 	private:
 		struct Entry
