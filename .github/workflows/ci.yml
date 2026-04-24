@@ -13,48 +13,91 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: "macOS · Clang · Release"
-            os: macos-latest
+          - name: "macOS 13 · Apple Clang · Release"
+            os: macos-13
             build_type: Release
             sanitize: "OFF"
+            packages: ""
+            cmake_extra: ""
 
-          - name: "Linux · GCC · Release"
-            os: ubuntu-latest
-            cc: gcc
-            cxx: g++
+          - name: "macOS 15 · Apple Clang · Release"
+            os: macos-15
             build_type: Release
             sanitize: "OFF"
+            packages: ""
+            cmake_extra: ""
 
-          - name: "Linux · Clang · Debug + ASan/UBSan"
-            os: ubuntu-latest
-            cc: clang
-            cxx: clang++
+          - name: "Linux · GCC 9 · Release"
+            os: ubuntu-22.04
+            build_type: Release
+            sanitize: "OFF"
+            packages: "gcc-9 g++-9"
+            cmake_extra: "-DCMAKE_C_COMPILER=gcc-9 -DCMAKE_CXX_COMPILER=g++-9"
+
+          - name: "Linux · GCC 12 · Release"
+            os: ubuntu-22.04
+            build_type: Release
+            sanitize: "OFF"
+            packages: "gcc-12 g++-12"
+            cmake_extra: "-DCMAKE_C_COMPILER=gcc-12 -DCMAKE_CXX_COMPILER=g++-12"
+
+          - name: "Linux · GCC 14 · Release"
+            os: ubuntu-24.04
+            build_type: Release
+            sanitize: "OFF"
+            packages: "gcc-14 g++-14"
+            cmake_extra: "-DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14"
+
+          - name: "Linux · Clang 14 · Release"
+            os: ubuntu-22.04
+            build_type: Release
+            sanitize: "OFF"
+            packages: "clang-14"
+            cmake_extra: "-DCMAKE_C_COMPILER=clang-14 -DCMAKE_CXX_COMPILER=clang++-14"
+
+          - name: "Linux · Clang 17 · Debug + ASan/UBSan"
+            os: ubuntu-24.04
             build_type: Debug
             sanitize: "ON"
+            packages: "clang-17"
+            cmake_extra: "-DCMAKE_C_COMPILER=clang-17 -DCMAKE_CXX_COMPILER=clang++-17"
 
-          - name: "Windows · MSVC · Release"
-            os: windows-latest
+          - name: "Linux · Clang 18 · Release"
+            os: ubuntu-24.04
             build_type: Release
             sanitize: "OFF"
+            packages: "clang-18"
+            cmake_extra: "-DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18"
+
+          - name: "Windows · MSVC 2019 · Release"
+            os: windows-2019
+            build_type: Release
+            sanitize: "OFF"
+            packages: ""
+            cmake_extra: ""
+
+          - name: "Windows · MSVC 2022 · Release"
+            os: windows-2022
+            build_type: Release
+            sanitize: "OFF"
+            packages: ""
+            cmake_extra: ""
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Configure (explicit compiler)
-        if: ${{ matrix.cc != '' }}
-        run: >
-          cmake -S . -B build
-          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-          -DTHORAX_SANITIZE=${{ matrix.sanitize }}
-          -DCMAKE_C_COMPILER=${{ matrix.cc }}
-          -DCMAKE_CXX_COMPILER=${{ matrix.cxx }}
+      - name: Install compiler
+        if: ${{ matrix.packages != '' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ matrix.packages }}
 
-      - name: Configure (default compiler)
-        if: ${{ matrix.cc == '' }}
+      - name: Configure
         run: >
           cmake -S . -B build
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
           -DTHORAX_SANITIZE=${{ matrix.sanitize }}
+          ${{ matrix.cmake_extra }}
 
       - name: Build
         run: cmake --build build --parallel
