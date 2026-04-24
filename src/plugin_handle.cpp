@@ -73,7 +73,7 @@ Result<PluginHandle, Error> PluginHandle::open(std::string const& path)
 	{
 		char buf[256] = {};
 		FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-		               nullptr, GetLastError(), 0, buf, sizeof(buf), nullptr);
+		               nullptr, GetLastError(), 0, buf, static_cast<DWORD>(sizeof(buf)), nullptr);
 		return Result<PluginHandle, Error>::err({ErrorCode::FileNotFound, buf});
 	}
 

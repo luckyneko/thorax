@@ -57,10 +57,12 @@ namespace thx
 			auto raw = fn.substr(start, end - start);
 
 			// MSVC prepends "class " or "struct " to user-defined types.
-			if (raw.size() >= 6 && raw.substr(0, 6) == "class ")
-				return raw.substr(6);
-			if (raw.size() >= 7 && raw.substr(0, 7) == "struct ")
-				return raw.substr(7);
+			constexpr std::size_t kClassLen  = std::size_t{6}; // "class "
+			constexpr std::size_t kStructLen = std::size_t{7}; // "struct "
+			if (raw.size() >= kClassLen && raw.substr(std::size_t{0}, kClassLen) == "class ")
+				return raw.substr(kClassLen);
+			if (raw.size() >= kStructLen && raw.substr(std::size_t{0}, kStructLen) == "struct ")
+				return raw.substr(kStructLen);
 			return raw;
 
 #else

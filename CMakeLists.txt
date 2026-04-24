@@ -19,6 +19,11 @@ project(thorax LANGUAGES CXX VERSION 0.0.1)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 
+# GCC 9.1 is the minimum version that supports __PRETTY_FUNCTION__ in constexpr.
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS "9.1")
+    message(FATAL_ERROR "GCC >= 9.1 is required (found ${CMAKE_CXX_COMPILER_VERSION})")
+endif()
+
 # Options
 option(THORAX_BUILD_TESTING "Build UnitTesting project" ${NOT_SUBPROJECT})
 option(THORAX_SANITIZE "Enable AddressSanitizer and UndefinedBehaviorSanitizer (Clang/GCC only)" OFF)
