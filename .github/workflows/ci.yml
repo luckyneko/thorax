@@ -13,13 +13,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: "macOS 13 · Apple Clang · Release"
-            os: macos-13
-            build_type: Release
-            sanitize: "OFF"
-            packages: ""
-            cmake_extra: ""
-
           - name: "macOS 15 · Apple Clang · Release"
             os: macos-15
             build_type: Release
@@ -69,15 +62,15 @@ jobs:
             packages: "clang-18"
             cmake_extra: "-DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18"
 
-          - name: "Windows · MSVC 2019 · Release"
-            os: windows-2019
+          - name: "Windows · MSVC 2022 · Release"
+            os: windows-2022
             build_type: Release
             sanitize: "OFF"
             packages: ""
             cmake_extra: ""
 
-          - name: "Windows · MSVC 2022 · Release"
-            os: windows-2022
+          - name: "Windows · MSVC 2025 · Release"
+            os: windows-2025
             build_type: Release
             sanitize: "OFF"
             packages: ""
