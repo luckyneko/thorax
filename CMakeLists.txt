@@ -26,6 +26,7 @@ endif()
 
 # Options
 option(THORAX_BUILD_TESTING "Build UnitTesting project" ${NOT_SUBPROJECT})
+option(THORAX_BUILD_EXAMPLES "Build example applications" ${NOT_SUBPROJECT})
 option(THORAX_SANITIZE "Enable AddressSanitizer and UndefinedBehaviorSanitizer (Clang/GCC only)" OFF)
 
 # Load Catch2
@@ -102,6 +103,11 @@ if(THORAX_SANITIZE)
         add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
         add_link_options(-fsanitize=address,undefined)
     endif()
+endif()
+
+# Examples
+if(THORAX_BUILD_EXAMPLES)
+    add_subdirectory(examples)
 endif()
 
 # Testing Target
