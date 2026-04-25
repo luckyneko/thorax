@@ -28,7 +28,10 @@ endif()
 option(THORAX_BUILD_TESTING "Build UnitTesting project" ${NOT_SUBPROJECT})
 option(THORAX_BUILD_EXAMPLES "Build example applications" ${NOT_SUBPROJECT})
 option(THORAX_BUILD_PLUGINS "Build built-in plugins" ${NOT_SUBPROJECT})
+option(THORAX_INSTALL "Generate install targets and CMake package files" ${NOT_SUBPROJECT})
 option(THORAX_SANITIZE "Enable AddressSanitizer and UndefinedBehaviorSanitizer (Clang/GCC only)" OFF)
+
+include(GNUInstallDirs)
 
 # Load Catch2
 if(THORAX_BUILD_TESTING)
@@ -72,8 +75,9 @@ add_library(${PROJECT_NAME} STATIC
     src/plugin_loader.cpp
 )
 target_include_directories(${PROJECT_NAME} PUBLIC
-    include
-    "${CMAKE_CURRENT_BINARY_DIR}/include"
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 target_link_libraries(${PROJECT_NAME} PUBLIC
     Threads::Threads
@@ -168,4 +172,121 @@ if(THORAX_BUILD_TESTING)
     endif()
 
     catch_discover_tests(test-${PROJECT_NAME} TEST_PREFIX "(${PROJECT_NAME}) ")
+
+    # Install smoke-test: install to a temp prefix, then configure and build a
+    # minimal consumer that verifies find_package(Thorax) works end-to-end.
+    if(THORAX_INSTALL AND NOT CMAKE_CROSSCOMPILING)
+        set(THORAX_TEST_INSTALL_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/test_install_prefix")
+        if(CMAKE_BUILD_TYPE)
+            set(THORAX_TEST_CONFIG "${CMAKE_BUILD_TYPE}")
+        else()
+            set(THORAX_TEST_CONFIG "Release")
+        endif()
+
+        add_test(NAME install.install
+            COMMAND ${CMAKE_COMMAND}
+                    --install "${CMAKE_CURRENT_BINARY_DIR}"
+                    --prefix  "${THORAX_TEST_INSTALL_PREFIX}"
+                    --config  "${THORAX_TEST_CONFIG}"
+        )
+        set_tests_properties(install.install PROPERTIES
+            FIXTURES_SETUP thorax_installed
+        )
+
+        add_test(NAME install.consumer_configure
+            COMMAND ${CMAKE_COMMAND}
+                    -S "${CMAKE_CURRENT_SOURCE_DIR}/test/consumer"
+                    -B "${CMAKE_CURRENT_BINARY_DIR}/test_consumer_build"
+                    "-DCMAKE_PREFIX_PATH=${THORAX_TEST_INSTALL_PREFIX}"
+                    -DCMAKE_BUILD_TYPE=Release
+        )
+        set_tests_properties(install.consumer_configure PROPERTIES
+            FIXTURES_REQUIRED thorax_installed
+            FIXTURES_SETUP    consumer_configured
+        )
+
+        add_test(NAME install.consumer_build
+            COMMAND ${CMAKE_COMMAND}
+                    --build "${CMAKE_CURRENT_BINARY_DIR}/test_consumer_build"
+                    --config Release
+        )
+        set_tests_properties(install.consumer_build PROPERTIES
+            FIXTURES_REQUIRED consumer_configured
+        )
+    endif()
+endif()
+
+# ---------------------------------------------------------------------------
+# Install & Package
+# ---------------------------------------------------------------------------
+
+if(THORAX_INSTALL)
+    include(CMakePackageConfigHelpers)
+
+    # Core static library
+    install(TARGETS ${PROJECT_NAME}
+        EXPORT  ThoraxTargets
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
+    install(DIRECTORY include/thx/
+            DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/thx
+            FILES_MATCHING PATTERN "*.h"
+    )
+    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/include/thx/version.h"
+            DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/thx
+    )
+
+    # Plugins (optional components)
+    if(THORAX_BUILD_PLUGINS)
+        install(TARGETS plugin_logging plugin_io
+            EXPORT  ThoraxTargets
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/thorax/plugins
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        )
+        install(DIRECTORY plugins/logging/include/
+                DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+                FILES_MATCHING PATTERN "*.h"
+        )
+        install(DIRECTORY plugins/io/include/
+                DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+                FILES_MATCHING PATTERN "*.h"
+        )
+    endif()
+
+    # Export set → ThoraxTargets.cmake
+    install(EXPORT ThoraxTargets
+        FILE        ThoraxTargets.cmake
+        NAMESPACE   Thorax::
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Thorax
+    )
+
+    # ThoraxConfig.cmake + ThoraxConfigVersion.cmake
+    configure_package_config_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/cmake/ThoraxConfig.cmake.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/ThoraxConfig.cmake"
+        INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Thorax
+    )
+    write_basic_package_version_file(
+        "${CMAKE_CURRENT_BINARY_DIR}/ThoraxConfigVersion.cmake"
+        VERSION       ${PROJECT_VERSION}
+        COMPATIBILITY SameMajorVersion
+    )
+    install(FILES
+        "${CMAKE_CURRENT_BINARY_DIR}/ThoraxConfig.cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/ThoraxConfigVersion.cmake"
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Thorax
+    )
+
+    # CPack binary distribution
+    set(CPACK_PACKAGE_NAME                "Thorax")
+    set(CPACK_PACKAGE_VERSION             "${PROJECT_VERSION}")
+    set(CPACK_PACKAGE_VENDOR              "LuckyNeko")
+    set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "C++17 cross-platform plugin framework")
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md")
+        set(CPACK_RESOURCE_FILE_LICENSE   "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md")
+    endif()
+    set(CPACK_SOURCE_IGNORE_FILES         "/\\.git/" "/build/" "/thirdparty/")
+    include(CPack)
 endif()
