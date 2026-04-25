@@ -61,6 +61,7 @@ add_library(${PROJECT_NAME} STATIC
     include/thx/iservice.h
     include/thx/service.h
     include/thx/service_manager.h
+    include/thx/iplugin.h
     include/thx/platform.h
     include/thx/result.h
     include/thx/plugin_handle.h
@@ -145,6 +146,7 @@ if(THORAX_BUILD_TESTING)
         test/test_abi_types.cpp
         test/test_plugin_loader.cpp
         test/test_diagnostics.cpp
+        test/test_iplugin.cpp
     )
     target_link_libraries(test-${PROJECT_NAME} ${PROJECT_NAME} Catch2::Catch2WithMain)
     target_include_directories(test-${PROJECT_NAME} PRIVATE test/mock_plugin)

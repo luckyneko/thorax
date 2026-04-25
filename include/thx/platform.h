@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "thx/iplugin.h"
 #include "thx/iservice.h"
 #include "thx/version.h"
 
@@ -17,10 +18,16 @@
 
 namespace thx
 {
-	// Function pointer types for the required plugin exports.
+	// Function pointer types for the legacy single-service plugin exports.
+	// Will be removed in a future release; new plugins should use the
+	// IPlugin-based exports below.
 	using ServiceCreateFn  = IService*   (*)();
 	using ServiceDestroyFn = void        (*)(IService*);
 	using AbiVersionFn     = uint32_t    (*)();
+
+	// Function pointer types for the IPlugin-based plugin exports.
+	using PluginCreateFn   = IPlugin*    (*)();
+	using PluginDestroyFn  = void        (*)(IPlugin*);
 
 	// Platform plugin file extension, used by PluginLoader::discover().
 #if defined(_WIN32)
@@ -58,16 +65,15 @@ namespace thx
 #  define THX_PLUGIN_EXPORT
 #endif
 
-// THX_DEFINE_PLUGIN(Type) emits the three C-linkage symbols that every thorax
-// plugin shared library must export:
+// THX_DEFINE_PLUGIN(Type) emits the legacy single-service plugin exports:
 //
 //   extern "C" thx::IService* thx_create();
 //   extern "C" void           thx_destroy(thx::IService*);
 //   extern "C" uint32_t       thx_abi_version();
 //
-// Place this macro once in a .cpp file (not a header). It is a macro because
-// extern "C" and fixed symbol names cannot be expressed in standard C++
-// without one.
+// Deprecated: prefer THX_DEFINE_SERVICE_PLUGIN (single-service) or
+// THX_DEFINE_CUSTOM_PLUGIN (multi-service / custom IPlugin) below. The legacy
+// macro will be removed in a future release once all in-tree plugins migrate.
 //
 // thx_abi_version() embeds the major component of THORAX_VERSION at plugin
 // compile time. PluginHandle::open() checks this against the host's major
@@ -88,4 +94,43 @@ namespace thx
 	extern "C" THX_PLUGIN_EXPORT uint32_t thx_abi_version()           \
 	{                                                                  \
 		return thx::THORAX_VERSION.major;                              \
+	}
+
+// THX_DEFINE_SERVICE_PLUGIN(ServiceType) — the common one-service-per-DSO
+// shape. Emits an IPlugin shim that registers exactly one service of the
+// given type in onLoad and unregisters it in onUnload.
+//
+// Place this macro once in a .cpp file. ServiceType must inherit from
+// thx::Service<ServiceType>, define static_version(), and be default-constructible.
+#define THX_DEFINE_SERVICE_PLUGIN(ServiceType)                                \
+	extern "C" THX_PLUGIN_EXPORT thx::IPlugin* thx_create_plugin()             \
+	{                                                                          \
+		return new (std::nothrow) thx::ServicePluginShim<ServiceType>();       \
+	}                                                                          \
+	extern "C" THX_PLUGIN_EXPORT void thx_destroy_plugin(thx::IPlugin* p)      \
+	{                                                                          \
+		delete p;                                                              \
+	}                                                                          \
+	extern "C" THX_PLUGIN_EXPORT uint32_t thx_abi_version()                    \
+	{                                                                          \
+		return thx::THORAX_VERSION.major;                                      \
+	}
+
+// THX_DEFINE_CUSTOM_PLUGIN(PluginType) — power-user form. The plugin author
+// supplies their own IPlugin subclass, free to register multiple services or
+// declare required() dependencies.
+//
+// PluginType must inherit from thx::IPlugin and be default-constructible.
+#define THX_DEFINE_CUSTOM_PLUGIN(PluginType)                                  \
+	extern "C" THX_PLUGIN_EXPORT thx::IPlugin* thx_create_plugin()             \
+	{                                                                          \
+		return new (std::nothrow) PluginType();                                \
+	}                                                                          \
+	extern "C" THX_PLUGIN_EXPORT void thx_destroy_plugin(thx::IPlugin* p)      \
+	{                                                                          \
+		delete p;                                                              \
+	}                                                                          \
+	extern "C" THX_PLUGIN_EXPORT uint32_t thx_abi_version()                    \
+	{                                                                          \
+		return thx::THORAX_VERSION.major;                                      \
 	}

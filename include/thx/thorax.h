@@ -16,6 +16,7 @@
 #include "thx/iservice.h"
 #include "thx/service.h"
 #include "thx/service_manager.h"
+#include "thx/iplugin.h"
 #include "thx/platform.h"
 #include "thx/result.h"
 #include "thx/plugin_handle.h"
