@@ -198,7 +198,7 @@ if(THORAX_BUILD_TESTING)
                     -S "${CMAKE_CURRENT_SOURCE_DIR}/test/consumer"
                     -B "${CMAKE_CURRENT_BINARY_DIR}/test_consumer_build"
                     "-DCMAKE_PREFIX_PATH=${THORAX_TEST_INSTALL_PREFIX}"
-                    -DCMAKE_BUILD_TYPE=Release
+                    -DCMAKE_BUILD_TYPE=${THORAX_TEST_CONFIG}
         )
         set_tests_properties(install.consumer_configure PROPERTIES
             FIXTURES_REQUIRED thorax_installed
@@ -208,7 +208,7 @@ if(THORAX_BUILD_TESTING)
         add_test(NAME install.consumer_build
             COMMAND ${CMAKE_COMMAND}
                     --build "${CMAKE_CURRENT_BINARY_DIR}/test_consumer_build"
-                    --config Release
+                    --config ${THORAX_TEST_CONFIG}
         )
         set_tests_properties(install.consumer_build PROPERTIES
             FIXTURES_REQUIRED consumer_configured

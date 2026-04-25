@@ -78,7 +78,10 @@ struct IOServiceImpl : IIOService
 		for (auto& r : live)
 		{
 			if (r->can_read(path))
-				return r->read(path, buffer, buffer_size);
+			{
+				int result = r->read(path, buffer, buffer_size);
+				return (result < 0) ? -2 : result;
+			}
 		}
 		return -1; // no reader accepted
 	}

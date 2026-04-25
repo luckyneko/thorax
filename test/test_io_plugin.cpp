@@ -167,7 +167,7 @@ TEST_CASE("IOPlugin - remove_reader stops delivery", "[io_plugin]")
 
 	auto txt = svc->make_text_reader();
 	svc->add_reader(txt);
-	REQUIRE(svc->read(path.c_str(), nullptr, 0) == -1); // null buf → read fails inside reader
+	REQUIRE(svc->read(path.c_str(), nullptr, 0) == -2); // reader accepted but read failed
 
 	svc->remove_reader(txt.get());
 
@@ -273,6 +273,32 @@ TEST_CASE("IOPlugin - unregistered extension falls through to text reader",
 	int n = svc->read(path.c_str(), buf, static_cast<int>(sizeof(buf)));
 	REQUIRE(n > 0);
 	REQUIRE(std::string(buf, static_cast<std::size_t>(n)) == "binary");
+
+	std::filesystem::remove(path);
+}
+
+TEST_CASE("IOPlugin - -1 means no reader, -2 means reader accepted but failed",
+          "[io_plugin]")
+{
+	auto path = make_temp_file("thx_io_errcode.txt", "data");
+
+	Fixture f;
+	auto svc = f.service();
+	REQUIRE(svc);
+
+	char buf[64]{};
+
+	// No reader registered → -1
+	REQUIRE(svc->read(path.c_str(), buf, static_cast<int>(sizeof(buf))) == -1);
+
+	auto txt = svc->make_text_reader();
+	svc->add_reader(txt);
+
+	// Reader registered, null buffer forces the reader's internal check to fail → -2
+	REQUIRE(svc->read(path.c_str(), nullptr, 0) == -2);
+
+	// Valid read succeeds (≥ 0)
+	REQUIRE(svc->read(path.c_str(), buf, static_cast<int>(sizeof(buf))) >= 0);
 
 	std::filesystem::remove(path);
 }

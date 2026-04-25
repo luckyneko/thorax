@@ -53,7 +53,8 @@ public:
 	}
 
 	// Read a file using the first registered reader whose can_read() is true.
-	// Returns bytes read, or -1 if no reader accepted the path or the read failed.
+	// Returns bytes read (≥ 0), -1 if no reader accepted the path, or -2 if a
+	// reader accepted but the underlying read failed.
 	virtual int read(const char* path, char* buffer, int buffer_size) = 0;
 
 	// Register a reader; the service stores a weak_ptr.

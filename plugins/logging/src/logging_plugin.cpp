@@ -97,7 +97,9 @@ struct RotatingFileSink : ILogBackend
 		if (m_file)
 		{
 			std::fseek(m_file, 0, SEEK_END);
-			m_current_size = std::ftell(m_file);
+			long n = std::ftell(m_file);
+			if (n >= 0)
+				m_current_size = n;
 		}
 	}
 
@@ -122,7 +124,14 @@ struct RotatingFileSink : ILogBackend
 		if (m_max_files >= 1)
 			std::rename(m_path.c_str(), (m_path + ".1").c_str());
 
-		m_file         = std::fopen(m_path.c_str(), "w");
+		m_file = std::fopen(m_path.c_str(), "w");
+		if (!m_file)
+		{
+			// Rotation renamed away the base file but couldn't create a fresh one.
+			// Best-effort: try to promote .1 back to base and reopen for append.
+			std::rename((m_path + ".1").c_str(), m_path.c_str());
+			m_file = std::fopen(m_path.c_str(), "a");
+		}
 		m_current_size = 0;
 	}
 
@@ -155,6 +164,8 @@ struct LoggingServiceImpl : ILoggingService
 
 	void log(LogLevel level, const char* message) override
 	{
+		if (!message)
+			message = "";
 		// Promote live weak_ptrs while holding the lock; write without holding it
 		// so that backend::write() can call back into the service safely.
 		std::vector<std::shared_ptr<ILogBackend>> live;
