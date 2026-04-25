@@ -19,7 +19,12 @@ PluginLoader::PluginLoader(ServiceManager& sm) : sm_(sm) {}
 PluginLoader::~PluginLoader()
 {
 	for (auto& [path, entry] : plugins_)
-		sm_.unregister_service(entry.service_id);
+	{
+		if (entry.plugin)
+			entry.plugin->onUnload(sm_);
+		else if (entry.legacy_service_id)
+			sm_.unregister_service(*entry.legacy_service_id);
+	}
 	plugins_.clear();
 }
 
@@ -29,6 +34,93 @@ std::string PluginLoader::resolve_canonical(std::string const& path)
 	auto c = std::filesystem::canonical(path, ec);
 	return ec ? std::string{} : c.string();
 }
+
+namespace
+{
+	bool service_registered(ServiceManager const& sm, ServiceID id)
+	{
+		auto services = sm.list_services();
+		for (auto const& s : services)
+			if (s.id == id)
+				return true;
+		return false;
+	}
+
+	Result<void, Error> load_iplugin(ServiceManager& sm,
+	                                 PluginHandle&   handle,
+	                                 std::string const&             canonical,
+	                                 std::shared_ptr<IPlugin>&      out_plugin)
+	{
+		auto* destroy = handle.plugin_destroy_fn();
+		IPlugin* raw  = handle.plugin_create_fn()();
+		if (!raw)
+			return Result<void, Error>::err({ErrorCode::FactoryFailed,
+				"thx_create_plugin returned null for: " + canonical});
+
+		// Wrap in shared_ptr now so the deleter runs even on error returns below.
+		std::shared_ptr<IPlugin> plugin(raw, [destroy](IPlugin* p)
+		{
+			if (p && destroy)
+				destroy(p);
+		});
+
+		// Reject if any required() service is missing.
+		auto reqs = plugin->required();
+		for (std::size_t i = 0; i < reqs.size(); ++i)
+		{
+			if (!service_registered(sm, reqs[i]))
+			{
+				return Result<void, Error>::err({ErrorCode::NotLoaded,
+					std::string("plugin requires service '") + reqs[i].name()
+					+ "' which is not registered"});
+			}
+		}
+
+		if (!plugin->onLoad(sm))
+		{
+			return Result<void, Error>::err({ErrorCode::RegistrationFailed,
+				"IPlugin::onLoad returned false for: " + canonical});
+		}
+
+		out_plugin = std::move(plugin);
+		return Result<void, Error>::ok();
+	}
+
+	Result<ServiceID, Error> load_legacy(ServiceManager& sm,
+	                                     PluginHandle&   handle,
+	                                     std::string const& canonical)
+	{
+		// Probe: instantiate once to read the service ID and version, then discard.
+		// The real instance is created by the factory below when ServiceManager
+		// calls it on first registration.
+		IService* probe = handle.create_fn()();
+		if (!probe)
+			return Result<ServiceID, Error>::err({ErrorCode::FactoryFailed,
+				"thx_create returned null for: " + canonical});
+
+		ServiceID svc_id  = probe->id();
+		Version   svc_ver = probe->version();
+		handle.destroy_fn()(probe);
+
+		// Capture function pointers by value; they remain valid while the DSO is
+		// open (handle lives in plugins_ after successful registration).
+		ServiceCreateFn  create  = handle.create_fn();
+		ServiceDestroyFn destroy = handle.destroy_fn();
+
+		bool registered = sm.register_service(svc_id, svc_ver,
+			[create, destroy]() -> std::shared_ptr<IService>
+			{
+				auto* raw = create();
+				return make_service(raw, destroy);
+			});
+
+		if (!registered)
+			return Result<ServiceID, Error>::err({ErrorCode::RegistrationFailed,
+				"ServiceManager rejected service: " + std::string(svc_id.name())});
+
+		return Result<ServiceID, Error>::ok(svc_id);
+	}
+} // namespace
 
 Result<void, Error> PluginLoader::load(std::string const& path)
 {
@@ -46,35 +138,28 @@ Result<void, Error> PluginLoader::load(std::string const& path)
 
 	PluginHandle handle = std::move(open_result.value());
 
-	// Probe: instantiate once to read the service ID and version, then discard.
-	// The real instance is created by the factory below when ServiceManager
-	// calls it on first registration.
-	IService* probe = handle.create_fn()();
-	if (!probe)
-		return Result<void, Error>::err({ErrorCode::FactoryFailed,
-			"thx_create returned null for: " + canonical});
+	if (handle.has_iplugin_abi())
+	{
+		std::shared_ptr<IPlugin> plugin;
+		auto r = load_iplugin(sm_, handle, canonical, plugin);
+		if (!r)
+			return r;
 
-	ServiceID svc_id  = probe->id();
-	Version   svc_ver = probe->version();
-	handle.destroy_fn()(probe);
+		Entry entry;
+		entry.handle = std::move(handle);
+		entry.plugin = std::move(plugin);
+		plugins_.emplace(canonical, std::move(entry));
+		return Result<void, Error>::ok();
+	}
 
-	// Capture function pointers by value; they remain valid while the DSO is
-	// open (handle lives in plugins_ after successful registration).
-	ServiceCreateFn  create  = handle.create_fn();
-	ServiceDestroyFn destroy = handle.destroy_fn();
+	auto r = load_legacy(sm_, handle, canonical);
+	if (!r)
+		return Result<void, Error>::err(r.error());
 
-	bool registered = sm_.register_service(svc_id, svc_ver,
-		[create, destroy]() -> std::shared_ptr<IService>
-		{
-			auto* raw = create();
-			return make_service(raw, destroy);
-		});
-
-	if (!registered)
-		return Result<void, Error>::err({ErrorCode::RegistrationFailed,
-			"ServiceManager rejected service: " + std::string(svc_id.name())});
-
-	plugins_.emplace(canonical, Entry{std::move(handle), svc_id});
+	Entry entry;
+	entry.handle            = std::move(handle);
+	entry.legacy_service_id = r.value();
+	plugins_.emplace(canonical, std::move(entry));
 	return Result<void, Error>::ok();
 }
 
@@ -91,8 +176,12 @@ Result<void, Error> PluginLoader::unload(std::string const& path)
 		return Result<void, Error>::err({ErrorCode::NotLoaded,
 			"Plugin not loaded: " + path});
 
-	sm_.unregister_service(it->second.service_id);
-	plugins_.erase(it); // PluginHandle destructor closes the DSO
+	if (it->second.plugin)
+		it->second.plugin->onUnload(sm_);
+	else if (it->second.legacy_service_id)
+		sm_.unregister_service(*it->second.legacy_service_id);
+
+	plugins_.erase(it); // ~Entry: plugin destroyed first, then handle dlclose
 	return Result<void, Error>::ok();
 }
 
@@ -148,7 +237,16 @@ std::vector<LoadedPluginInfo> PluginLoader::list_plugins() const
 	std::vector<LoadedPluginInfo> result;
 	result.reserve(plugins_.size());
 	for (auto const& [path, entry] : plugins_)
-		result.push_back({path, entry.service_id});
+	{
+		// Legacy plugins report their single service ID. IPlugin-based plugins
+		// can register many services and don't have one canonical ID — they
+		// appear with an empty ServiceID. (Snapshot redesign comes in a later
+		// roadmap milestone.)
+		ServiceID id = entry.legacy_service_id
+		                   ? *entry.legacy_service_id
+		                   : ServiceID("");
+		result.push_back({path, id});
+	}
 	return result;
 }
 

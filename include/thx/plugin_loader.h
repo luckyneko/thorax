@@ -8,12 +8,15 @@
 
 #pragma once
 
+#include "thx/iplugin.h"
 #include "thx/plugin_handle.h"
 #include "thx/result.h"
 #include "thx/service_id.h"
 #include "thx/service_manager.h"
 #include "thx/log.h"
 
+#include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -76,8 +79,12 @@ namespace thx
 	private:
 		struct Entry
 		{
-			PluginHandle handle;
-			ServiceID    service_id;
+			// Declaration order matters: `plugin` is destroyed before `handle`
+			// so that the IPlugin's destructor (which lives in the DSO) runs
+			// before the DSO is dlclose()d.
+			PluginHandle             handle;
+			std::optional<ServiceID> legacy_service_id;
+			std::shared_ptr<IPlugin> plugin;
 		};
 
 		ServiceManager& sm_;
