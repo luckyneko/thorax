@@ -32,8 +32,9 @@ namespace thx
 	// Loads, unloads, and discovers plugin shared libraries.
 	//
 	// Owns the DSO handles and integrates with a ServiceManager. Each loaded
-	// plugin registers exactly one service (via THX_DEFINE_PLUGIN). The loader
-	// tracks canonical paths so loading the same file twice is a safe no-op.
+	// plugin produces an IPlugin (via THX_DEFINE_SERVICE_PLUGIN or THX_DEFINE_PLUGIN)
+	// which registers any number of services in onLoad. The loader tracks
+	// canonical paths so loading the same file twice is a safe no-op.
 	//
 	// Thread safety: not thread-safe. Protect concurrent calls externally if needed.
 	//

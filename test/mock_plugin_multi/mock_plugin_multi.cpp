@@ -58,4 +58,4 @@ public:
 
 } // namespace
 
-THX_DEFINE_CUSTOM_PLUGIN(MultiPlugin)
+THX_DEFINE_PLUGIN(MultiPlugin)

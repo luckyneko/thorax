@@ -90,10 +90,8 @@ TEST_CASE("PluginHandle::open - valid mock plugin", "[plugin_handle]")
 	auto r = thx::PluginHandle::open(THX_MOCK_PLUGIN_PATH);
 	REQUIRE(r.is_ok());
 	REQUIRE(bool(r.value()));
-	// mock_plugin uses THX_DEFINE_SERVICE_PLUGIN, so the IPlugin ABI is preferred.
-	REQUIRE(r.value().has_iplugin_abi());
-	REQUIRE(r.value().plugin_create_fn()  != nullptr);
-	REQUIRE(r.value().plugin_destroy_fn() != nullptr);
+	REQUIRE(r.value().create_fn()  != nullptr);
+	REQUIRE(r.value().destroy_fn() != nullptr);
 }
 
 TEST_CASE("PluginHandle::open - mismatched ABI version returns VersionMismatch", "[plugin_handle]")

@@ -23,9 +23,6 @@ PluginLoader::~PluginLoader()
 	{
 		if (entry.plugin)
 			entry.plugin->onUnload(sm_);
-		else
-			for (auto const& id : entry.service_ids)
-				sm_.unregister_service(id);
 	}
 	plugins_.clear();
 }
@@ -54,8 +51,8 @@ namespace
 	                                 std::shared_ptr<IPlugin>&      out_plugin,
 	                                 std::vector<ServiceID>&        out_new_ids)
 	{
-		auto* destroy = handle.plugin_destroy_fn();
-		IPlugin* raw  = handle.plugin_create_fn()();
+		auto* destroy = handle.destroy_fn();
+		IPlugin* raw  = handle.create_fn()();
 		if (!raw)
 			return Result<void, Error>::err({ErrorCode::FactoryFailed,
 				"thx_create_plugin returned null for: " + canonical});
@@ -100,41 +97,6 @@ namespace
 		out_plugin = std::move(plugin);
 		return Result<void, Error>::ok();
 	}
-
-	Result<ServiceID, Error> load_legacy(ServiceManager& sm,
-	                                     PluginHandle&   handle,
-	                                     std::string const& canonical)
-	{
-		// Probe: instantiate once to read the service ID and version, then discard.
-		// The real instance is created by the factory below when ServiceManager
-		// calls it on first registration.
-		IService* probe = handle.create_fn()();
-		if (!probe)
-			return Result<ServiceID, Error>::err({ErrorCode::FactoryFailed,
-				"thx_create returned null for: " + canonical});
-
-		ServiceID svc_id  = probe->id();
-		Version   svc_ver = probe->version();
-		handle.destroy_fn()(probe);
-
-		// Capture function pointers by value; they remain valid while the DSO is
-		// open (handle lives in plugins_ after successful registration).
-		ServiceCreateFn  create  = handle.create_fn();
-		ServiceDestroyFn destroy = handle.destroy_fn();
-
-		bool registered = sm.register_service(svc_id, svc_ver,
-			[create, destroy]() -> std::shared_ptr<IService>
-			{
-				auto* raw = create();
-				return make_service(raw, destroy);
-			});
-
-		if (!registered)
-			return Result<ServiceID, Error>::err({ErrorCode::RegistrationFailed,
-				"ServiceManager rejected service: " + std::string(svc_id.name())});
-
-		return Result<ServiceID, Error>::ok(svc_id);
-	}
 } // namespace
 
 Result<void, Error> PluginLoader::load(std::string const& path)
@@ -153,29 +115,16 @@ Result<void, Error> PluginLoader::load(std::string const& path)
 
 	PluginHandle handle = std::move(open_result.value());
 
-	if (handle.has_iplugin_abi())
-	{
-		std::shared_ptr<IPlugin> plugin;
-		std::vector<ServiceID>   new_ids;
-		auto r = load_iplugin(sm_, handle, canonical, plugin, new_ids);
-		if (!r)
-			return r;
-
-		Entry entry;
-		entry.handle      = std::move(handle);
-		entry.service_ids = std::move(new_ids);
-		entry.plugin      = std::move(plugin);
-		plugins_.emplace(canonical, std::move(entry));
-		return Result<void, Error>::ok();
-	}
-
-	auto r = load_legacy(sm_, handle, canonical);
+	std::shared_ptr<IPlugin> plugin;
+	std::vector<ServiceID>   new_ids;
+	auto r = load_iplugin(sm_, handle, canonical, plugin, new_ids);
 	if (!r)
-		return Result<void, Error>::err(r.error());
+		return r;
 
 	Entry entry;
-	entry.handle = std::move(handle);
-	entry.service_ids.push_back(r.value());
+	entry.handle      = std::move(handle);
+	entry.service_ids = std::move(new_ids);
+	entry.plugin      = std::move(plugin);
 	plugins_.emplace(canonical, std::move(entry));
 	return Result<void, Error>::ok();
 }
@@ -195,9 +144,6 @@ Result<void, Error> PluginLoader::unload(std::string const& path)
 
 	if (it->second.plugin)
 		it->second.plugin->onUnload(sm_);
-	else
-		for (auto const& id : it->second.service_ids)
-			sm_.unregister_service(id);
 
 	plugins_.erase(it); // ~Entry: plugin destroyed first, then handle dlclose
 	return Result<void, Error>::ok();

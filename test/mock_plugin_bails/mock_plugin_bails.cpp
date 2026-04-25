@@ -27,4 +27,4 @@ public:
 
 } // namespace
 
-THX_DEFINE_CUSTOM_PLUGIN(BailingPlugin)
+THX_DEFINE_PLUGIN(BailingPlugin)

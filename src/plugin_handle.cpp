@@ -28,11 +28,9 @@ void PluginHandle::close() noexcept
 #else
 	dlclose(handle_);
 #endif
-	handle_            = nullptr;
-	create_fn_         = nullptr;
-	destroy_fn_        = nullptr;
-	plugin_create_fn_  = nullptr;
-	plugin_destroy_fn_ = nullptr;
+	handle_      = nullptr;
+	create_fn_   = nullptr;
+	destroy_fn_  = nullptr;
 }
 
 PluginHandle::~PluginHandle()
@@ -45,14 +43,10 @@ PluginHandle::PluginHandle(PluginHandle&& other) noexcept
 	, path_(std::move(other.path_))
 	, create_fn_(other.create_fn_)
 	, destroy_fn_(other.destroy_fn_)
-	, plugin_create_fn_(other.plugin_create_fn_)
-	, plugin_destroy_fn_(other.plugin_destroy_fn_)
 {
-	other.handle_            = nullptr;
-	other.create_fn_         = nullptr;
-	other.destroy_fn_        = nullptr;
-	other.plugin_create_fn_  = nullptr;
-	other.plugin_destroy_fn_ = nullptr;
+	other.handle_     = nullptr;
+	other.create_fn_  = nullptr;
+	other.destroy_fn_ = nullptr;
 }
 
 PluginHandle& PluginHandle::operator=(PluginHandle&& other) noexcept
@@ -60,17 +54,13 @@ PluginHandle& PluginHandle::operator=(PluginHandle&& other) noexcept
 	if (this != &other)
 	{
 		close();
-		handle_            = other.handle_;
-		path_              = std::move(other.path_);
-		create_fn_         = other.create_fn_;
-		destroy_fn_        = other.destroy_fn_;
-		plugin_create_fn_  = other.plugin_create_fn_;
-		plugin_destroy_fn_ = other.plugin_destroy_fn_;
-		other.handle_            = nullptr;
-		other.create_fn_         = nullptr;
-		other.destroy_fn_        = nullptr;
-		other.plugin_create_fn_  = nullptr;
-		other.plugin_destroy_fn_ = nullptr;
+		handle_      = other.handle_;
+		path_        = std::move(other.path_);
+		create_fn_   = other.create_fn_;
+		destroy_fn_  = other.destroy_fn_;
+		other.handle_     = nullptr;
+		other.create_fn_  = nullptr;
+		other.destroy_fn_ = nullptr;
 	}
 	return *this;
 }
@@ -118,21 +108,15 @@ Result<PluginHandle, Error> PluginHandle::open(std::string const& path)
 
 	// Casting void* to function pointer is implementation-defined but universally
 	// supported and the only portable way to use dlsym in C++.
-	auto create_v        = reinterpret_cast<ServiceCreateFn> (native_sym(h, "thx_create"));
-	auto destroy_v       = reinterpret_cast<ServiceDestroyFn>(native_sym(h, "thx_destroy"));
-	auto plugin_create_v = reinterpret_cast<PluginCreateFn>  (native_sym(h, "thx_create_plugin"));
-	auto plugin_destroy_v= reinterpret_cast<PluginDestroyFn> (native_sym(h, "thx_destroy_plugin"));
-	auto abi_ver_fn      = reinterpret_cast<AbiVersionFn>    (native_sym(h, "thx_abi_version"));
+	auto create_v   = reinterpret_cast<PluginCreateFn> (native_sym(h, "thx_create_plugin"));
+	auto destroy_v  = reinterpret_cast<PluginDestroyFn>(native_sym(h, "thx_destroy_plugin"));
+	auto abi_ver_fn = reinterpret_cast<AbiVersionFn>   (native_sym(h, "thx_abi_version"));
 
-	bool has_iplugin = (plugin_create_v && plugin_destroy_v);
-	bool has_legacy  = (create_v && destroy_v);
-
-	if (!has_iplugin && !has_legacy)
+	if (!create_v || !destroy_v)
 	{
 		native_close(h);
 		return Result<PluginHandle, Error>::err({ErrorCode::SymbolNotFound,
-			"Neither thx_create_plugin/thx_destroy_plugin nor thx_create/thx_destroy "
-			"found in: " + path});
+			"thx_create_plugin or thx_destroy_plugin not found in: " + path});
 	}
 
 	if (abi_ver_fn && abi_ver_fn() != thx::THORAX_VERSION.major)
@@ -143,20 +127,10 @@ Result<PluginHandle, Error> PluginHandle::open(std::string const& path)
 	}
 
 	PluginHandle handle;
-	handle.handle_            = h;
-	handle.path_              = path;
-	// Prefer the IPlugin ABI when both are present; the legacy fields stay null
-	// in that case so PluginLoader takes the new code path.
-	if (has_iplugin)
-	{
-		handle.plugin_create_fn_  = plugin_create_v;
-		handle.plugin_destroy_fn_ = plugin_destroy_v;
-	}
-	else
-	{
-		handle.create_fn_  = create_v;
-		handle.destroy_fn_ = destroy_v;
-	}
+	handle.handle_     = h;
+	handle.path_       = path;
+	handle.create_fn_  = create_v;
+	handle.destroy_fn_ = destroy_v;
 	return Result<PluginHandle, Error>::ok(std::move(handle));
 }
 
