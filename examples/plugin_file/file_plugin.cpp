@@ -35,4 +35,4 @@ struct FileServiceImpl : examples::IFileService
 
 } // namespace
 
-THX_DEFINE_PLUGIN(FileServiceImpl)
+THX_DEFINE_SERVICE_PLUGIN(FileServiceImpl)

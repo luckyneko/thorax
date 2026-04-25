@@ -25,4 +25,4 @@ struct LoggingServiceImpl : examples::ILoggingService
 
 } // namespace
 
-THX_DEFINE_PLUGIN(LoggingServiceImpl)
+THX_DEFINE_SERVICE_PLUGIN(LoggingServiceImpl)

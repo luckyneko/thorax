@@ -115,4 +115,4 @@ struct IOServiceImpl : IIOService
 
 } // namespace
 
-THX_DEFINE_PLUGIN(IOServiceImpl)
+THX_DEFINE_SERVICE_PLUGIN(IOServiceImpl)
