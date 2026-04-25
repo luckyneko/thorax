@@ -1,0 +1,115 @@
+/*
+ *  Created by LuckyNeko on 25/04/2026.
+ *  Copyright 2026 LuckyNeko
+ *
+ *  Distributed under the MIT Software License
+ *  (See accompanying file LICENSE.md)
+ */
+
+#include "thx/plugins/io/io_service.h"
+#include <thx/platform.h>
+
+#include <algorithm>
+#include <cstddef>
+#include <cstdio>
+#include <mutex>
+#include <vector>
+
+using namespace thx::plugins::io;
+
+namespace
+{
+
+// ---------------------------------------------------------------------------
+// TextReader — generic fallback reader; accepts any path
+// ---------------------------------------------------------------------------
+
+struct TextReader : IFileReader
+{
+	bool can_read(const char* /*path*/) override { return true; }
+
+	int read(const char* path, char* buffer, int buffer_size) override
+	{
+		if (!path || !buffer || buffer_size <= 0)
+			return -1;
+
+		FILE* f = std::fopen(path, "rb");
+		if (!f)
+			return -1;
+
+		int n = static_cast<int>(
+			std::fread(buffer, 1, static_cast<std::size_t>(buffer_size - 1), f));
+		std::fclose(f);
+		return n;
+	}
+};
+
+// ---------------------------------------------------------------------------
+// IOServiceImpl
+// ---------------------------------------------------------------------------
+
+struct IOServiceImpl : IIOService
+{
+	std::mutex                                m_mutex;
+	std::vector<std::weak_ptr<IFileReader>>   m_readers;
+
+	int read(const char* path, char* buffer, int buffer_size) override
+	{
+		// Promote live weak_ptrs under the lock; call read() outside to avoid
+		// deadlock if a reader calls back into the service.
+		std::vector<std::shared_ptr<IFileReader>> live;
+		{
+			std::lock_guard lock(m_mutex);
+			auto it = m_readers.begin();
+			while (it != m_readers.end())
+			{
+				if (auto r = it->lock())
+				{
+					live.push_back(std::move(r));
+					++it;
+				}
+				else
+				{
+					it = m_readers.erase(it); // cull expired
+				}
+			}
+		}
+
+		for (auto& r : live)
+		{
+			if (r->can_read(path))
+				return r->read(path, buffer, buffer_size);
+		}
+		return -1; // no reader accepted
+	}
+
+	void add_reader(std::shared_ptr<IFileReader> reader) override
+	{
+		if (!reader)
+			return;
+		std::lock_guard lock(m_mutex);
+		m_readers.push_back(std::move(reader));
+	}
+
+	void remove_reader(IFileReader* key) override
+	{
+		std::lock_guard lock(m_mutex);
+		m_readers.erase(
+			std::remove_if(m_readers.begin(), m_readers.end(),
+				[key](std::weak_ptr<IFileReader> const& wp)
+				{
+					auto sp = wp.lock();
+					return !sp || sp.get() == key;
+				}),
+			m_readers.end());
+	}
+
+	std::shared_ptr<IFileReader> make_text_reader() override
+	{
+		return std::make_shared<TextReader>();
+	}
+};
+
+} // namespace
+
+THX_DEFINE_PLUGIN(IOServiceImpl)

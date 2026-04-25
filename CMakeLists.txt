@@ -27,6 +27,7 @@ endif()
 # Options
 option(THORAX_BUILD_TESTING "Build UnitTesting project" ${NOT_SUBPROJECT})
 option(THORAX_BUILD_EXAMPLES "Build example applications" ${NOT_SUBPROJECT})
+option(THORAX_BUILD_PLUGINS "Build built-in plugins" ${NOT_SUBPROJECT})
 option(THORAX_SANITIZE "Enable AddressSanitizer and UndefinedBehaviorSanitizer (Clang/GCC only)" OFF)
 
 # Load Catch2
@@ -110,6 +111,11 @@ if(THORAX_BUILD_EXAMPLES)
     add_subdirectory(examples)
 endif()
 
+# Plugins
+if(THORAX_BUILD_PLUGINS)
+    add_subdirectory(plugins)
+endif()
+
 # Testing Target
 if(THORAX_BUILD_TESTING)
     enable_testing()
@@ -144,5 +150,22 @@ if(THORAX_BUILD_TESTING)
         THX_MOCK_BAD_ABI_PLUGIN_PATH="$<TARGET_FILE:mock_plugin_bad_abi>"
     )
     add_dependencies(test-${PROJECT_NAME} mock_plugin mock_plugin_bad_abi)
+
+    if(THORAX_BUILD_PLUGINS)
+        target_sources(test-${PROJECT_NAME} PRIVATE
+            test/test_logging_plugin.cpp
+            test/test_io_plugin.cpp
+        )
+        target_include_directories(test-${PROJECT_NAME} PRIVATE
+            plugins/logging/include
+            plugins/io/include
+        )
+        target_compile_definitions(test-${PROJECT_NAME} PRIVATE
+            THX_LOGGING_PLUGIN_PATH="$<TARGET_FILE:plugin_logging>"
+            THX_IO_PLUGIN_PATH="$<TARGET_FILE:plugin_io>"
+        )
+        add_dependencies(test-${PROJECT_NAME} plugin_logging plugin_io)
+    endif()
+
     catch_discover_tests(test-${PROJECT_NAME} TEST_PREFIX "(${PROJECT_NAME}) ")
 endif()
