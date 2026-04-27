@@ -28,7 +28,6 @@ namespace thx
 	struct ServiceInfo
 	{
 		ServiceID id;
-		int       ref_count;
 	};
 
 	// Central registry that owns the lifetime of all registered services.
@@ -36,8 +35,12 @@ namespace thx
 	// Thread safety: concurrent get_service() calls do not block each other
 	// (shared lock). register/unregister take an exclusive lock.
 	//
-	// Reference counting: multiple callers may register the same service ID.
-	// The entry is only removed when the last registrant calls unregister_service.
+	// Single-owner semantics: a given ServiceID may be registered exactly once.
+	// A second register_service call for the same ID returns false with a
+	// diagnostic — the registry rejects duplicate ownership rather than
+	// silently sharing it. Plugins that want to *contribute* to an existing
+	// service (rather than replace it) should use the provider pattern
+	// exposed by the relevant service interface.
 	class ServiceManager
 	{
 	public:
@@ -56,18 +59,15 @@ namespace thx
 
 		// Registers a service by ID, version, and a factory callable.
 		//
-		// The factory is called only when the service is not yet registered,
-		// ensuring at most one instance exists at any time. If a compatible
-		// version is already registered the ref count is incremented and the
-		// factory is never invoked.
-		//
-		// After construction, IService::onConstruct() is called. If it returns
-		// false the service is discarded and registration fails.
+		// The factory is invoked exactly once; the resulting shared_ptr is
+		// stored as the sole registered instance. After construction,
+		// IService::onConstruct() is called. If it returns false the service
+		// is discarded and registration fails.
 		//
 		// Returns false and logs a diagnostic if:
 		//   - factory is null or returns null
 		//   - onConstruct() returns false
-		//   - an incompatible version is already registered for that ID
+		//   - the ID is already registered (regardless of version)
 		bool register_service(ServiceID id, Version version, ServiceFactory factory);
 
 		// Type-deducing registration. Requires T to provide T::static_id() and
@@ -85,10 +85,11 @@ namespace thx
 		template <typename T>
 		std::shared_ptr<T> get_service() const;
 
-		// Decrements the ref count for the given service.
-		// The entry is removed when the count reaches zero.
+		// Removes the service entry. IService::onDestroy() is called outside
+		// the registry lock so the service may safely call ServiceManager
+		// during shutdown.
 		//
-		// Returns true if the entry was fully removed.
+		// Returns true if the entry was removed.
 		// Returns false (and logs a diagnostic) if the ID is not registered.
 		bool unregister_service(ServiceID id);
 
@@ -96,15 +97,14 @@ namespace thx
 		template <typename T>
 		bool unregister_service();
 
-		// Returns a point-in-time snapshot of all registered service IDs and
-		// their reference counts. Useful for diagnostics and test assertions.
+		// Returns a point-in-time snapshot of all registered service IDs.
+		// Useful for diagnostics and test assertions.
 		std::vector<ServiceInfo> list_services() const;
 
 	private:
 		struct Entry
 		{
 			std::shared_ptr<IService> service;
-			int ref_count{1};
 		};
 
 		mutable std::shared_mutex mutex_;
@@ -124,6 +124,7 @@ namespace thx
 			return nullptr;
 		return std::dynamic_pointer_cast<T>(it->second.service);
 	}
+
 
 	template <typename T>
 	std::shared_ptr<T> ServiceManager::get_service() const

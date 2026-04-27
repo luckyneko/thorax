@@ -22,9 +22,12 @@ namespace thx
 	// Plugin abstraction. A DSO produces exactly one IPlugin via thx_create_plugin
 	// and may register any number of services (or none) in onLoad.
 	//
-	// Lifetime: PluginLoader instantiates the IPlugin via the DSO's thx_create_plugin
-	// export, then calls onLoad. On unload, onUnload runs first, then the IPlugin is
-	// destroyed via the DSO's thx_destroy_plugin export.
+	// Lifetime contract: callers MUST release every shared_ptr<IService> they
+	// obtained from a plugin BEFORE calling PluginLoader::unload (or destroying
+	// the loader). When the DSO is unloaded the service's destructor — which
+	// lives in plugin code — becomes unreachable, and a still-held service
+	// reference will crash on release. A future roadmap milestone tracks
+	// deferred-dlclose plumbing that would lift this restriction.
 	class IPlugin
 	{
 	public:

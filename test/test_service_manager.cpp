@@ -161,26 +161,27 @@ TEST_CASE("ServiceManager - onConstruct called on first registration", "[service
 	REQUIRE(constructed);
 }
 
-TEST_CASE("ServiceManager - onConstruct not called on duplicate registration",
+TEST_CASE("ServiceManager - duplicate registration is rejected",
 		  "[service_manager]")
 {
 	thx::ServiceManager sm;
 	int construct_count = 0;
 	bool flag = false;
 
-	// First registration — onConstruct fires.
-	sm.register_service(kServiceA, kV100, [&]()
-						{
+	REQUIRE(sm.register_service(kServiceA, kV100, [&]()
+								{
 		++construct_count;
-		return std::make_shared<TestService>("thx.test.ServiceA", kV100, &flag); });
+		return std::make_shared<TestService>("thx.test.ServiceA", kV100, &flag); }));
 
-	// Second registration (same ID, compatible) — factory must NOT be called.
-	sm.register_service(kServiceA, kV100, [&]()
-						{
+	// Second registration with the same ID must be rejected; the factory is
+	// never invoked.
+	REQUIRE_FALSE(sm.register_service(kServiceA, kV100, [&]()
+									  {
 		++construct_count;
-		return std::make_shared<TestService>("thx.test.ServiceA", kV100); });
+		return std::make_shared<TestService>("thx.test.ServiceA", kV100); }));
 
 	REQUIRE(construct_count == 1);
+	REQUIRE(sm.list_services().size() == 1);
 }
 
 TEST_CASE("ServiceManager - onConstruct failure aborts registration",
@@ -215,25 +216,21 @@ TEST_CASE("ServiceManager - onDestroy called when last registrant unregisters",
 	REQUIRE(destroyed);
 }
 
-TEST_CASE("ServiceManager - onDestroy not called until last unregister",
+TEST_CASE("ServiceManager - re-registration after unregister succeeds",
 		  "[service_manager]")
 {
 	thx::ServiceManager sm;
-	bool destroyed = false;
+	bool destroyed_first = false;
 
-	// Two registrations.
-	sm.register_service(kServiceA, kV100, [&]()
-						{ return std::make_shared<TestService>("thx.test.ServiceA", kV100,
-															   nullptr, &destroyed); });
-	sm.register_service(kServiceA, kV100,
-						[]()
-						{ return std::make_shared<TestService>("thx.test.ServiceA", kV100); });
+	REQUIRE(sm.register_service(kServiceA, kV100, [&]()
+								{ return std::make_shared<TestService>("thx.test.ServiceA", kV100,
+																	   nullptr, &destroyed_first); }));
+	sm.unregister_service(kServiceA);
+	REQUIRE(destroyed_first);
 
-	sm.unregister_service(kServiceA); // decrements to 1
-	REQUIRE_FALSE(destroyed);
-
-	sm.unregister_service(kServiceA); // decrements to 0 — onDestroy fires
-	REQUIRE(destroyed);
+	// After unregister, the slot is free for a fresh registration.
+	REQUIRE(sm.register_service(kServiceA, kV100,
+								[]() { return std::make_shared<TestService>("thx.test.ServiceA", kV100); }));
 }
 
 TEST_CASE("ServiceManager - unregister releases shared_ptr ownership after onDestroy",
@@ -258,38 +255,25 @@ TEST_CASE("ServiceManager - unregister releases shared_ptr ownership after onDes
 }
 
 // ---------------------------------------------------------------------------
-// Version mismatch rejection
+// Single-owner registration semantics
 // ---------------------------------------------------------------------------
 
-TEST_CASE("ServiceManager - older version rejected when newer is registered",
+TEST_CASE("ServiceManager - second registration with any version is rejected",
 		  "[service_manager]")
 {
 	thx::ServiceManager sm;
 	reg(sm, "thx.test.ServiceA", kV100);
 
+	// All of these must fail under single-owner semantics, regardless of
+	// whether the version is older, newer-compatible, or different major.
 	REQUIRE_FALSE(reg(sm, "thx.test.ServiceA", kV090));
-	REQUIRE(sm.get_service<TestService>(kServiceA) != nullptr);
-}
-
-TEST_CASE("ServiceManager - different major version rejected", "[service_manager]")
-{
-	thx::ServiceManager sm;
-	reg(sm, "thx.test.ServiceA", kV100);
-
+	REQUIRE_FALSE(reg(sm, "thx.test.ServiceA", kV110));
 	REQUIRE_FALSE(reg(sm, "thx.test.ServiceA", kV200));
-	REQUIRE(sm.get_service<TestService>(kServiceA) != nullptr);
-}
 
-TEST_CASE("ServiceManager - newer compatible version increments ref count",
-		  "[service_manager]")
-{
-	thx::ServiceManager sm;
-	reg(sm, "thx.test.ServiceA", kV100);
-
-	REQUIRE(reg(sm, "thx.test.ServiceA", kV110));
-
-	REQUIRE_FALSE(sm.unregister_service(kServiceA)); // ref count: 2 → 1
-	REQUIRE(sm.unregister_service(kServiceA));		 // ref count: 1 → 0
+	// Original registration survives.
+	auto svc = sm.get_service<TestService>(kServiceA);
+	REQUIRE(svc != nullptr);
+	REQUIRE(svc->version() == kV100);
 }
 
 // ---------------------------------------------------------------------------
@@ -362,11 +346,11 @@ TEST_CASE("ServiceManager - concurrent register and get_service is safe",
 	for (auto& t : threads)
 		t.join();
 
-	REQUIRE(registered >= 1);
+	// Single-owner semantics: exactly one register_service call wins; the
+	// other seven find the entry already present and return false.
+	REQUIRE(registered == 1);
 
-	int n = registered.load();
-	for (int i = 0; i < n; ++i)
-		sm.unregister_service(kServiceA);
+	REQUIRE(sm.unregister_service(kServiceA));
 	REQUIRE(sm.get_service<TestService>(kServiceA) == nullptr);
 }
 

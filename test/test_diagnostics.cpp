@@ -246,23 +246,21 @@ TEST_CASE("ServiceManager::list_services - returns registered entry", "[introspe
 
 	auto svcs = sm.list_services();
 	REQUIRE(svcs.size() == 1);
-	REQUIRE(svcs[0].id        == thx::ServiceID("test.Minimal"));
-	REQUIRE(svcs[0].ref_count == 1);
+	REQUIRE(svcs[0].id == thx::ServiceID("test.Minimal"));
 }
 
-TEST_CASE("ServiceManager::list_services - ref_count increments on compatible re-register",
+TEST_CASE("ServiceManager - duplicate registration is rejected",
           "[introspection]")
 {
 	thx::ServiceManager sm;
-	sm.register_service(thx::ServiceID("test.Minimal"), thx::make_version(1, 0, 0), make_minimal);
-	sm.register_service(thx::ServiceID("test.Minimal"), thx::make_version(1, 0, 0), make_minimal);
-
-	auto svcs = sm.list_services();
-	REQUIRE(svcs.size() == 1);
-	REQUIRE(svcs[0].ref_count == 2);
+	REQUIRE(sm.register_service(thx::ServiceID("test.Minimal"),
+	                            thx::make_version(1, 0, 0), make_minimal));
+	REQUIRE_FALSE(sm.register_service(thx::ServiceID("test.Minimal"),
+	                                  thx::make_version(1, 0, 0), make_minimal));
+	REQUIRE(sm.list_services().size() == 1);
 }
 
-TEST_CASE("ServiceManager::list_services - entry removed after last unregister",
+TEST_CASE("ServiceManager::list_services - entry removed after unregister",
           "[introspection]")
 {
 	thx::ServiceManager sm;

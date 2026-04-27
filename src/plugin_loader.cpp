@@ -58,6 +58,8 @@ namespace
 				"thx_create_plugin returned null for: " + canonical});
 
 		// Wrap in shared_ptr now so the deleter runs even on error returns below.
+		// The destroy function pointer remains valid while `handle` is alive,
+		// which is guaranteed to outlive the IPlugin (Entry destruction order).
 		std::shared_ptr<IPlugin> plugin(raw, [destroy](IPlugin* p)
 		{
 			if (p && destroy)

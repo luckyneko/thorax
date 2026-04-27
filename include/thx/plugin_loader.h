@@ -53,11 +53,15 @@ namespace thx
 		// If the canonical path is already loaded, returns ok (no-op).
 		Result<void, Error> load(std::string const& path);
 
-		// Unregisters the plugin's service and closes the DSO.
+		// Unregisters the plugin's services and closes the DSO.
 		// Returns Err(NotLoaded) if path was not previously loaded.
 		//
-		// Safety: all shared_ptr<IService> handles to the service should be
-		// released before calling unload; their deleters point into the DSO.
+		// Safety: callers MUST release every shared_ptr<IService> obtained from
+		// this plugin before calling unload (or destroying the loader). The
+		// service's destructor and shared_ptr control block both live in plugin
+		// code; once the DSO is unloaded, releasing a still-held service ref is
+		// undefined behaviour. A deferred-dlclose mechanism that lifts this
+		// restriction is tracked as a future roadmap milestone.
 		Result<void, Error> unload(std::string const& path);
 
 		// Returns true if the canonical path is currently loaded.
@@ -79,12 +83,12 @@ namespace thx
 	private:
 		struct Entry
 		{
-			// Declaration order matters: `plugin` is destroyed before `handle`
-			// so that the IPlugin's destructor (which lives in the DSO) runs
+			// Declaration order matters: `plugin` is destroyed before `handle`,
+			// so the IPlugin's destructor (which lives in plugin code) runs
 			// before the DSO is dlclose()d.
 			PluginHandle             handle;
-			std::vector<ServiceID>   service_ids; // services registered by this load
-			std::shared_ptr<IPlugin> plugin;      // null for legacy single-service plugins
+			std::vector<ServiceID>   service_ids;
+			std::shared_ptr<IPlugin> plugin;
 		};
 
 		ServiceManager& sm_;

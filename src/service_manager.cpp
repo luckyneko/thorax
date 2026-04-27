@@ -35,23 +35,12 @@ bool ServiceManager::register_service(ServiceID id, Version version, ServiceFact
 
 	std::unique_lock lock(mutex_);
 
-	auto it = services_.find(id);
-	if (it != services_.end())
+	if (services_.find(id) != services_.end())
 	{
-		if (!compatible(it->second.service->version(), version))
-		{
-			auto const& ev = it->second.service->version();
-			std::ostringstream msg;
-			msg << "register_service: incompatible version for '" << id.name() << "'"
-			    << " (registered=" << ev.major << '.' << ev.minor << '.' << ev.patch
-			    << ", requested=" << version.major << '.' << version.minor
-			    << '.' << version.patch << ')';
-			thx::log(LogLevel::Warn, msg.str());
-			return false;
-		}
-
-		++it->second.ref_count;
-		return true;
+		thx::log(LogLevel::Warn,
+		    std::string("register_service: '") + id.name()
+		    + "' is already registered (single-owner registry)");
+		return false;
 	}
 
 	auto service = factory();
@@ -62,6 +51,19 @@ bool ServiceManager::register_service(ServiceID id, Version version, ServiceFact
 		return false;
 	}
 
+	// Verify the service reports the version the caller claimed; mismatch is
+	// a programming error worth flagging early.
+	if (service->version() != version)
+	{
+		std::ostringstream msg;
+		auto const& ev = service->version();
+		msg << "register_service: declared version " << version.major << '.' << version.minor
+		    << '.' << version.patch
+		    << " does not match service-reported " << ev.major << '.' << ev.minor << '.' << ev.patch
+		    << " for '" << id.name() << "'";
+		thx::log(LogLevel::Warn, msg.str());
+	}
+
 	if (!service->onConstruct())
 	{
 		thx::log(LogLevel::Error,
@@ -69,7 +71,7 @@ bool ServiceManager::register_service(ServiceID id, Version version, ServiceFact
 		return false;
 	}
 
-	services_.emplace(id, Entry{std::move(service), 1});
+	services_.emplace(id, Entry{std::move(service)});
 	return true;
 }
 
@@ -88,22 +90,15 @@ bool ServiceManager::unregister_service(ServiceID id)
 			return false;
 		}
 
-		if (--it->second.ref_count == 0)
-		{
-			to_destroy = std::move(it->second.service);
-			services_.erase(it);
-		}
+		to_destroy = std::move(it->second.service);
+		services_.erase(it);
 	}
 
-	// Call onDestroy outside the lock so the service may safely call
+	// onDestroy runs without the registry lock so the service may safely call
 	// ServiceManager methods during shutdown.
 	if (to_destroy)
-	{
 		to_destroy->onDestroy();
-		return true;
-	}
-
-	return false;
+	return true;
 }
 
 std::vector<ServiceInfo> ServiceManager::list_services() const
@@ -112,7 +107,7 @@ std::vector<ServiceInfo> ServiceManager::list_services() const
 	std::vector<ServiceInfo> result;
 	result.reserve(services_.size());
 	for (auto const& [id, entry] : services_)
-		result.push_back({id, entry.ref_count});
+		result.push_back({id});
 	return result;
 }
 
