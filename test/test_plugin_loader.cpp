@@ -202,6 +202,64 @@ TEST_CASE("PluginLoader - destructor unloads remaining plugins",
 }
 
 // ---------------------------------------------------------------------------
+// PluginLoader — DSO keep-alive lifetime (Milestone 8b)
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginLoader - service survives unload until collect_plugin_garbage",
+          "[plugin_loader][lifetime][integration]")
+{
+	// Drain anything queued from previous tests so our count is meaningful.
+	thx::collect_plugin_garbage();
+
+	thx::ServiceManager sm;
+	std::shared_ptr<thx_mock::MockService> svc;
+	{
+		thx::PluginLoader loader(sm);
+		REQUIRE(loader.load(THX_MOCK_PLUGIN_PATH));
+		svc = sm.get_service<thx_mock::MockService>();
+		REQUIRE(svc != nullptr);
+		REQUIRE(loader.unload(THX_MOCK_PLUGIN_PATH));
+
+		// DSO must still be mapped — a virtual call into plugin code works.
+		REQUIRE(svc->ping() == 42);
+		REQUIRE(thx::pending_plugin_garbage() >= 1);
+	} // loader destroyed; DSO still queued
+
+	// Service still works after the loader is gone.
+	REQUIRE(svc->ping() == 42);
+
+	// Drop the last reference; ~MockServiceImpl runs in the still-mapped DSO.
+	svc.reset();
+
+	// Nothing has actually been unmapped yet.
+	REQUIRE(thx::pending_plugin_garbage() >= 1);
+
+	auto closed = thx::collect_plugin_garbage();
+	REQUIRE(closed >= 1);
+	REQUIRE(thx::pending_plugin_garbage() == 0);
+}
+
+TEST_CASE("PluginLoader - load drains the deferred-close queue",
+          "[plugin_loader][lifetime][integration]")
+{
+	thx::collect_plugin_garbage();
+
+	thx::ServiceManager sm;
+	thx::PluginLoader   loader(sm);
+
+	REQUIRE(loader.load(THX_MOCK_PLUGIN_PATH));
+	REQUIRE(loader.unload(THX_MOCK_PLUGIN_PATH));
+	REQUIRE(thx::pending_plugin_garbage() >= 1);
+
+	// Loading any plugin path drains the queue first.
+	REQUIRE(loader.load(THX_MOCK_PLUGIN_PATH));
+	REQUIRE(thx::pending_plugin_garbage() == 0);
+
+	REQUIRE(loader.unload(THX_MOCK_PLUGIN_PATH));
+	thx::collect_plugin_garbage();
+}
+
+// ---------------------------------------------------------------------------
 // PluginLoader::discover
 // ---------------------------------------------------------------------------
 
@@ -337,8 +395,11 @@ TEST_CASE("PluginLoader::discover_and_load - loads real plugin from directory",
 
 	// On Windows a loaded DLL's file is locked until FreeLibrary; unload the
 	// plugin (and release the service handle) before removing the temp dir.
+	// PluginLoader::unload defers the actual dlclose, so we must drain the
+	// graveyard explicitly before the file is unlinked.
 	svc.reset();
 	loader.unload(dst.string());
+	thx::collect_plugin_garbage();
 
 	fs::remove_all(tmp);
 

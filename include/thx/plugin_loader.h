@@ -37,9 +37,12 @@ namespace thx
 	// canonical paths so loading the same file twice is a safe no-op.
 	//
 	// Thread safety: not thread-safe. Protect concurrent calls externally if needed.
+	// (The deferred-dlclose graveyard used internally is thread-safe.)
 	//
-	// Destruction: any plugins still loaded when the PluginLoader is destroyed are
-	// unloaded automatically (services unregistered, DSOs closed).
+	// Destruction: any plugins still loaded when the PluginLoader is destroyed
+	// are unloaded automatically (services unregistered, DSO handles deferred).
+	// The destructor does NOT call collect_plugin_garbage(); call it explicitly
+	// when no service references into those DSOs remain.
 	class PluginLoader
 	{
 	public:
@@ -51,17 +54,25 @@ namespace thx
 
 		// Loads the plugin DSO at path and registers its service.
 		// If the canonical path is already loaded, returns ok (no-op).
+		//
+		// As a side effect, drains the deferred-close queue (see unload). This
+		// keeps the queue bounded in long-running programs but means any
+		// service references held over from an earlier unload MUST be released
+		// before calling load() — otherwise the drain unmaps the DSO out from
+		// under them.
 		Result<void, Error> load(std::string const& path);
 
-		// Unregisters the plugin's services and closes the DSO.
+		// Unregisters the plugin's services and releases the DSO from this loader.
 		// Returns Err(NotLoaded) if path was not previously loaded.
 		//
-		// Safety: callers MUST release every shared_ptr<IService> obtained from
-		// this plugin before calling unload (or destroying the loader). The
-		// service's destructor and shared_ptr control block both live in plugin
-		// code; once the DSO is unloaded, releasing a still-held service ref is
-		// undefined behaviour. A deferred-dlclose mechanism that lifts this
-		// restriction is tracked as a future roadmap milestone.
+		// Lifetime: the DSO is NOT immediately unmapped. Its native handle is
+		// pushed onto a process-wide deferred-close queue, drained at the next
+		// call to load() or thx::collect_plugin_garbage(). This means callers
+		// MAY hold shared_ptr<IService> handles across unload — the DSO stays
+		// mapped (and the service's destructor / shared_ptr control block stay
+		// reachable) until the next drain. Once collect_plugin_garbage() runs,
+		// every still-held service reference into the unmapped DSO becomes
+		// undefined behaviour, so drain only when no such references remain.
 		Result<void, Error> unload(std::string const& path);
 
 		// Returns true if the canonical path is currently loaded.
@@ -96,5 +107,18 @@ namespace thx
 
 		static std::string resolve_canonical(std::string const& path);
 	};
+
+	// Unmaps every DSO that has been released via PluginLoader::unload (or
+	// PluginLoader destruction) since the last drain. Returns the number of
+	// DSOs actually unmapped.
+	//
+	// Safety: any shared_ptr<IService> that was registered by one of those
+	// plugins MUST be released before calling this. After collection, code
+	// belonging to the unmapped DSO (including the shared_ptr control block
+	// destructors for any leftover service refs) is no longer reachable.
+	std::size_t collect_plugin_garbage() noexcept;
+
+	// Number of DSOs awaiting unmap. Useful for diagnostics and tests.
+	std::size_t pending_plugin_garbage() noexcept;
 
 } // namespace thx

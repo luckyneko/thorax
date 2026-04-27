@@ -15,6 +15,24 @@
 namespace thx
 {
 
+namespace detail
+{
+	// Defined in plugin_handle.cpp alongside the graveyard storage.
+	std::size_t drain_dso_graveyard() noexcept;
+	std::size_t pending_dso_graveyard() noexcept;
+} // namespace detail
+
+std::size_t collect_plugin_garbage() noexcept
+{
+	return detail::drain_dso_graveyard();
+}
+
+std::size_t pending_plugin_garbage() noexcept
+{
+	return detail::pending_dso_graveyard();
+}
+
+
 PluginLoader::PluginLoader(ServiceManager& sm) : sm_(sm) {}
 
 PluginLoader::~PluginLoader()
@@ -103,6 +121,14 @@ namespace
 
 Result<void, Error> PluginLoader::load(std::string const& path)
 {
+	// Drain the deferred-close queue before any new dlopen so we don't
+	// accumulate a long tail of mapped-but-released DSOs in long-running
+	// processes. Safe at this point: any references that survived the previous
+	// unload have either been released by now (the user's responsibility) or
+	// the user is intentionally keeping them alive — in which case they should
+	// not be calling load() yet.
+	detail::drain_dso_graveyard();
+
 	auto canonical = resolve_canonical(path);
 	if (canonical.empty())
 		return Result<void, Error>::err({ErrorCode::FileNotFound,
