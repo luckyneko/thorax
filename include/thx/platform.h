@@ -37,21 +37,29 @@ namespace thx
 // Plugin-side export helpers
 // ---------------------------------------------------------------------------
 
-// On Windows, symbols must be explicitly marked for export from a DLL.
+// THX_PLUGIN_API bundles extern "C", the platform DLL-export attribute, and
+// (on POSIX with -fvisibility=hidden) an explicit default-visibility marker
+// into a single decorator for the three thx_* plugin entry-points.
+//
+// Using -fvisibility=hidden on plugin DSOs ensures that only these three
+// symbols are visible to the dynamic linker, avoiding ODR collisions between
+// independently loaded plugins that happen to define the same internal names.
 #if defined(_WIN32)
-#  define THX_PLUGIN_EXPORT __declspec(dllexport)
+#  define THX_PLUGIN_API extern "C" __declspec(dllexport)
+#elif defined(__GNUC__) || defined(__clang__)
+#  define THX_PLUGIN_API extern "C" __attribute__((visibility("default")))
 #else
-#  define THX_PLUGIN_EXPORT
+#  define THX_PLUGIN_API extern "C"
 #endif
 
 // Every thorax plugin shared library must export three C-linkage symbols:
 //
-//   extern "C" thx::IPlugin* thx_create_plugin();
-//   extern "C" void          thx_destroy_plugin(thx::IPlugin*);
-//   extern "C" uint32_t      thx_abi_version();
+//   thx::IPlugin* thx_create_plugin();
+//   void          thx_destroy_plugin(thx::IPlugin*);
+//   uint32_t      thx_abi_version();
 //
-// Use one of the macros below to emit them; they are macros because extern "C"
-// and fixed symbol names cannot be expressed in standard C++ without one.
+// Use one of the macros below to emit them; they are macros because fixed
+// symbol names and extern "C" cannot be expressed in standard C++ without one.
 //
 // thx_abi_version() embeds the major component of THORAX_VERSION at plugin
 // compile time. PluginHandle::open() checks this against the host's major
@@ -67,18 +75,18 @@ namespace thx
 //
 // Place this macro once in a .cpp file. ServiceType must inherit from
 // thx::Service<ServiceType>, define static_version(), and be default-constructible.
-#define THX_DEFINE_SERVICE_PLUGIN(ServiceType)                                \
-	extern "C" THX_PLUGIN_EXPORT thx::IPlugin* thx_create_plugin()             \
-	{                                                                          \
-		return new (std::nothrow) thx::ServicePluginShim<ServiceType>();       \
-	}                                                                          \
-	extern "C" THX_PLUGIN_EXPORT void thx_destroy_plugin(thx::IPlugin* p)      \
-	{                                                                          \
-		delete p;                                                              \
-	}                                                                          \
-	extern "C" THX_PLUGIN_EXPORT uint32_t thx_abi_version()                    \
-	{                                                                          \
-		return thx::THORAX_VERSION.major;                                      \
+#define THX_DEFINE_SERVICE_PLUGIN(ServiceType)                               \
+	THX_PLUGIN_API thx::IPlugin* thx_create_plugin()                          \
+	{                                                                         \
+		return new (std::nothrow) thx::ServicePluginShim<ServiceType>();      \
+	}                                                                         \
+	THX_PLUGIN_API void thx_destroy_plugin(thx::IPlugin* p)                   \
+	{                                                                         \
+		delete p;                                                             \
+	}                                                                         \
+	THX_PLUGIN_API uint32_t thx_abi_version()                                 \
+	{                                                                         \
+		return thx::THORAX_VERSION.major;                                     \
 	}
 
 // THX_DEFINE_PLUGIN(PluginType) — power-user form. The plugin author supplies
@@ -86,16 +94,16 @@ namespace thx
 // required() dependencies.
 //
 // PluginType must inherit from thx::IPlugin and be default-constructible.
-#define THX_DEFINE_PLUGIN(PluginType)                                         \
-	extern "C" THX_PLUGIN_EXPORT thx::IPlugin* thx_create_plugin()             \
-	{                                                                          \
-		return new (std::nothrow) PluginType();                                \
-	}                                                                          \
-	extern "C" THX_PLUGIN_EXPORT void thx_destroy_plugin(thx::IPlugin* p)      \
-	{                                                                          \
-		delete p;                                                              \
-	}                                                                          \
-	extern "C" THX_PLUGIN_EXPORT uint32_t thx_abi_version()                    \
-	{                                                                          \
-		return thx::THORAX_VERSION.major;                                      \
+#define THX_DEFINE_PLUGIN(PluginType)                                        \
+	THX_PLUGIN_API thx::IPlugin* thx_create_plugin()                          \
+	{                                                                         \
+		return new (std::nothrow) PluginType();                               \
+	}                                                                         \
+	THX_PLUGIN_API void thx_destroy_plugin(thx::IPlugin* p)                   \
+	{                                                                         \
+		delete p;                                                             \
+	}                                                                         \
+	THX_PLUGIN_API uint32_t thx_abi_version()                                 \
+	{                                                                         \
+		return thx::THORAX_VERSION.major;                                     \
 	}

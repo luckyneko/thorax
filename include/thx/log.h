@@ -14,9 +14,9 @@
 
 // Detect compiler support for builtin source-location default arguments.
 // These let thx::log() capture the caller's file/line/function without a macro.
-// __builtin_FILE/LINE/FUNCTION are GCC/Clang builtins; MSVC does not expose them
-// and its __has_builtin operator emits C4067 when querying unknown builtins.
-#if defined(__GNUC__) || defined(__clang__)
+// GCC/Clang support __builtin_FILE/LINE/FUNCTION natively.
+// MSVC supports them since VS 2019 16.6 (_MSC_VER 1926).
+#if defined(__GNUC__) || defined(__clang__) || (defined(_MSC_VER) && _MSC_VER >= 1926)
 #  define THX_DETAIL_HAS_BUILTIN_LOCATION 1
 #endif
 
@@ -31,9 +31,9 @@ namespace thx
 	};
 
 	// Thin source-location descriptor.
-	// On GCC/Clang, current() captures the call site via compiler builtins when
-	// used as a default argument (C++17-compatible, no macros required).
-	// On other compilers the macros THX_LOG / THX_ASSERT provide location capture.
+	// current() captures the call site via compiler builtins when used as a
+	// default argument (C++17-compatible, no macros required). Supported on
+	// GCC, Clang, and MSVC >= VS 2019 16.6; empty on older toolchains.
 	struct SourceLocation
 	{
 		const char* file     = "";
@@ -78,8 +78,8 @@ namespace thx
 	void set_log_sink(std::shared_ptr<ILogSink> sink);
 
 	// Emits a log record to the active sink.
-	// On GCC/Clang the source location is captured automatically at the call site;
-	// use THX_LOG for portable location capture.
+	// The source location is captured automatically at the call site on supported
+	// compilers (GCC, Clang, MSVC >= VS 2019 16.6).
 	void log(LogLevel            level,
 	         std::string const&  message,
 	         SourceLocation      location = SourceLocation::current());
@@ -100,18 +100,3 @@ namespace thx
 	}
 
 } // namespace thx
-
-// ---------------------------------------------------------------------------
-// Portable call-site capture macros
-// ---------------------------------------------------------------------------
-
-// THX_LOG(level, msg) — emits a log record with the call site's file/line/func.
-// Prefer this form for portable source-location capture on all compilers.
-#define THX_LOG(level, msg) \
-	thx::log((level), (msg), \
-	         thx::SourceLocation{__FILE__, static_cast<int>(__LINE__), __func__})
-
-// THX_ASSERT(cond, msg) — logs + aborts in debug builds if cond is false.
-#define THX_ASSERT(cond, msg) \
-	thx::assert_that((cond), (msg), \
-	                 thx::SourceLocation{__FILE__, static_cast<int>(__LINE__), __func__})

@@ -1,3 +1,5 @@
+include(thx_warnings)
+
 enable_testing()
 
 # All example targets include the examples/ root so that
@@ -8,18 +10,23 @@ add_library(example_plugin_logging SHARED
 )
 target_link_libraries(example_plugin_logging PRIVATE ${PROJECT_NAME})
 target_include_directories(example_plugin_logging PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+thx_set_warnings(example_plugin_logging)
+target_compile_options(example_plugin_logging PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fvisibility=hidden>)
 
 add_library(example_plugin_file SHARED
     plugin_file/file_plugin.cpp
 )
 target_link_libraries(example_plugin_file PRIVATE ${PROJECT_NAME})
 target_include_directories(example_plugin_file PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+thx_set_warnings(example_plugin_file)
+target_compile_options(example_plugin_file PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fvisibility=hidden>)
 
 add_executable(example_host
     host/main.cpp
 )
 target_link_libraries(example_host PRIVATE ${PROJECT_NAME})
 target_include_directories(example_host PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+thx_set_warnings(example_host)
 add_dependencies(example_host example_plugin_logging example_plugin_file)
 
 # Run the host with the directory that contains the two built plugins.

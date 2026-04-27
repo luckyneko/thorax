@@ -18,6 +18,7 @@ endif()
 project(thorax LANGUAGES CXX VERSION 0.0.1)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
+include(thx_warnings)
 
 # GCC 9.1 is the minimum version that supports __PRETTY_FUNCTION__ in constexpr.
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS "9.1")
@@ -93,13 +94,7 @@ endif()
 # Force C++17
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
 
-# Enable Warnings as errors
-if(MSVC)
-    string(REGEX REPLACE "/W[0-4]" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-    target_compile_options(${PROJECT_NAME} PRIVATE /WX /W4)
-else()
-    target_compile_options(${PROJECT_NAME} PRIVATE -Werror -Wall -Wextra)
-endif()
+thx_set_warnings(${PROJECT_NAME})
 
 # Handle Sanitization
 if(THORAX_SANITIZE)
@@ -131,12 +126,16 @@ if(THORAX_BUILD_TESTING)
     )
     target_link_libraries(mock_plugin PRIVATE ${PROJECT_NAME})
     target_include_directories(mock_plugin PRIVATE test/mock_plugin)
+    thx_set_warnings(mock_plugin)
+    target_compile_options(mock_plugin PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fvisibility=hidden>)
 
     # Mock plugin that exports thx_abi_version() = 999 to test version-mismatch rejection.
     add_library(mock_plugin_bad_abi SHARED
         test/mock_plugin_bad_abi/mock_bad_abi.cpp
     )
     target_link_libraries(mock_plugin_bad_abi PRIVATE ${PROJECT_NAME})
+    thx_set_warnings(mock_plugin_bad_abi)
+    target_compile_options(mock_plugin_bad_abi PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fvisibility=hidden>)
 
     # IPlugin-based mock that registers ServiceA + ServiceB and requires MockService.
     add_library(mock_plugin_multi SHARED
@@ -144,12 +143,16 @@ if(THORAX_BUILD_TESTING)
     )
     target_link_libraries(mock_plugin_multi PRIVATE ${PROJECT_NAME})
     target_include_directories(mock_plugin_multi PRIVATE test/mock_plugin)
+    thx_set_warnings(mock_plugin_multi)
+    target_compile_options(mock_plugin_multi PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fvisibility=hidden>)
 
     # IPlugin-based mock whose onLoad returns false.
     add_library(mock_plugin_bails SHARED
         test/mock_plugin_bails/mock_plugin_bails.cpp
     )
     target_link_libraries(mock_plugin_bails PRIVATE ${PROJECT_NAME})
+    thx_set_warnings(mock_plugin_bails)
+    target_compile_options(mock_plugin_bails PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fvisibility=hidden>)
 
     add_executable(test-${PROJECT_NAME}
         test/thorax.cpp
@@ -163,6 +166,7 @@ if(THORAX_BUILD_TESTING)
     )
     target_link_libraries(test-${PROJECT_NAME} ${PROJECT_NAME} Catch2::Catch2WithMain)
     target_include_directories(test-${PROJECT_NAME} PRIVATE test/mock_plugin)
+    thx_set_warnings(test-${PROJECT_NAME})
     # Provide the built mock plugin paths at compile time.
     target_compile_definitions(test-${PROJECT_NAME} PRIVATE
         THX_MOCK_PLUGIN_PATH="$<TARGET_FILE:mock_plugin>"

@@ -30,15 +30,15 @@ public:
 
 } // namespace
 
-extern "C" THX_PLUGIN_EXPORT thx::IPlugin* thx_create_plugin()
+THX_PLUGIN_API thx::IPlugin* thx_create_plugin()
 {
 	return new (std::nothrow) BadAbiPlugin();
 }
-extern "C" THX_PLUGIN_EXPORT void thx_destroy_plugin(thx::IPlugin* p)
+THX_PLUGIN_API void thx_destroy_plugin(thx::IPlugin* p)
 {
 	delete p;
 }
-extern "C" THX_PLUGIN_EXPORT uint32_t thx_abi_version()
+THX_PLUGIN_API uint32_t thx_abi_version()
 {
 	return 999u;
 }

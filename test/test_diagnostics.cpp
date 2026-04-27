@@ -100,11 +100,11 @@ TEST_CASE("log - all LogLevel values are routed", "[log]")
 	REQUIRE(g.records()[3].level == thx::LogLevel::Error);
 }
 
-TEST_CASE("THX_LOG - captures call-site source location", "[log]")
+TEST_CASE("log - captures call-site source location", "[log]")
 {
 	SinkGuard g;
 	int expected_line = __LINE__ + 1;
-	THX_LOG(thx::LogLevel::Debug, "location check");
+	thx::log(thx::LogLevel::Debug, "location check");
 
 	REQUIRE(!g.records().empty());
 	auto const& loc = g.records()[0].location;
@@ -150,13 +150,6 @@ TEST_CASE("assert_that - true condition does not log", "[assert]")
 	REQUIRE(g.records().empty());
 }
 
-TEST_CASE("THX_ASSERT - true condition does not log", "[assert]")
-{
-	SinkGuard g;
-	THX_ASSERT(true, "should not appear");
-	REQUIRE(g.records().empty());
-}
-
 #if defined(NDEBUG)
 TEST_CASE("assert_that - false condition logs Error in release build", "[assert]")
 {
@@ -168,11 +161,11 @@ TEST_CASE("assert_that - false condition logs Error in release build", "[assert]
 	REQUIRE(g.records()[0].message == "intentional failure");
 }
 
-TEST_CASE("THX_ASSERT - captures source location on failure", "[assert]")
+TEST_CASE("assert_that - captures source location on failure", "[assert]")
 {
 	SinkGuard g;
 	int expected_line = __LINE__ + 1;
-	THX_ASSERT(false, "location check");
+	thx::assert_that(false, "location check");
 
 	REQUIRE(!g.records().empty());
 	REQUIRE(g.records()[0].location.line == expected_line);
