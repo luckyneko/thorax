@@ -49,10 +49,12 @@ public:
 		sm.unregister_service<thx_mock::ServiceA>();
 	}
 
-	thx::Span<const thx::ServiceID> required() const override
+	thx::Span<const thx::ServiceRequirement> required() const override
 	{
-		static const thx::ServiceID kReqs[] = { thx_mock::MockService::static_id() };
-		return thx::Span<const thx::ServiceID>(kReqs, 1);
+		static const thx::ServiceRequirement kReqs[] = {
+			{ thx_mock::MockService::static_id(), thx_mock::MockService::static_version() }
+		};
+		return thx::Span<const thx::ServiceRequirement>(kReqs, 1);
 	}
 };
 

@@ -9,7 +9,9 @@
 #include "thx/plugin_loader.h"
 #include "thx/platform.h"
 
+#include <algorithm>
 #include <filesystem>
+#include <sstream>
 #include <unordered_set>
 
 namespace thx
@@ -54,13 +56,29 @@ std::string PluginLoader::resolve_canonical(std::string const& path)
 
 namespace
 {
-	bool service_registered(ServiceManager const& sm, ServiceID id)
+	// Returns ok if the registry has a service matching `req` (same ID, version
+	// satisfies compatible(req.version, registered.version)). Returns Err with
+	// a useful diagnostic otherwise.
+	Result<void, Error> check_requirement(ServiceManager const& sm,
+	                                     ServiceRequirement const& req)
 	{
-		auto services = sm.list_services();
-		for (auto const& s : services)
-			if (s.id == id)
-				return true;
-		return false;
+		for (auto const& s : sm.list_services())
+		{
+			if (s.id != req.id)
+				continue;
+			if (compatible(req.version, s.version))
+				return Result<void, Error>::ok();
+
+			std::ostringstream msg;
+			msg << "plugin requires service '" << req.id.name() << "' at "
+			    << req.version.major << '.' << req.version.minor << '.' << req.version.patch
+			    << "; registered version is "
+			    << s.version.major << '.' << s.version.minor << '.' << s.version.patch;
+			return Result<void, Error>::err({ErrorCode::VersionMismatch, msg.str()});
+		}
+		return Result<void, Error>::err({ErrorCode::NotLoaded,
+			std::string("plugin requires service '") + req.id.name()
+			+ "' which is not registered"});
 	}
 
 	Result<void, Error> load_iplugin(ServiceManager& sm,
@@ -84,16 +102,12 @@ namespace
 				destroy(p);
 		});
 
-		// Reject if any required() service is missing.
+		// Reject if any required() service is missing or too old.
 		auto reqs = plugin->required();
 		for (std::size_t i = 0; i < reqs.size(); ++i)
 		{
-			if (!service_registered(sm, reqs[i]))
-			{
-				return Result<void, Error>::err({ErrorCode::NotLoaded,
-					std::string("plugin requires service '") + reqs[i].name()
-					+ "' which is not registered"});
-			}
+			if (auto r = check_requirement(sm, reqs[i]); !r)
+				return r;
 		}
 
 		// Snapshot the registry so we can attribute new registrations to this plugin.
@@ -194,34 +208,30 @@ std::vector<std::string> PluginLoader::discover(std::string const& directory) co
 		if (entry.path().extension().string() == kPluginExtension)
 			results.push_back(entry.path().string());
 	}
+	// Filesystem iteration order is unspecified; sort so load order is
+	// reproducible across runs and platforms.
+	std::sort(results.begin(), results.end());
 	return results;
 }
 
-Result<void, Error> PluginLoader::discover_and_load(std::string const& directory)
+PluginLoader::LoadSummary PluginLoader::discover_and_load(std::string const& directory)
 {
-	auto paths = discover(directory);
-
-	Result<void, Error> last_err = Result<void, Error>::ok();
-	int loaded = 0;
-
-	for (auto const& p : paths)
+	LoadSummary summary;
+	for (auto const& p : discover(directory))
 	{
 		auto r = load(p);
 		if (r)
 		{
-			++loaded;
+			summary.loaded.push_back(p);
 		}
 		else
 		{
 			thx::log(LogLevel::Warn,
 			    "discover_and_load: failed to load '" + p + "': " + r.error().message);
-			last_err = std::move(r);
+			summary.failed.emplace_back(p, std::move(r.error()));
 		}
 	}
-
-	if (loaded == 0 && !paths.empty())
-		return last_err;
-	return Result<void, Error>::ok();
+	return summary;
 }
 
 std::vector<LoadedPluginInfo> PluginLoader::list_plugins() const

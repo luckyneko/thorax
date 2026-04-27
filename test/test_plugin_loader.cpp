@@ -30,6 +30,10 @@
 #  error "THX_MOCK_BAILS_PLUGIN_PATH not defined — set via target_compile_definitions in CMakeLists.txt"
 #endif
 
+#ifndef THX_MOCK_REQUIRES_NEWER_PLUGIN_PATH
+#  error "THX_MOCK_REQUIRES_NEWER_PLUGIN_PATH not defined — set via target_compile_definitions in CMakeLists.txt"
+#endif
+
 // ---------------------------------------------------------------------------
 // Result<T, Error>
 // ---------------------------------------------------------------------------
@@ -360,6 +364,24 @@ TEST_CASE("PluginLoader - IPlugin onLoad returning false fails the load",
 	REQUIRE_FALSE(loader.is_loaded(THX_MOCK_BAILS_PLUGIN_PATH));
 }
 
+TEST_CASE("PluginLoader - IPlugin required() rejected when registered version is too old",
+          "[plugin_loader][iplugin][integration]")
+{
+	thx::ServiceManager sm;
+	thx::PluginLoader   loader(sm);
+
+	// mock_plugin registers MockService 1.0.0;
+	// mock_plugin_requires_newer demands MockService >= 2.0.0.
+	REQUIRE(loader.load(THX_MOCK_PLUGIN_PATH));
+
+	auto r = loader.load(THX_MOCK_REQUIRES_NEWER_PLUGIN_PATH);
+	REQUIRE_FALSE(r);
+	REQUIRE(r.error().code == thx::ErrorCode::VersionMismatch);
+	REQUIRE(r.error().message.find("2.0.0") != std::string::npos);
+	REQUIRE(r.error().message.find("1.0.0") != std::string::npos);
+	REQUIRE_FALSE(loader.is_loaded(THX_MOCK_REQUIRES_NEWER_PLUGIN_PATH));
+}
+
 TEST_CASE("PluginLoader - IPlugin required() service missing fails the load",
           "[plugin_loader][iplugin][integration]")
 {
@@ -391,12 +413,12 @@ TEST_CASE("PluginLoader::discover_and_load - loads real plugin from directory",
 	thx::ServiceManager sm;
 	thx::PluginLoader   loader(sm);
 
-	auto r   = loader.discover_and_load(tmp.string());
-	auto svc = sm.get_service<thx_mock::MockService>();
+	auto summary = loader.discover_and_load(tmp.string());
+	auto svc     = sm.get_service<thx_mock::MockService>();
 
-	bool r_ok    = r.is_ok();
-	bool svc_ok  = (svc != nullptr);
-	bool ping_ok = svc_ok && (svc->ping() == 42);
+	bool loaded_ok = (summary.loaded.size() == 1) && summary.failed.empty();
+	bool svc_ok    = (svc != nullptr);
+	bool ping_ok   = svc_ok && (svc->ping() == 42);
 
 	// On Windows a loaded DLL's file is locked until FreeLibrary; unload the
 	// plugin (and release the service handle) before removing the temp dir.
@@ -408,7 +430,7 @@ TEST_CASE("PluginLoader::discover_and_load - loads real plugin from directory",
 
 	fs::remove_all(tmp);
 
-	REQUIRE(r_ok);
+	REQUIRE(loaded_ok);
 	REQUIRE(svc_ok);
 	REQUIRE(ping_ok);
 }

@@ -82,10 +82,20 @@ namespace thx
 		// extension (.dylib / .so / .dll). Does not load them.
 		std::vector<std::string> discover(std::string const& directory) const;
 
+		// Outcome of a discover_and_load call: which paths loaded successfully
+		// and which failed (with their associated Error). Either list may be
+		// empty. Callers can choose how to react to partial failure.
+		struct LoadSummary
+		{
+			std::vector<std::string>                       loaded;
+			std::vector<std::pair<std::string, Error>>     failed;
+		};
+
 		// Discovers all plugins in directory and loads each one.
-		// Per-file errors are logged via thx::log() and skipped.
-		// Returns ok unless no plugins were found or all failed to load.
-		Result<void, Error> discover_and_load(std::string const& directory);
+		// Always returns a summary; callers inspect loaded/failed to decide
+		// what counts as success. Individual failures are also logged via
+		// thx::log().
+		LoadSummary discover_and_load(std::string const& directory);
 
 		// Returns a snapshot of currently loaded plugins and the service ID each
 		// registered. Useful for diagnostics and test assertions.

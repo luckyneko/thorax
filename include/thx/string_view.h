@@ -9,6 +9,7 @@
 #pragma once
 
 #include <cstddef>
+#include <string>
 #include <string_view>
 
 namespace thx
@@ -35,7 +36,8 @@ namespace thx
 		// Implicit construction from string literals so existing call sites
 		// (e.g. make_version(1, 0, 0, "alpha")) do not need updating.
 		constexpr StringView(const char* str) noexcept  // NOLINT(google-explicit-constructor)
-			: data_(str ? str : ""), size_(str ? cstrlen(str) : 0)
+			: data_(str ? str : "")
+			, size_(str ? std::char_traits<char>::length(str) : 0)
 		{
 		}
 
@@ -98,14 +100,6 @@ namespace thx
 	private:
 		const char*  data_;
 		std::size_t  size_;
-
-		static constexpr std::size_t cstrlen(const char* s) noexcept
-		{
-			std::size_t n = 0;
-			while (s[n])
-				++n;
-			return n;
-		}
 	};
 
 } // namespace thx

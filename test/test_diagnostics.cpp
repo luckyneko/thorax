@@ -51,7 +51,7 @@ struct SinkGuard
 	std::shared_ptr<CapturingSink> sink = std::make_shared<CapturingSink>();
 
 	SinkGuard()  { thx::set_log_sink(sink); }
-	~SinkGuard() { thx::set_log_sink(nullptr); }
+	~SinkGuard() { thx::restore_default_log_sink(); }
 
 	std::vector<thx::LogRecord> const& records() const { return sink->records; }
 
@@ -113,11 +113,25 @@ TEST_CASE("log - captures call-site source location", "[log]")
 	REQUIRE(std::string(loc.function).size() > 0);
 }
 
-TEST_CASE("set_log_sink - nullptr restores default without crashing", "[log]")
+TEST_CASE("set_log_sink - nullptr silences logging", "[log]")
 {
 	thx::set_log_sink(nullptr);
-	thx::log(thx::LogLevel::Info, "back to default");
-	// Absence of crash is the assertion.
+	// No crash, no output anywhere — the call simply drops.
+	thx::log(thx::LogLevel::Info, "this goes nowhere");
+	thx::restore_default_log_sink();
+}
+
+TEST_CASE("restore_default_log_sink - resumes stderr sink without crashing", "[log]")
+{
+	auto sink = std::make_shared<CapturingSink>();
+	thx::set_log_sink(sink);
+	thx::log(thx::LogLevel::Info, "captured");
+	REQUIRE(sink->records.size() == 1);
+
+	thx::restore_default_log_sink();
+	// Subsequent log goes to stderr (the default), not the captured sink.
+	thx::log(thx::LogLevel::Info, "default again");
+	REQUIRE(sink->records.size() == 1);
 }
 
 TEST_CASE("set_log_sink - replacing sink mid-stream", "[log]")
@@ -131,7 +145,7 @@ TEST_CASE("set_log_sink - replacing sink mid-stream", "[log]")
 	thx::set_log_sink(sink2);
 	thx::log(thx::LogLevel::Info, "to sink2");
 
-	thx::set_log_sink(nullptr); // restore
+	thx::restore_default_log_sink();
 
 	REQUIRE(sink1->records.size() == 1);
 	REQUIRE(sink2->records.size() == 1);
@@ -217,7 +231,7 @@ TEST_CASE("ServiceManager::set_log_sink - errors route to installed sink",
 	thx::ServiceManager sm;
 	sm.register_service(thx::ServiceID("test.Static"), thx::make_version(1, 0, 0), nullptr);
 
-	thx::ServiceManager::set_log_sink(nullptr); // restore
+	thx::restore_default_log_sink();
 
 	REQUIRE(sink->has_level(thx::LogLevel::Error));
 }

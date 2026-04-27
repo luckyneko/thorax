@@ -19,15 +19,22 @@
 
 namespace thx
 {
+	// Pairs a ServiceID with a minimum acceptable Version. Used by
+	// IPlugin::required() to declare versioned dependencies.
+	struct ServiceRequirement
+	{
+		ServiceID id;
+		Version   version;
+	};
+
 	// Plugin abstraction. A DSO produces exactly one IPlugin via thx_create_plugin
 	// and may register any number of services (or none) in onLoad.
 	//
-	// Lifetime contract: callers MUST release every shared_ptr<IService> they
-	// obtained from a plugin BEFORE calling PluginLoader::unload (or destroying
-	// the loader). When the DSO is unloaded the service's destructor — which
-	// lives in plugin code — becomes unreachable, and a still-held service
-	// reference will crash on release. A future roadmap milestone tracks
-	// deferred-dlclose plumbing that would lift this restriction.
+	// Lifetime: callers may hold shared_ptr<IService> handles past unload —
+	// PluginLoader::unload defers the dlclose into a graveyard that's drained
+	// at the next load() or via thx::collect_plugin_garbage(). Don't drain
+	// while service references are still alive: their destructors live in
+	// plugin code and need the DSO mapped to run.
 	class IPlugin
 	{
 	public:
@@ -49,9 +56,11 @@ namespace thx
 		// services registered in onLoad.
 		virtual void onUnload(ServiceManager& sm) = 0;
 
-		// Optional: services that must already be registered before onLoad runs.
-		// PluginLoader rejects the load if any are missing. Default: no requirements.
-		virtual Span<const ServiceID> required() const { return {}; }
+		// Optional: services that must already be registered (at a sufficient
+		// version) before onLoad runs. PluginLoader rejects the load if any
+		// requirement is missing or the registered version is too old.
+		// Default: no requirements.
+		virtual Span<const ServiceRequirement> required() const { return {}; }
 	};
 
 	// Convenience IPlugin used by THX_DEFINE_SERVICE_PLUGIN. Registers exactly

@@ -32,11 +32,12 @@ int main(int argc, char* argv[])
 	auto& sm = thx::ServiceManager::instance();
 	thx::PluginLoader loader(sm);
 
-	auto result = loader.discover_and_load(argv[1]);
-	if (!result)
+	auto summary = loader.discover_and_load(argv[1]);
+	if (summary.loaded.empty())
 	{
-		std::fprintf(stderr, "discover_and_load failed: %s\n",
-					 result.error().message.c_str());
+		std::fprintf(stderr, "discover_and_load: no plugins loaded from %s\n", argv[1]);
+		for (auto const& [path, err] : summary.failed)
+			std::fprintf(stderr, "  %s: %s\n", path.c_str(), err.message.c_str());
 		return 1;
 	}
 

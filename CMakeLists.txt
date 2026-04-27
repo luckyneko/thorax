@@ -154,6 +154,16 @@ if(THORAX_BUILD_TESTING)
     thx_set_warnings(mock_plugin_bails)
     target_compile_options(mock_plugin_bails PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fvisibility=hidden>)
 
+    # IPlugin-based mock that requires MockService at 2.0.0 (mock_plugin only
+    # registers 1.0.0), used to test the versioned-requirement rejection path.
+    add_library(mock_plugin_requires_newer SHARED
+        test/mock_plugin_requires_newer/mock_plugin_requires_newer.cpp
+    )
+    target_link_libraries(mock_plugin_requires_newer PRIVATE ${PROJECT_NAME})
+    target_include_directories(mock_plugin_requires_newer PRIVATE test/mock_plugin)
+    thx_set_warnings(mock_plugin_requires_newer)
+    target_compile_options(mock_plugin_requires_newer PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fvisibility=hidden>)
+
     add_executable(test-${PROJECT_NAME}
         test/thorax.cpp
         test/test_service_id.cpp
@@ -173,12 +183,14 @@ if(THORAX_BUILD_TESTING)
         THX_MOCK_BAD_ABI_PLUGIN_PATH="$<TARGET_FILE:mock_plugin_bad_abi>"
         THX_MOCK_MULTI_PLUGIN_PATH="$<TARGET_FILE:mock_plugin_multi>"
         THX_MOCK_BAILS_PLUGIN_PATH="$<TARGET_FILE:mock_plugin_bails>"
+        THX_MOCK_REQUIRES_NEWER_PLUGIN_PATH="$<TARGET_FILE:mock_plugin_requires_newer>"
     )
     add_dependencies(test-${PROJECT_NAME}
         mock_plugin
         mock_plugin_bad_abi
         mock_plugin_multi
         mock_plugin_bails
+        mock_plugin_requires_newer
     )
 
     if(THORAX_BUILD_PLUGINS)

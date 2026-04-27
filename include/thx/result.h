@@ -10,6 +10,8 @@
 
 #include <optional>
 #include <string>
+#include <type_traits>
+#include <utility>
 #include <variant>
 
 namespace thx
@@ -65,6 +67,26 @@ namespace thx
 		T const& value() const { return std::get<0>(data_); }
 		E&       error()       { return std::get<1>(data_); }
 		E const& error() const { return std::get<1>(data_); }
+
+		// Returns value() if ok, otherwise the supplied fallback.
+		T value_or(T fallback) const&
+		{
+			return is_ok() ? value() : std::move(fallback);
+		}
+
+		// Applies f to the contained value if ok, returning a new Result with
+		// the transformed type. On error, propagates the error unchanged.
+		//
+		// Example:
+		//   Result<int>::ok(2).map([](int n) { return n * 10; })  // → Result<int>::ok(20)
+		template <typename F>
+		auto map(F&& f) const& -> Result<std::decay_t<std::invoke_result_t<F, T const&>>, E>
+		{
+			using U = std::decay_t<std::invoke_result_t<F, T const&>>;
+			if (is_err())
+				return Result<U, E>::err(error());
+			return Result<U, E>::ok(std::forward<F>(f)(value()));
+		}
 
 	private:
 		template <std::size_t I, typename... Args>

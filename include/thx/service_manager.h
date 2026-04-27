@@ -16,6 +16,7 @@
 #include <mutex>
 #include <shared_mutex>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace thx
@@ -28,6 +29,7 @@ namespace thx
 	struct ServiceInfo
 	{
 		ServiceID id;
+		Version   version;
 	};
 
 	// Central registry that owns the lifetime of all registered services.
@@ -109,6 +111,10 @@ namespace thx
 
 		mutable std::shared_mutex mutex_;
 		std::unordered_map<ServiceID, Entry> services_;
+		// IDs reserved by an in-flight register_service. The factory and
+		// onConstruct callback run without the registry lock held; the ID is
+		// kept here so concurrent registers see it as taken and bail out.
+		std::unordered_set<ServiceID> reserved_;
 	};
 
 	// ---------------------------------------------------------------------------

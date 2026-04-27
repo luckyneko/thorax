@@ -33,19 +33,33 @@ bool ServiceManager::register_service(ServiceID id, Version version, ServiceFact
 		return false;
 	}
 
-	std::unique_lock lock(mutex_);
-
-	if (services_.find(id) != services_.end())
+	// Phase 1: reserve the ID. If anyone else already owns it (registered or
+	// in-flight reservation) we bail before doing real work.
 	{
-		thx::log(LogLevel::Warn,
-		    std::string("register_service: '") + id.name()
-		    + "' is already registered (single-owner registry)");
-		return false;
+		std::unique_lock lock(mutex_);
+		if (services_.find(id) != services_.end() || reserved_.count(id))
+		{
+			thx::log(LogLevel::Warn,
+			    std::string("register_service: '") + id.name()
+			    + "' is already registered (single-owner registry)");
+			return false;
+		}
+		reserved_.insert(id);
 	}
+
+	// Phase 2: build the service. The lock is NOT held here, so the factory
+	// and onConstruct callback may safely call back into ServiceManager
+	// (any attempt to re-register `id` will see the reservation and bail).
+	auto release_reservation = [&]
+	{
+		std::unique_lock lock(mutex_);
+		reserved_.erase(id);
+	};
 
 	auto service = factory();
 	if (!service)
 	{
+		release_reservation();
 		thx::log(LogLevel::Error,
 		    std::string("register_service: factory returned null for '") + id.name() + "'");
 		return false;
@@ -66,12 +80,18 @@ bool ServiceManager::register_service(ServiceID id, Version version, ServiceFact
 
 	if (!service->onConstruct())
 	{
+		release_reservation();
 		thx::log(LogLevel::Error,
 		    std::string("register_service: onConstruct failed for '") + id.name() + "'");
 		return false;
 	}
 
-	services_.emplace(id, Entry{std::move(service)});
+	// Phase 3: commit. Replace the reservation with the real entry atomically.
+	{
+		std::unique_lock lock(mutex_);
+		reserved_.erase(id);
+		services_.emplace(id, Entry{std::move(service)});
+	}
 	return true;
 }
 
@@ -107,7 +127,7 @@ std::vector<ServiceInfo> ServiceManager::list_services() const
 	std::vector<ServiceInfo> result;
 	result.reserve(services_.size());
 	for (auto const& [id, entry] : services_)
-		result.push_back({id});
+		result.push_back({id, entry.service->version()});
 	return result;
 }
 

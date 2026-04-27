@@ -73,9 +73,15 @@ namespace thx
 		virtual void write(LogRecord const&) = 0;
 	};
 
-	// Replaces the process-wide log sink. Pass nullptr to restore the default
-	// stderr sink. Thread-safe; the new sink is used for all subsequent log calls.
+	// Replaces the process-wide log sink. Passing nullptr SILENCES logging:
+	// records are dropped on the floor. Thread-safe; the new sink takes effect
+	// for all subsequent log calls. To go back to the built-in stderr sink,
+	// call restore_default_log_sink().
 	void set_log_sink(std::shared_ptr<ILogSink> sink);
+
+	// Restores the built-in stderr log sink. Equivalent to constructing a fresh
+	// instance of the default sink and passing it to set_log_sink(). Thread-safe.
+	void restore_default_log_sink();
 
 	// Emits a log record to the active sink.
 	// The source location is captured automatically at the call site on supported
