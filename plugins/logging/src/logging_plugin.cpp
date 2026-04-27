@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <fstream>
 #include <cstring>
 #include <mutex>
 #include <string>
@@ -56,17 +57,16 @@ struct ConsoleSink : ILogBackend
 
 struct FileSink : ILogBackend
 {
-	FILE* m_file{nullptr};
+	std::ofstream m_file;
 
-	explicit FileSink(const char* path) { m_file = std::fopen(path, "a"); }
-	~FileSink() { if (m_file) std::fclose(m_file); }
+	explicit FileSink(const char* path) { m_file.open(path, std::ios::app); }
 
 	void write(LogLevel level, const char* message) override
 	{
 		if (!m_file)
 			return;
-		std::fprintf(m_file, "[%s] %s\n", level_tag(level), message);
-		std::fflush(m_file);
+		m_file << "[" << level_tag(level) << "] " << message << "\n";
+		m_file.flush();
 	}
 };
 
@@ -82,36 +82,29 @@ struct FileSink : ILogBackend
 
 struct RotatingFileSink : ILogBackend
 {
-	std::string m_path;
-	long        m_max_size{0};
-	int         m_max_files{0};
-	FILE*       m_file{nullptr};
-	long        m_current_size{0};
+	std::string   m_path;
+	long          m_max_size{0};
+	int           m_max_files{0};
+	std::ofstream m_file;
+	long          m_current_size{0};
 
 	RotatingFileSink(const char* path, int max_size_bytes, int max_files)
 		: m_path(path)
 		, m_max_size(static_cast<long>(max_size_bytes))
 		, m_max_files(max_files)
 	{
-		m_file = std::fopen(path, "a");
+		m_file.open(path, std::ios::app);
 		if (m_file)
 		{
-			std::fseek(m_file, 0, SEEK_END);
-			long n = std::ftell(m_file);
-			if (n >= 0)
-				m_current_size = n;
+			auto pos = m_file.tellp();
+			if (pos >= 0)
+				m_current_size = static_cast<long>(pos);
 		}
 	}
 
-	~RotatingFileSink() { if (m_file) std::fclose(m_file); }
-
 	void rotate()
 	{
-		if (m_file)
-		{
-			std::fclose(m_file);
-			m_file = nullptr;
-		}
+		m_file.close();
 
 		// Shift numbered files outward (high → low index to avoid overwrite).
 		for (int i = m_max_files; i > 1; --i)
@@ -124,13 +117,13 @@ struct RotatingFileSink : ILogBackend
 		if (m_max_files >= 1)
 			std::rename(m_path.c_str(), (m_path + ".1").c_str());
 
-		m_file = std::fopen(m_path.c_str(), "w");
+		m_file.open(m_path, std::ios::trunc);
 		if (!m_file)
 		{
 			// Rotation renamed away the base file but couldn't create a fresh one.
 			// Best-effort: try to promote .1 back to base and reopen for append.
 			std::rename((m_path + ".1").c_str(), m_path.c_str());
-			m_file = std::fopen(m_path.c_str(), "a");
+			m_file.open(m_path, std::ios::app);
 		}
 		m_current_size = 0;
 	}
@@ -146,10 +139,11 @@ struct RotatingFileSink : ILogBackend
 		if (!m_file)
 			return;
 
-		int n = std::fprintf(m_file, "[%s] %s\n", level_tag(level), message);
-		if (n > 0)
-			m_current_size += static_cast<long>(n);
-		std::fflush(m_file);
+		auto line = std::string("[") + level_tag(level) + "] " + message + "\n";
+		m_file << line;
+		m_file.flush();
+		if (m_file)
+			m_current_size += static_cast<long>(line.size());
 	}
 };
 

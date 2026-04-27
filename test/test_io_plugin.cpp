@@ -82,14 +82,11 @@ struct SuffixReader : IFileReader
 			return -1;
 		std::memcpy(buffer, marker, static_cast<std::size_t>(mlen));
 
-		FILE* f = std::fopen(path, "rb");
+		std::ifstream f(path, std::ios::binary);
 		if (!f)
 			return mlen;
-		int n = static_cast<int>(std::fread(
-			buffer + mlen, 1,
-			static_cast<std::size_t>(buffer_size - mlen - 1), f));
-		std::fclose(f);
-		return mlen + n;
+		f.read(buffer + mlen, static_cast<std::streamsize>(buffer_size - mlen - 1));
+		return mlen + static_cast<int>(f.gcount());
 	}
 };
 

@@ -10,8 +10,7 @@
 #include <thx/platform.h>
 
 #include <algorithm>
-#include <cstddef>
-#include <cstdio>
+#include <fstream>
 #include <mutex>
 #include <vector>
 
@@ -33,14 +32,12 @@ struct TextReader : IFileReader
 		if (!path || !buffer || buffer_size <= 0)
 			return -1;
 
-		FILE* f = std::fopen(path, "rb");
+		std::ifstream f(path, std::ios::binary);
 		if (!f)
 			return -1;
 
-		int n = static_cast<int>(
-			std::fread(buffer, 1, static_cast<std::size_t>(buffer_size - 1), f));
-		std::fclose(f);
-		return n;
+		f.read(buffer, static_cast<std::streamsize>(buffer_size - 1));
+		return static_cast<int>(f.gcount());
 	}
 };
 

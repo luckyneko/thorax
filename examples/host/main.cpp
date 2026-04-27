@@ -20,6 +20,7 @@
 #include "interfaces/logging_service.h"
 
 #include <cstdio>
+#include <fstream>
 
 int main(int argc, char* argv[])
 {
@@ -60,14 +61,13 @@ int main(int argc, char* argv[])
 	// Write a small probe file and read it back via FileService.
 	const char* tmp_path = "thorax_example.tmp";
 	{
-		FILE* f = std::fopen(tmp_path, "w");
+		std::ofstream f(tmp_path);
 		if (!f)
 		{
 			std::fprintf(stderr, "Cannot write temp file\n");
 			return 1;
 		}
-		std::fputs("Hello from thorax FileService!", f);
-		std::fclose(f);
+		f << "Hello from thorax FileService!";
 	}
 
 	char buf[64] = {};
