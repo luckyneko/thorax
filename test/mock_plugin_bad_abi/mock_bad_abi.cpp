@@ -9,6 +9,7 @@
 // Intentionally exports thx_abi_version() returning 999 to trigger the
 // PluginHandle::open() version-mismatch rejection path.
 
+#include <thx/iplugin.h>
 #include <thx/platform.h>
 
 #include <cstdint>
@@ -17,14 +18,27 @@
 namespace
 {
 
-struct BadAbiService : thx::IService
+class BadAbiPlugin : public thx::IPlugin
 {
-	thx::ServiceID id()      const override { return thx::ServiceID("test.BadAbi"); }
-	thx::Version   version() const override { return thx::make_version(1, 0, 0);    }
+public:
+	thx::StringView name()    const override { return "test.BadAbi"; }
+	thx::Version    version() const override { return thx::make_version(1, 0, 0); }
+
+	bool onLoad(thx::ServiceManager&)   override { return true; }
+	void onUnload(thx::ServiceManager&) override {}
 };
 
 } // namespace
 
-extern "C" THX_PLUGIN_EXPORT thx::IService* thx_create()                { return new (std::nothrow) BadAbiService(); }
-extern "C" THX_PLUGIN_EXPORT void           thx_destroy(thx::IService* p) { delete p; }
-extern "C" THX_PLUGIN_EXPORT uint32_t       thx_abi_version()             { return 999u; }
+extern "C" THX_PLUGIN_EXPORT thx::IPlugin* thx_create_plugin()
+{
+	return new (std::nothrow) BadAbiPlugin();
+}
+extern "C" THX_PLUGIN_EXPORT void thx_destroy_plugin(thx::IPlugin* p)
+{
+	delete p;
+}
+extern "C" THX_PLUGIN_EXPORT uint32_t thx_abi_version()
+{
+	return 999u;
+}

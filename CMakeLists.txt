@@ -138,6 +138,19 @@ if(THORAX_BUILD_TESTING)
     )
     target_link_libraries(mock_plugin_bad_abi PRIVATE ${PROJECT_NAME})
 
+    # IPlugin-based mock that registers ServiceA + ServiceB and requires MockService.
+    add_library(mock_plugin_multi SHARED
+        test/mock_plugin_multi/mock_plugin_multi.cpp
+    )
+    target_link_libraries(mock_plugin_multi PRIVATE ${PROJECT_NAME})
+    target_include_directories(mock_plugin_multi PRIVATE test/mock_plugin)
+
+    # IPlugin-based mock whose onLoad returns false.
+    add_library(mock_plugin_bails SHARED
+        test/mock_plugin_bails/mock_plugin_bails.cpp
+    )
+    target_link_libraries(mock_plugin_bails PRIVATE ${PROJECT_NAME})
+
     add_executable(test-${PROJECT_NAME}
         test/thorax.cpp
         test/test_service_id.cpp
@@ -154,8 +167,15 @@ if(THORAX_BUILD_TESTING)
     target_compile_definitions(test-${PROJECT_NAME} PRIVATE
         THX_MOCK_PLUGIN_PATH="$<TARGET_FILE:mock_plugin>"
         THX_MOCK_BAD_ABI_PLUGIN_PATH="$<TARGET_FILE:mock_plugin_bad_abi>"
+        THX_MOCK_MULTI_PLUGIN_PATH="$<TARGET_FILE:mock_plugin_multi>"
+        THX_MOCK_BAILS_PLUGIN_PATH="$<TARGET_FILE:mock_plugin_bails>"
     )
-    add_dependencies(test-${PROJECT_NAME} mock_plugin mock_plugin_bad_abi)
+    add_dependencies(test-${PROJECT_NAME}
+        mock_plugin
+        mock_plugin_bad_abi
+        mock_plugin_multi
+        mock_plugin_bails
+    )
 
     if(THORAX_BUILD_PLUGINS)
         target_sources(test-${PROJECT_NAME} PRIVATE

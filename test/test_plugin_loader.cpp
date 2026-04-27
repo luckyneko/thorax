@@ -22,6 +22,14 @@
 #  error "THX_MOCK_BAD_ABI_PLUGIN_PATH not defined — set via target_compile_definitions in CMakeLists.txt"
 #endif
 
+#ifndef THX_MOCK_MULTI_PLUGIN_PATH
+#  error "THX_MOCK_MULTI_PLUGIN_PATH not defined — set via target_compile_definitions in CMakeLists.txt"
+#endif
+
+#ifndef THX_MOCK_BAILS_PLUGIN_PATH
+#  error "THX_MOCK_BAILS_PLUGIN_PATH not defined — set via target_compile_definitions in CMakeLists.txt"
+#endif
+
 // ---------------------------------------------------------------------------
 // Result<T, Error>
 // ---------------------------------------------------------------------------
@@ -82,8 +90,10 @@ TEST_CASE("PluginHandle::open - valid mock plugin", "[plugin_handle]")
 	auto r = thx::PluginHandle::open(THX_MOCK_PLUGIN_PATH);
 	REQUIRE(r.is_ok());
 	REQUIRE(bool(r.value()));
-	REQUIRE(r.value().create_fn()  != nullptr);
-	REQUIRE(r.value().destroy_fn() != nullptr);
+	// mock_plugin uses THX_DEFINE_SERVICE_PLUGIN, so the IPlugin ABI is preferred.
+	REQUIRE(r.value().has_iplugin_abi());
+	REQUIRE(r.value().plugin_create_fn()  != nullptr);
+	REQUIRE(r.value().plugin_destroy_fn() != nullptr);
 }
 
 TEST_CASE("PluginHandle::open - mismatched ABI version returns VersionMismatch", "[plugin_handle]")
@@ -240,6 +250,67 @@ TEST_CASE("PluginLoader::discover - empty directory returns empty list",
 	fs::remove_all(tmp);
 
 	REQUIRE(found.empty());
+}
+
+// ---------------------------------------------------------------------------
+// PluginLoader — IPlugin ABI integration
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginLoader - IPlugin plugin registers multiple services",
+          "[plugin_loader][iplugin][integration]")
+{
+	thx::ServiceManager sm;
+	thx::PluginLoader   loader(sm);
+
+	// mock_plugin_multi requires MockService, so load mock_plugin first.
+	REQUIRE(loader.load(THX_MOCK_PLUGIN_PATH));
+	REQUIRE(loader.load(THX_MOCK_MULTI_PLUGIN_PATH));
+
+	REQUIRE(sm.get_service<thx_mock::MockService>() != nullptr);
+	REQUIRE(sm.get_service<thx_mock::ServiceA>()    != nullptr);
+	REQUIRE(sm.get_service<thx_mock::ServiceB>()    != nullptr);
+}
+
+TEST_CASE("PluginLoader - unloading IPlugin plugin removes all its services",
+          "[plugin_loader][iplugin][integration]")
+{
+	thx::ServiceManager sm;
+	thx::PluginLoader   loader(sm);
+
+	loader.load(THX_MOCK_PLUGIN_PATH);
+	loader.load(THX_MOCK_MULTI_PLUGIN_PATH);
+
+	REQUIRE(loader.unload(THX_MOCK_MULTI_PLUGIN_PATH));
+	REQUIRE(sm.get_service<thx_mock::ServiceA>() == nullptr);
+	REQUIRE(sm.get_service<thx_mock::ServiceB>() == nullptr);
+	// MockService still registered by mock_plugin.
+	REQUIRE(sm.get_service<thx_mock::MockService>() != nullptr);
+}
+
+TEST_CASE("PluginLoader - IPlugin onLoad returning false fails the load",
+          "[plugin_loader][iplugin][integration]")
+{
+	thx::ServiceManager sm;
+	thx::PluginLoader   loader(sm);
+
+	auto r = loader.load(THX_MOCK_BAILS_PLUGIN_PATH);
+	REQUIRE_FALSE(r);
+	REQUIRE(r.error().code == thx::ErrorCode::RegistrationFailed);
+	REQUIRE_FALSE(loader.is_loaded(THX_MOCK_BAILS_PLUGIN_PATH));
+}
+
+TEST_CASE("PluginLoader - IPlugin required() service missing fails the load",
+          "[plugin_loader][iplugin][integration]")
+{
+	thx::ServiceManager sm;
+	thx::PluginLoader   loader(sm);
+
+	// mock_plugin_multi requires MockService — without loading mock_plugin
+	// first, the load must fail.
+	auto r = loader.load(THX_MOCK_MULTI_PLUGIN_PATH);
+	REQUIRE_FALSE(r);
+	REQUIRE(r.error().code == thx::ErrorCode::NotLoaded);
+	REQUIRE_FALSE(loader.is_loaded(THX_MOCK_MULTI_PLUGIN_PATH));
 }
 
 TEST_CASE("PluginLoader::discover_and_load - loads real plugin from directory",

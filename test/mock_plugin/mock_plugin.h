@@ -25,4 +25,22 @@ struct MockService : thx::Service<MockService>
 	virtual int ping() const = 0;
 };
 
+// Additional services registered by mock_plugin_multi (used by the
+// IPlugin-multi-service tests).
+struct ServiceA : thx::Service<ServiceA>
+{
+	static constexpr thx::Version static_version()
+	{
+		return thx::make_version(1, 0, 0);
+	}
+};
+
+struct ServiceB : thx::Service<ServiceB>
+{
+	static constexpr thx::Version static_version()
+	{
+		return thx::make_version(1, 0, 0);
+	}
+};
+
 } // namespace thx_mock

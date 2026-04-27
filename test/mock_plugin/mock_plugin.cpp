@@ -19,4 +19,4 @@ struct MockServiceImpl : thx_mock::MockService
 
 } // namespace
 
-THX_DEFINE_PLUGIN(MockServiceImpl)
+THX_DEFINE_SERVICE_PLUGIN(MockServiceImpl)
