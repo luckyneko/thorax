@@ -99,6 +99,11 @@ TEST_CASE("PluginHandle::open - mismatched ABI version returns VersionMismatch",
 	auto r = thx::PluginHandle::open(THX_MOCK_BAD_ABI_PLUGIN_PATH);
 	REQUIRE(!r);
 	REQUIRE(r.error().code == thx::ErrorCode::VersionMismatch);
+
+	// The diagnostic should include both the plugin's claimed version (99.0.0
+	// per the mock) and the host's THORAX_VERSION so the user can tell which
+	// side is too new.
+	REQUIRE(r.error().message.find("99.0.0") != std::string::npos);
 }
 
 // ---------------------------------------------------------------------------

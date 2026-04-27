@@ -61,9 +61,12 @@ namespace thx
 // Use one of the macros below to emit them; they are macros because fixed
 // symbol names and extern "C" cannot be expressed in standard C++ without one.
 //
-// thx_abi_version() embeds the major component of THORAX_VERSION at plugin
-// compile time. PluginHandle::open() checks this against the host's major
-// version and rejects mismatches before the plugin is instantiated.
+// thx_abi_version() returns THORAX_VERSION packed into a uint32_t (see
+// pack_version()). PluginHandle::open() unpacks it and asks compatible():
+// the plugin's major must match the host's, and the host's full
+// major.minor.patch must be ≥ the plugin's. A plugin built against a newer
+// thorax than the host is rejected; a plugin built against the same major
+// but older minor/patch is accepted.
 //
 // The create function uses placement-new with std::nothrow so allocation
 // failure returns nullptr rather than throwing; PluginLoader already rejects
@@ -86,7 +89,7 @@ namespace thx
 	}                                                                         \
 	THX_PLUGIN_API uint32_t thx_abi_version()                                 \
 	{                                                                         \
-		return thx::THORAX_VERSION.major;                                     \
+		return thx::pack_version(thx::THORAX_VERSION);                        \
 	}
 
 // THX_DEFINE_PLUGIN(PluginType) — power-user form. The plugin author supplies
@@ -105,5 +108,5 @@ namespace thx
 	}                                                                         \
 	THX_PLUGIN_API uint32_t thx_abi_version()                                 \
 	{                                                                         \
-		return thx::THORAX_VERSION.major;                                     \
+		return thx::pack_version(thx::THORAX_VERSION);                        \
 	}

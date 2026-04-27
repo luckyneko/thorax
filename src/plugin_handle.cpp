@@ -10,6 +10,7 @@
 #include "thx/version.h"
 
 #include <mutex>
+#include <sstream>
 #include <vector>
 
 #if defined(_WIN32)
@@ -179,11 +180,20 @@ Result<PluginHandle, Error> PluginHandle::open(std::string const& path)
 			"thx_create_plugin or thx_destroy_plugin not found in: " + path});
 	}
 
-	if (abi_ver_fn && abi_ver_fn() != thx::THORAX_VERSION.major)
+	if (abi_ver_fn)
 	{
-		native_close(h);
-		return Result<PluginHandle, Error>::err({ErrorCode::VersionMismatch,
-			"ABI major version mismatch in: " + path});
+		Version plugin_v = unpack_version(abi_ver_fn());
+		if (!compatible(plugin_v, THORAX_VERSION))
+		{
+			std::ostringstream msg;
+			msg << "Plugin built against thorax "
+			    << plugin_v.major << '.' << plugin_v.minor << '.' << plugin_v.patch
+			    << " is not compatible with host "
+			    << THORAX_VERSION.major << '.' << THORAX_VERSION.minor << '.' << THORAX_VERSION.patch
+			    << ": " << path;
+			native_close(h);
+			return Result<PluginHandle, Error>::err({ErrorCode::VersionMismatch, msg.str()});
+		}
 	}
 
 	PluginHandle handle;

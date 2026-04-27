@@ -227,3 +227,44 @@ TEST_CASE("Version - compatible: pre-release does not satisfy release requiremen
 	STATIC_REQUIRE(!thx::compatible(thx::make_version(1, 0, 0),
 									thx::make_version(1, 0, 0, "alpha")));
 }
+
+// ---------------------------------------------------------------------------
+// pack_version / unpack_version
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Version - pack/unpack roundtrip preserves major.minor.patch",
+		  "[version][pack]")
+{
+	constexpr auto v       = thx::make_version(2, 5, 17);
+	constexpr auto packed  = thx::pack_version(v);
+	constexpr auto roundt  = thx::unpack_version(packed);
+	STATIC_REQUIRE(roundt.major == 2);
+	STATIC_REQUIRE(roundt.minor == 5);
+	STATIC_REQUIRE(roundt.patch == 17);
+}
+
+TEST_CASE("Version - pack_version uses fixed bit layout",
+		  "[version][pack]")
+{
+	// Documented encoding: (major<<24) | (minor<<16) | patch
+	constexpr auto packed = thx::pack_version(thx::make_version(0x12, 0x34, 0x5678));
+	STATIC_REQUIRE(packed == 0x12345678u);
+}
+
+TEST_CASE("Version - pack_version drops pre_release and build_metadata",
+		  "[version][pack]")
+{
+	// Pre-release / build metadata don't fit in the packed encoding.
+	constexpr auto a = thx::pack_version(thx::make_version(1, 2, 3));
+	constexpr auto b = thx::pack_version(thx::make_version(1, 2, 3, "alpha", "build"));
+	STATIC_REQUIRE(a == b);
+}
+
+TEST_CASE("Version - unpack_version of zero is the default Version",
+		  "[version][pack]")
+{
+	constexpr auto v = thx::unpack_version(0);
+	STATIC_REQUIRE(v.major == 0);
+	STATIC_REQUIRE(v.minor == 0);
+	STATIC_REQUIRE(v.patch == 0);
+}

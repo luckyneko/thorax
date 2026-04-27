@@ -76,4 +76,29 @@ namespace thx
 		return provided.major == required.major && provided >= required;
 	}
 
+	// Packs major/minor/patch into a single uint32_t for crossing the C plugin
+	// ABI (where struct returns are unsafe). Encoding is fixed:
+	//   bits 24..31 → major  (0..255)
+	//   bits 16..23 → minor  (0..255)
+	//   bits  0..15 → patch  (0..65535)
+	// Pre-release / build metadata are not represented; the loader gate uses
+	// only major.minor.patch precedence, which is sufficient for runtime
+	// compatibility checks. Components above their bit range are truncated.
+	constexpr uint32_t pack_version(Version const& v) noexcept
+	{
+		return ((v.major & 0xFFu) << 24)
+		     | ((v.minor & 0xFFu) << 16)
+		     |  (v.patch & 0xFFFFu);
+	}
+
+	// Inverse of pack_version. Returns a Version with empty pre_release and
+	// build_metadata.
+	constexpr Version unpack_version(uint32_t packed) noexcept
+	{
+		return Version{
+			(packed >> 24) & 0xFFu,
+			(packed >> 16) & 0xFFu,
+			 packed        & 0xFFFFu};
+	}
+
 } // namespace thx

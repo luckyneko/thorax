@@ -6,8 +6,9 @@
  *  (See accompanying file LICENSE.md)
  */
 
-// Intentionally exports thx_abi_version() returning 999 to trigger the
-// PluginHandle::open() version-mismatch rejection path.
+// Intentionally exports thx_abi_version() with a major component well outside
+// any plausible host's, to trigger PluginHandle::open()'s version-mismatch
+// rejection path.
 
 #include <thx/iplugin.h>
 #include <thx/platform.h>
@@ -40,5 +41,6 @@ THX_PLUGIN_API void thx_destroy_plugin(thx::IPlugin* p)
 }
 THX_PLUGIN_API uint32_t thx_abi_version()
 {
-	return 999u;
+	// Major = 99 in the upper 8 bits — guaranteed to mismatch any real host.
+	return thx::pack_version(thx::make_version(99, 0, 0));
 }
