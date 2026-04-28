@@ -86,14 +86,13 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
     ${CMAKE_DL_LIBS}
 )
 
-# GCC < 9 requires explicit linking for std::filesystem.
-if(CMAKE_COMPILER_IS_GNUCXX AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS "9.0")
-    target_link_libraries(${PROJECT_NAME} PUBLIC stdc++fs)
-endif()
-
 # Force C++17
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
 
+# Enable FPIC
+set_target_properties(${PROJECT_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+# Set default warnings
 thx_set_warnings(${PROJECT_NAME})
 
 # Handle Sanitization
