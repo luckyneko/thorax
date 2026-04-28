@@ -93,8 +93,8 @@ jobs:
           ${{ matrix.cmake_extra }}
 
       - name: Build
-        run: cmake --build build --parallel
+        run: cmake --build build --parallel --config ${{ matrix.build_type }}
 
       - name: Test
         working-directory: build
-        run: ctest --output-on-failure
+        run: ctest --output-on-failure -C ${{ matrix.build_type }}
