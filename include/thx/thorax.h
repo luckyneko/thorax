@@ -6,8 +6,7 @@
  *  (See accompanying file LICENSE.md)
  */
 
-#ifndef _THORAX_H_
-#define _THORAX_H_
+#pragma once
 
 #include "thx/string_view.h"
 #include "thx/span.h"
@@ -22,5 +21,3 @@
 #include "thx/plugin_handle.h"
 #include "thx/plugin_loader.h"
 #include "thx/log.h"
-
-#endif // _THORAX_H_

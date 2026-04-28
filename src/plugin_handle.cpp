@@ -173,14 +173,13 @@ Result<PluginHandle, Error> PluginHandle::open(std::string const& path)
 	auto destroy_v  = reinterpret_cast<PluginDestroyFn>(native_sym(h, "thx_destroy_plugin"));
 	auto abi_ver_fn = reinterpret_cast<AbiVersionFn>   (native_sym(h, "thx_abi_version"));
 
-	if (!create_v || !destroy_v)
+	if (!create_v || !destroy_v || !abi_ver_fn)
 	{
 		native_close(h);
 		return Result<PluginHandle, Error>::err({ErrorCode::SymbolNotFound,
-			"thx_create_plugin or thx_destroy_plugin not found in: " + path});
+			"thx_create_plugin, thx_destroy_plugin, or thx_abi_version not found in: " + path});
 	}
 
-	if (abi_ver_fn)
 	{
 		Version plugin_v = unpack_version(abi_ver_fn());
 		if (!compatible(plugin_v, THORAX_VERSION))

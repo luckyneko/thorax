@@ -164,7 +164,7 @@ if(THORAX_BUILD_TESTING)
     target_compile_options(mock_plugin_requires_newer PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fvisibility=hidden>)
 
     add_executable(test-${PROJECT_NAME}
-        test/thorax.cpp
+        test/test_umbrella_header.cpp
         test/test_service_id.cpp
         test/test_version.cpp
         test/test_service_manager.cpp
