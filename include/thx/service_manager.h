@@ -104,13 +104,8 @@ namespace thx
 		std::vector<ServiceInfo> list_services() const;
 
 	private:
-		struct Entry
-		{
-			std::shared_ptr<IService> service;
-		};
-
 		mutable std::shared_mutex mutex_;
-		std::unordered_map<ServiceID, Entry> services_;
+		std::unordered_map<ServiceID, std::shared_ptr<IService>> services_;
 		// IDs reserved by an in-flight register_service. The factory and
 		// onConstruct callback run without the registry lock held; the ID is
 		// kept here so concurrent registers see it as taken and bail out.
@@ -128,7 +123,7 @@ namespace thx
 		auto it = services_.find(id);
 		if (it == services_.end())
 			return nullptr;
-		return std::dynamic_pointer_cast<T>(it->second.service);
+		return std::dynamic_pointer_cast<T>(it->second);
 	}
 
 

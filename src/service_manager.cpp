@@ -90,7 +90,7 @@ bool ServiceManager::register_service(ServiceID id, Version version, ServiceFact
 	{
 		std::unique_lock lock(mutex_);
 		reserved_.erase(id);
-		services_.emplace(id, Entry{std::move(service)});
+		services_.emplace(id, std::move(service));
 	}
 	return true;
 }
@@ -110,7 +110,7 @@ bool ServiceManager::unregister_service(ServiceID id)
 			return false;
 		}
 
-		to_destroy = std::move(it->second.service);
+		to_destroy = std::move(it->second);
 		services_.erase(it);
 	}
 
@@ -126,8 +126,8 @@ std::vector<ServiceInfo> ServiceManager::list_services() const
 	std::shared_lock lock(mutex_);
 	std::vector<ServiceInfo> result;
 	result.reserve(services_.size());
-	for (auto const& [id, entry] : services_)
-		result.push_back({id, entry.service->version()});
+	for (auto const& [id, svc] : services_)
+		result.push_back({id, svc->version()});
 	return result;
 }
 
