@@ -62,23 +62,22 @@ namespace
 	Result<void, Error> check_requirement(ServiceManager const& sm,
 	                                     ServiceRequirement const& req)
 	{
-		for (auto const& s : sm.list_services())
-		{
-			if (s.id != req.id)
-				continue;
-			if (compatible(req.version, s.version))
-				return Result<void, Error>::ok();
+		auto svc = sm.get_service<IService>(req.id);
+		if (!svc)
+			return Result<void, Error>::err({ErrorCode::NotLoaded,
+				std::string("plugin requires service '") + req.id.name()
+				+ "' which is not registered"});
 
-			std::ostringstream msg;
-			msg << "plugin requires service '" << req.id.name() << "' at "
-			    << req.version.major << '.' << req.version.minor << '.' << req.version.patch
-			    << "; registered version is "
-			    << s.version.major << '.' << s.version.minor << '.' << s.version.patch;
-			return Result<void, Error>::err({ErrorCode::VersionMismatch, msg.str()});
-		}
-		return Result<void, Error>::err({ErrorCode::NotLoaded,
-			std::string("plugin requires service '") + req.id.name()
-			+ "' which is not registered"});
+		if (compatible(req.version, svc->version()))
+			return Result<void, Error>::ok();
+
+		std::ostringstream msg;
+		auto const& sv = svc->version();
+		msg << "plugin requires service '" << req.id.name() << "' at "
+		    << req.version.major << '.' << req.version.minor << '.' << req.version.patch
+		    << "; registered version is "
+		    << sv.major << '.' << sv.minor << '.' << sv.patch;
+		return Result<void, Error>::err({ErrorCode::VersionMismatch, msg.str()});
 	}
 
 	Result<void, Error> load_iplugin(ServiceManager& sm,
