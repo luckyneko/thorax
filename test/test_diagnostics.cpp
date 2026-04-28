@@ -306,7 +306,9 @@ TEST_CASE("PluginLoader::list_plugins - entry present after load", "[introspecti
 
 	auto plugins = loader.list_plugins();
 	REQUIRE(plugins.size() == 1);
-	REQUIRE(plugins[0].service_id == thx_mock::MockService::static_id());
+	REQUIRE(!plugins[0].plugin_name.empty());
+	REQUIRE(plugins[0].services.size() == 1);
+	REQUIRE(plugins[0].services[0] == thx_mock::MockService::static_id());
 }
 
 TEST_CASE("PluginLoader::list_plugins - empty after unload", "[introspection]")

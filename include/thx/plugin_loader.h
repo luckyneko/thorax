@@ -25,8 +25,9 @@ namespace thx
 	// Snapshot entry returned by PluginLoader::list_plugins().
 	struct LoadedPluginInfo
 	{
-		std::string path;
-		ServiceID   service_id;
+		std::string              path;
+		std::string              plugin_name; // from IPlugin::name()
+		std::vector<ServiceID>   services;    // all service IDs registered by this plugin
 	};
 
 	// Loads, unloads, and discovers plugin shared libraries.

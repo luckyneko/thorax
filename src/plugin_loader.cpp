@@ -240,13 +240,10 @@ std::vector<LoadedPluginInfo> PluginLoader::list_plugins() const
 	result.reserve(plugins_.size());
 	for (auto const& [path, entry] : plugins_)
 	{
-		// Plugins that registered ≥1 service report the first as their primary;
-		// plugins that registered none appear with a sentinel empty ServiceID.
-		// A richer per-plugin service list is part of a later roadmap milestone.
-		ServiceID id = entry.service_ids.empty()
-		                   ? ServiceID("")
-		                   : entry.service_ids.front();
-		result.push_back({path, id});
+		std::string name = entry.plugin
+		                       ? std::string(static_cast<std::string_view>(entry.plugin->name()))
+		                       : std::string{};
+		result.push_back({path, std::move(name), entry.service_ids});
 	}
 	return result;
 }
