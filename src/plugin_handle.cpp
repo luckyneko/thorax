@@ -7,10 +7,10 @@
  */
 
 #include "thx/plugin_handle.h"
+#include "thx/detail/format.h"
 #include "thx/version.h"
 
 #include <mutex>
-#include <sstream>
 #include <vector>
 
 #if defined(_WIN32)
@@ -184,14 +184,13 @@ Result<PluginHandle, Error> PluginHandle::open(std::string const& path)
 		Version plugin_v = unpack_version(abi_ver_fn());
 		if (!compatible(plugin_v, THORAX_VERSION))
 		{
-			std::ostringstream msg;
-			msg << "Plugin built against thorax "
-			    << plugin_v.major << '.' << plugin_v.minor << '.' << plugin_v.patch
-			    << " is not compatible with host "
-			    << THORAX_VERSION.major << '.' << THORAX_VERSION.minor << '.' << THORAX_VERSION.patch
-			    << ": " << path;
+			std::string msg = "Plugin built against thorax "
+			    + detail::format_version(plugin_v)
+			    + " is not compatible with host "
+			    + detail::format_version(THORAX_VERSION)
+			    + ": " + path;
 			native_close(h);
-			return Result<PluginHandle, Error>::err({ErrorCode::VersionMismatch, msg.str()});
+			return Result<PluginHandle, Error>::err({ErrorCode::VersionMismatch, std::move(msg)});
 		}
 	}
 

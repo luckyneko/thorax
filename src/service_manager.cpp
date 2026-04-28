@@ -7,9 +7,8 @@
  */
 
 #include "thx/service_manager.h"
+#include "thx/detail/format.h"
 #include "thx/log.h"
-
-#include <sstream>
 
 namespace thx
 {
@@ -65,13 +64,12 @@ bool ServiceManager::register_service(ServiceID id, Version version, ServiceFact
 	// a programming error worth flagging early.
 	if (service->version() != version)
 	{
-		std::ostringstream msg;
-		auto const& ev = service->version();
-		msg << "register_service: declared version " << version.major << '.' << version.minor
-		    << '.' << version.patch
-		    << " does not match service-reported " << ev.major << '.' << ev.minor << '.' << ev.patch
-		    << " for '" << id.name() << "'";
-		thx::log(LogLevel::Warn, msg.str());
+		thx::log(LogLevel::Warn,
+		    std::string("register_service: declared version ")
+		    + detail::format_version(version)
+		    + " does not match service-reported "
+		    + detail::format_version(service->version())
+		    + " for '" + id.name() + "'");
 	}
 
 	if (!service->onConstruct())

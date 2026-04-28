@@ -7,11 +7,11 @@
  */
 
 #include "thx/plugin_loader.h"
+#include "thx/detail/format.h"
 #include "thx/platform.h"
 
 #include <algorithm>
 #include <filesystem>
-#include <sstream>
 #include <unordered_set>
 
 namespace thx
@@ -71,13 +71,11 @@ namespace
 		if (compatible(req.version, svc->version()))
 			return Result<void, Error>::ok();
 
-		std::ostringstream msg;
-		auto const& sv = svc->version();
-		msg << "plugin requires service '" << req.id.name() << "' at "
-		    << req.version.major << '.' << req.version.minor << '.' << req.version.patch
-		    << "; registered version is "
-		    << sv.major << '.' << sv.minor << '.' << sv.patch;
-		return Result<void, Error>::err({ErrorCode::VersionMismatch, msg.str()});
+		std::string msg = std::string("plugin requires service '") + req.id.name() + "' at "
+		    + detail::format_version(req.version)
+		    + "; registered version is "
+		    + detail::format_version(svc->version());
+		return Result<void, Error>::err({ErrorCode::VersionMismatch, std::move(msg)});
 	}
 
 	Result<void, Error> load_iplugin(ServiceManager& sm,
