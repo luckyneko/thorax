@@ -62,15 +62,12 @@ bool ServiceManager::register_service(ServiceID id, Version version, ServiceFact
 
 	// Verify the service reports the version the caller claimed; mismatch is
 	// a programming error worth flagging early.
-	if (service->version() != version)
-	{
-		thx::log(LogLevel::Warn,
-		    std::string("register_service: declared version ")
-		    + detail::format_version(version)
-		    + " does not match service-reported "
-		    + detail::format_version(service->version())
-		    + " for '" + id.name() + "'");
-	}
+	thx::assert_that(service->version() == version,
+	    std::string("register_service: declared version ")
+	    + detail::format_version(version)
+	    + " does not match service-reported "
+	    + detail::format_version(service->version())
+	    + " for '" + id.name() + "'");
 
 	if (!service->onConstruct())
 	{
