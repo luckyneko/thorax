@@ -179,10 +179,14 @@ TEST_CASE("LoggingPlugin - make_file_backend writes messages to file", "[logging
 	svc->log(LogLevel::Info, "file-message");
 	fb.reset(); // release before closing to exercise weak_ptr eviction path
 
-	std::ifstream in(tmp);
-	REQUIRE(in.is_open());
-	std::string contents((std::istreambuf_iterator<char>(in)),
-	                      std::istreambuf_iterator<char>());
+	std::string contents;
+	{
+		std::ifstream in(tmp);
+		REQUIRE(in.is_open());
+		contents.assign(std::istreambuf_iterator<char>(in),
+		                std::istreambuf_iterator<char>());
+	} // close in before remove — Windows requires no open handles to delete
+
 	fs::remove(tmp);
 
 	REQUIRE(contents.find("file-message") != std::string::npos);
