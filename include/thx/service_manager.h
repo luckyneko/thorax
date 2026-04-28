@@ -9,7 +9,6 @@
 #pragma once
 
 #include "thx/iservice.h"
-#include "thx/log.h"
 
 #include <functional>
 #include <memory>
@@ -54,10 +53,6 @@ namespace thx
 
 		// Returns the process-wide singleton instance.
 		static ServiceManager& instance();
-
-		// Replaces the global log sink used by all thorax diagnostics.
-		// Equivalent to calling thx::set_log_sink() directly.
-		static void set_log_sink(std::shared_ptr<ILogSink> sink);
 
 		// Registers a service by ID, version, and a factory callable.
 		//

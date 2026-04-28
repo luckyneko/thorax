@@ -7,6 +7,7 @@
  */
 
 #include "thx/service_manager.h"
+#include "thx/log.h"
 
 #include <sstream>
 
@@ -17,11 +18,6 @@ ServiceManager& ServiceManager::instance()
 {
 	static ServiceManager inst;
 	return inst;
-}
-
-void ServiceManager::set_log_sink(std::shared_ptr<ILogSink> sink)
-{
-	thx::set_log_sink(std::move(sink));
 }
 
 bool ServiceManager::register_service(ServiceID id, Version version, ServiceFactory factory)

@@ -222,11 +222,10 @@ TEST_CASE("ServiceManager - unregister unknown ID logs Warn", "[log][service_man
 	REQUIRE(g.has_level(thx::LogLevel::Warn));
 }
 
-TEST_CASE("ServiceManager::set_log_sink - errors route to installed sink",
-          "[log][service_manager]")
+TEST_CASE("ServiceManager - errors route to installed sink", "[log][service_manager]")
 {
 	auto sink = std::make_shared<CapturingSink>();
-	thx::ServiceManager::set_log_sink(sink);
+	thx::set_log_sink(sink);
 
 	thx::ServiceManager sm;
 	sm.register_service(thx::ServiceID("test.Static"), thx::make_version(1, 0, 0), nullptr);
