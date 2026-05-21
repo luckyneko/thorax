@@ -31,8 +31,14 @@ namespace thx
 		// the same ID will see the in-flight reservation and bail out.
 		virtual bool onConstruct() { return true; }
 
-		// Called once by ServiceManager when the last registrant unregisters
-		// the service, before the service object is destroyed.
+		// Called by ServiceManager when the service is unregistered, after the
+		// entry has been removed from the map but while at least one shared_ptr
+		// to the service is still alive (the registry's own handle). The
+		// underlying object is destroyed when the last shared_ptr drops, which
+		// may be later than onDestroy() if any external caller is still holding
+		// one. Treat onDestroy() as "the service is leaving the registry" — not
+		// "the service is about to be deleted."
+		//
 		// The registry lock is NOT held here, so ServiceManager may be called.
 		virtual void onDestroy() {}
 	};

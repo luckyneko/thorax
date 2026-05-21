@@ -23,6 +23,7 @@ bool ServiceManager::register_service(ServiceID id, Version version, ServiceFact
 {
 	if (!factory)
 	{
+		// No reservation taken yet — nothing to release here.
 		thx::log(LogLevel::Error,
 		    std::string("register_service: null factory for '") + id.name() + "'");
 		return false;
@@ -45,36 +46,56 @@ bool ServiceManager::register_service(ServiceID id, Version version, ServiceFact
 	// Phase 2: build the service. The lock is NOT held here, so the factory
 	// and onConstruct callback may safely call back into ServiceManager
 	// (any attempt to re-register `id` will see the reservation and bail).
+	//
+	// The reservation must be released on every exit path — including the
+	// uncaught-exception path, since user-supplied factories and onConstruct
+	// callbacks can throw. The try/catch below catches any exception, releases
+	// the reservation, and rethrows so the caller still sees the failure.
 	auto release_reservation = [&]
 	{
 		std::unique_lock lock(mutex_);
 		reserved_.erase(id);
 	};
 
-	auto service = factory();
-	if (!service)
+	std::shared_ptr<IService> service;
+	try
 	{
-		release_reservation();
-		thx::log(LogLevel::Error,
-		    std::string("register_service: factory returned null for '") + id.name() + "'");
-		return false;
+		service = factory();
+		if (!service)
+		{
+			release_reservation();
+			thx::log(LogLevel::Error,
+			    std::string("register_service: factory returned null for '") + id.name() + "'");
+			return false;
+		}
+
+		// Verify the service reports the version the caller claimed. Mismatch is
+		// a programming error: refuse the registration so Release builds notice
+		// the same way Debug builds do.
+		if (service->version() != version)
+		{
+			release_reservation();
+			thx::log(LogLevel::Error,
+			    std::string("register_service: declared version ")
+			    + detail::format_version(version)
+			    + " does not match service-reported "
+			    + detail::format_version(service->version())
+			    + " for '" + id.name() + "'");
+			return false;
+		}
+
+		if (!service->onConstruct())
+		{
+			release_reservation();
+			thx::log(LogLevel::Error,
+			    std::string("register_service: onConstruct failed for '") + id.name() + "'");
+			return false;
+		}
 	}
-
-	// Verify the service reports the version the caller claimed; mismatch is
-	// a programming error worth flagging early.
-	thx::assert_that(service->version() == version,
-	    std::string("register_service: declared version ")
-	    + detail::format_version(version)
-	    + " does not match service-reported "
-	    + detail::format_version(service->version())
-	    + " for '" + id.name() + "'");
-
-	if (!service->onConstruct())
+	catch (...)
 	{
 		release_reservation();
-		thx::log(LogLevel::Error,
-		    std::string("register_service: onConstruct failed for '") + id.name() + "'");
-		return false;
+		throw;
 	}
 
 	// Phase 3: commit. Replace the reservation with the real entry atomically.

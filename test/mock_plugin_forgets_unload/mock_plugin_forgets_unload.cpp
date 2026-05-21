@@ -1,0 +1,45 @@
+/*
+ *  Created by LuckyNeko on 21/05/2026.
+ *  Copyright 2026 LuckyNeko
+ *
+ *  Distributed under the MIT Software License
+ *  (See accompanying file LICENSE.md)
+ */
+
+// IPlugin-based mock that registers ServiceA in onLoad but forgets to
+// unregister it in onUnload. PluginLoader's safety-net sweep must catch
+// the survivor and unregister it on the user's behalf, emitting a Warn
+// diagnostic.
+
+#include "mock_plugin.h"
+#include <thx/iplugin.h>
+#include <thx/platform.h>
+
+#include <memory>
+
+namespace
+{
+
+class ForgetsUnloadPlugin : public thx::IPlugin
+{
+public:
+	thx::StringView name()    const override { return "thx.mock.ForgetsUnloadPlugin"; }
+	thx::Version    version() const override { return thx::make_version(1, 0, 0); }
+
+	bool onLoad(thx::ServiceManager& sm) override
+	{
+		return sm.register_service<thx_mock::ServiceA>(
+			[]() -> std::shared_ptr<thx::IService>
+			{
+				return std::make_shared<thx_mock::ServiceA>();
+			});
+	}
+
+	// Intentionally empty: simulate a misbehaved plugin that forgets to
+	// unregister what it registered.
+	void onUnload(thx::ServiceManager&) override {}
+};
+
+} // namespace
+
+THX_DEFINE_PLUGIN(ForgetsUnloadPlugin)

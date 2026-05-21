@@ -11,6 +11,7 @@
 #include <thx/service_manager.h>
 
 #include <atomic>
+#include <stdexcept>
 #include <thread>
 #include <vector>
 
@@ -144,6 +145,37 @@ TEST_CASE("ServiceManager - factory returning null rejected", "[service_manager]
 	REQUIRE_FALSE(sm.register_service(kServiceA, kV100,
 									  []() -> std::shared_ptr<thx::IService>
 									  { return nullptr; }));
+	REQUIRE(sm.get_service<TestService>(kServiceA) == nullptr);
+}
+
+TEST_CASE("ServiceManager - factory throwing releases the reservation",
+		  "[service_manager]")
+{
+	thx::ServiceManager sm;
+
+	// First call: factory throws. The reservation must not leak — a follow-up
+	// registration with the same ID must succeed.
+	REQUIRE_THROWS(sm.register_service(kServiceA, kV100,
+		[]() -> std::shared_ptr<thx::IService>
+		{
+			throw std::runtime_error("boom");
+		}));
+
+	REQUIRE(reg(sm, "thx.test.ServiceA", kV100));
+	REQUIRE(sm.get_service<TestService>(kServiceA) != nullptr);
+}
+
+TEST_CASE("ServiceManager - declared version mismatch rejected",
+		  "[service_manager]")
+{
+	thx::ServiceManager sm;
+
+	// Factory returns a service whose version() doesn't match the declared
+	// version. register_service must refuse the registration (Release-safe;
+	// previously this was assert-only and silently committed in Release).
+	REQUIRE_FALSE(sm.register_service(
+		kServiceA, kV100,
+		[]() { return std::make_shared<TestService>("thx.test.ServiceA", kV200); }));
 	REQUIRE(sm.get_service<TestService>(kServiceA) == nullptr);
 }
 

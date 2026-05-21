@@ -36,6 +36,12 @@ namespace thx
 			std::string_view fn{__FUNCSIG__};
 			constexpr std::string_view marker = "extract_type_name<";
 			auto mpos = fn.find(marker);
+			// Defensive: if a future MSVC ever stops emitting the marker, return
+			// an empty string_view rather than walking off the end. Empty names
+			// are observable downstream (the ServiceID will have an empty name)
+			// which surfaces the problem instead of UB.
+			if (mpos == std::string_view::npos)
+				return {};
 			auto start = mpos + marker.size();
 
 			// Walk forward counting '<' and '>' to find the matching '>'.
@@ -72,8 +78,13 @@ namespace thx
 			//   "... [T = thx::io::FileService]"
 			// Both contain "T = " followed by the type name, terminated by ';' or ']'.
 			std::string_view fn{__PRETTY_FUNCTION__};
-			auto start = fn.find("T = ") + 4;
+			auto pos = fn.find("T = ");
+			if (pos == std::string_view::npos)
+				return {};
+			auto start = pos + 4;
 			auto end = fn.find_first_of(";]", start);
+			if (end == std::string_view::npos)
+				end = fn.size();
 			return fn.substr(start, end - start);
 #endif
 		}

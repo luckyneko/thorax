@@ -37,12 +37,39 @@ std::size_t pending_plugin_garbage() noexcept
 
 PluginLoader::PluginLoader(ServiceManager& sm) : sm_(sm) {}
 
+namespace
+{
+	// Force-unregister any service IDs the plugin's onUnload neglected to drop.
+	// A well-behaved IPlugin removes everything it registered; this is a safety
+	// net against third-party plugins that forget.
+	void sweep_surviving_services(ServiceManager&               sm,
+	                              std::vector<ServiceID> const& ids,
+	                              std::string const&            plugin_name)
+	{
+		for (auto const& id : ids)
+		{
+			if (sm.get_service<IService>(id))
+			{
+				thx::log(LogLevel::Warn,
+				    std::string("PluginLoader: plugin '") + plugin_name
+				    + "' left service '" + id.name()
+				    + "' registered after onUnload; force-unregistering");
+				sm.unregister_service(id);
+			}
+		}
+	}
+} // namespace
+
 PluginLoader::~PluginLoader()
 {
 	for (auto& [path, entry] : plugins_)
 	{
+		std::string name = entry.plugin
+		                       ? std::string(static_cast<std::string_view>(entry.plugin->name()))
+		                       : path;
 		if (entry.plugin)
 			entry.plugin->onUnload(sm_);
+		sweep_surviving_services(sm_, entry.service_ids, name);
 	}
 	plugins_.clear();
 }
@@ -114,17 +141,31 @@ namespace
 		for (auto const& s : before)
 			before_ids.insert(s.id);
 
+		auto diff_new_ids = [&]() -> std::vector<ServiceID>
+		{
+			std::vector<ServiceID> ids;
+			for (auto const& s : sm.list_services())
+				if (!before_ids.count(s.id))
+					ids.push_back(s.id);
+			std::sort(ids.begin(), ids.end(),
+			    [](ServiceID const& a, ServiceID const& b)
+			    {
+			        return std::string_view(a.name()) < std::string_view(b.name());
+			    });
+			return ids;
+		};
+
 		if (!plugin->onLoad(sm))
 		{
+			// onLoad may have partially registered services before returning false.
+			// Unregister them so the failed load leaves the registry as it was.
+			for (auto const& id : diff_new_ids())
+				sm.unregister_service(id);
 			return Result<void, Error>::err({ErrorCode::RegistrationFailed,
 				"IPlugin::onLoad returned false for: " + canonical});
 		}
 
-		auto after = sm.list_services();
-		for (auto const& s : after)
-			if (!before_ids.count(s.id))
-				out_new_ids.push_back(s.id);
-
+		out_new_ids = diff_new_ids();
 		out_plugin = std::move(plugin);
 		return Result<void, Error>::ok();
 	}
@@ -170,19 +211,27 @@ Result<void, Error> PluginLoader::load(std::string const& path)
 
 Result<void, Error> PluginLoader::unload(std::string const& path)
 {
-	// Try canonical resolution first; fall back to the raw path as the map key
-	// if the file has been deleted since it was loaded.
+	// Map keys are always canonical paths from a successful load(); if the
+	// caller's path can't be canonicalized now (file deleted, or never existed)
+	// we can't find the entry. Report NotLoaded — from the caller's point of
+	// view "no such file" and "loaded under a different path" are both "this
+	// thing isn't loaded right now."
 	auto canonical = resolve_canonical(path);
 	if (canonical.empty())
-		canonical = path;
+		return Result<void, Error>::err({ErrorCode::NotLoaded,
+			"Plugin not loaded (path cannot be resolved): " + path});
 
 	auto it = plugins_.find(canonical);
 	if (it == plugins_.end())
 		return Result<void, Error>::err({ErrorCode::NotLoaded,
 			"Plugin not loaded: " + path});
 
+	std::string name = it->second.plugin
+	                       ? std::string(static_cast<std::string_view>(it->second.plugin->name()))
+	                       : canonical;
 	if (it->second.plugin)
 		it->second.plugin->onUnload(sm_);
+	sweep_surviving_services(sm_, it->second.service_ids, name);
 
 	plugins_.erase(it); // ~Entry: plugin destroyed first, then handle dlclose
 	return Result<void, Error>::ok();
@@ -190,10 +239,12 @@ Result<void, Error> PluginLoader::unload(std::string const& path)
 
 bool PluginLoader::is_loaded(std::string const& path) const
 {
+	// Map keys are canonical paths; if canonicalization fails the file isn't
+	// reachable on disk and therefore can't match any loaded entry.
 	auto canonical = resolve_canonical(path);
-	if (!canonical.empty())
-		return plugins_.count(canonical) > 0;
-	return plugins_.count(path) > 0;
+	if (canonical.empty())
+		return false;
+	return plugins_.count(canonical) > 0;
 }
 
 std::vector<std::string> PluginLoader::discover(std::string const& directory) const

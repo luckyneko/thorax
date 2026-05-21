@@ -163,6 +163,27 @@ if(THORAX_BUILD_TESTING)
     thx_set_warnings(mock_plugin_requires_newer)
     target_compile_options(mock_plugin_requires_newer PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fvisibility=hidden>)
 
+    # IPlugin-based mock that registers ServiceA in onLoad and then returns false.
+    # Used to verify PluginLoader rolls back partial registrations on failure.
+    add_library(mock_plugin_bails_after_register SHARED
+        test/mock_plugin_bails_after_register/mock_plugin_bails_after_register.cpp
+    )
+    target_link_libraries(mock_plugin_bails_after_register PRIVATE ${PROJECT_NAME})
+    target_include_directories(mock_plugin_bails_after_register PRIVATE test/mock_plugin)
+    thx_set_warnings(mock_plugin_bails_after_register)
+    target_compile_options(mock_plugin_bails_after_register PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fvisibility=hidden>)
+
+    # IPlugin-based mock that registers ServiceA in onLoad but does NOT unregister
+    # it in onUnload. Used to verify PluginLoader's safety-net sweep catches
+    # survivors left behind by misbehaved plugins.
+    add_library(mock_plugin_forgets_unload SHARED
+        test/mock_plugin_forgets_unload/mock_plugin_forgets_unload.cpp
+    )
+    target_link_libraries(mock_plugin_forgets_unload PRIVATE ${PROJECT_NAME})
+    target_include_directories(mock_plugin_forgets_unload PRIVATE test/mock_plugin)
+    thx_set_warnings(mock_plugin_forgets_unload)
+    target_compile_options(mock_plugin_forgets_unload PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fvisibility=hidden>)
+
     add_executable(test-${PROJECT_NAME}
         test/test_umbrella_header.cpp
         test/test_service_id.cpp
@@ -183,6 +204,8 @@ if(THORAX_BUILD_TESTING)
         THX_MOCK_MULTI_PLUGIN_PATH="$<TARGET_FILE:mock_plugin_multi>"
         THX_MOCK_BAILS_PLUGIN_PATH="$<TARGET_FILE:mock_plugin_bails>"
         THX_MOCK_REQUIRES_NEWER_PLUGIN_PATH="$<TARGET_FILE:mock_plugin_requires_newer>"
+        THX_MOCK_BAILS_AFTER_REGISTER_PLUGIN_PATH="$<TARGET_FILE:mock_plugin_bails_after_register>"
+        THX_MOCK_FORGETS_UNLOAD_PLUGIN_PATH="$<TARGET_FILE:mock_plugin_forgets_unload>"
     )
     add_dependencies(test-${PROJECT_NAME}
         mock_plugin
@@ -190,6 +213,8 @@ if(THORAX_BUILD_TESTING)
         mock_plugin_multi
         mock_plugin_bails
         mock_plugin_requires_newer
+        mock_plugin_bails_after_register
+        mock_plugin_forgets_unload
     )
 
     if(THORAX_BUILD_PLUGINS)

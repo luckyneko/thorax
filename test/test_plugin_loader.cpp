@@ -34,6 +34,14 @@
 #  error "THX_MOCK_REQUIRES_NEWER_PLUGIN_PATH not defined — set via target_compile_definitions in CMakeLists.txt"
 #endif
 
+#ifndef THX_MOCK_BAILS_AFTER_REGISTER_PLUGIN_PATH
+#  error "THX_MOCK_BAILS_AFTER_REGISTER_PLUGIN_PATH not defined — set via target_compile_definitions in CMakeLists.txt"
+#endif
+
+#ifndef THX_MOCK_FORGETS_UNLOAD_PLUGIN_PATH
+#  error "THX_MOCK_FORGETS_UNLOAD_PLUGIN_PATH not defined — set via target_compile_definitions in CMakeLists.txt"
+#endif
+
 // ---------------------------------------------------------------------------
 // Result<T, Error>
 // ---------------------------------------------------------------------------
@@ -362,6 +370,54 @@ TEST_CASE("PluginLoader - IPlugin onLoad returning false fails the load",
 	REQUIRE_FALSE(r);
 	REQUIRE(r.error().code == thx::ErrorCode::RegistrationFailed);
 	REQUIRE_FALSE(loader.is_loaded(THX_MOCK_BAILS_PLUGIN_PATH));
+}
+
+TEST_CASE("PluginLoader - onLoad partial registration is rolled back on failure",
+          "[plugin_loader][iplugin][integration]")
+{
+	// mock_plugin_bails_after_register registers ServiceA in onLoad then
+	// returns false. The loader must unregister ServiceA so the failed
+	// load leaves the registry as it was.
+	thx::ServiceManager sm;
+	thx::PluginLoader   loader(sm);
+
+	REQUIRE(sm.list_services().empty());
+
+	auto r = loader.load(THX_MOCK_BAILS_AFTER_REGISTER_PLUGIN_PATH);
+	REQUIRE_FALSE(r);
+	REQUIRE(r.error().code == thx::ErrorCode::RegistrationFailed);
+	REQUIRE(sm.get_service<thx_mock::ServiceA>() == nullptr);
+	REQUIRE(sm.list_services().empty());
+	REQUIRE_FALSE(loader.is_loaded(THX_MOCK_BAILS_AFTER_REGISTER_PLUGIN_PATH));
+}
+
+TEST_CASE("PluginLoader - unload sweeps services left behind by onUnload",
+          "[plugin_loader][iplugin][integration]")
+{
+	// mock_plugin_forgets_unload registers ServiceA in onLoad but does NOT
+	// unregister it in onUnload. The loader's safety-net sweep must catch
+	// the survivor and unregister it.
+	thx::ServiceManager sm;
+	thx::PluginLoader   loader(sm);
+
+	REQUIRE(loader.load(THX_MOCK_FORGETS_UNLOAD_PLUGIN_PATH));
+	REQUIRE(sm.get_service<thx_mock::ServiceA>() != nullptr);
+
+	REQUIRE(loader.unload(THX_MOCK_FORGETS_UNLOAD_PLUGIN_PATH));
+	REQUIRE(sm.get_service<thx_mock::ServiceA>() == nullptr);
+}
+
+TEST_CASE("PluginLoader - destructor sweeps services left behind by onUnload",
+          "[plugin_loader][iplugin][integration]")
+{
+	thx::ServiceManager sm;
+	{
+		thx::PluginLoader loader(sm);
+		REQUIRE(loader.load(THX_MOCK_FORGETS_UNLOAD_PLUGIN_PATH));
+		REQUIRE(sm.get_service<thx_mock::ServiceA>() != nullptr);
+	} // ~PluginLoader runs onUnload (no-op) then sweeps survivors.
+
+	REQUIRE(sm.get_service<thx_mock::ServiceA>() == nullptr);
 }
 
 TEST_CASE("PluginLoader - IPlugin required() rejected when registered version is too old",
