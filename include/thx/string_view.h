@@ -34,7 +34,7 @@ namespace thx
 		}
 
 		// Implicit construction from string literals so existing call sites
-		// (e.g. make_version(1, 0, 0, "alpha")) do not need updating.
+		// (e.g. Version{1, 0, 0, "alpha"}) do not need updating.
 		constexpr StringView(const char* str) noexcept  // NOLINT(google-explicit-constructor)
 			: data_(str ? str : "")
 			, size_(str ? std::char_traits<char>::length(str) : 0)

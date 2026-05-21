@@ -73,7 +73,7 @@ The ABI contract is "allocate and free on the same side of the DSO boundary." Ev
 ```
 THX_PLUGIN_API thx::IPlugin* thx_create_plugin();
 THX_PLUGIN_API void          thx_destroy_plugin(thx::IPlugin*);
-THX_PLUGIN_API uint32_t      thx_abi_version();    // pack_version(THORAX_VERSION) at plugin compile-time
+THX_PLUGIN_API uint32_t      thx_abi_version();    // THORAX_VERSION.pack() at plugin compile-time
 ```
 
 Plugin authors don't write these by hand; they use one of:
@@ -81,7 +81,7 @@ Plugin authors don't write these by hand; they use one of:
 - `THX_DEFINE_SERVICE_PLUGIN(ServiceType)` — common case. Emits an `IPlugin` shim that registers exactly one service of the given type in `onLoad` and unregisters it in `onUnload`. `ServiceType` must inherit from `thx::Service<ServiceType>`, define `static_version()`, and be default-constructible.
 - `THX_DEFINE_PLUGIN(PluginType)` — power-user form. The author supplies their own `IPlugin` subclass, free to register multiple services, declare `required()` dependencies, or hold per-DSO state.
 
-Both macros emit `thx_abi_version()` returning `pack_version(THORAX_VERSION)`. `PluginHandle::open()` unpacks this and applies `compatible(plugin_version, host_version)`: same major and host's full major.minor.patch ≥ plugin's. A plugin built against a newer thorax than the host is rejected; a plugin built against the same major but older minor/patch is accepted.
+Both macros emit `thx_abi_version()` returning `THORAX_VERSION.pack()`. `PluginHandle::open()` unpacks this via `Version(uint32_t)` and applies `Version::compatible(plugin_version, host_version)`: same major and host's full major.minor.patch ≥ plugin's. A plugin built against a newer thorax than the host is rejected; a plugin built against the same major but older minor/patch is accepted.
 
 Anything that crosses a virtual boundary on an `IService` API must use ABI-stable types — primitives, C strings, `thx::StringView`, `thx::Span<T>`, `thx::Version`. Do not put `std::string_view`, `std::span`, `std::string`, `std::vector`, or other STL containers in virtual signatures plugins implement; their layout is not stable across compilers/CRTs.
 
@@ -122,13 +122,13 @@ thx::assert_that(condition, "message");   // logs at Error if false; std::abort(
 
 ### Versioning
 
-[thx::Version](include/thx/version_type.h) is full semver 2.0 with `constexpr` comparison. `thx::THORAX_VERSION` is generated from the CMake project version into [include/thx/version.h.in](include/thx/version.h.in). `pack_version(Version)` packs major/minor/patch into a `uint32_t` (8/8/16 bits) for crossing the C plugin ABI; `unpack_version` is the inverse (pre-release and build metadata are not represented in the packed form — the loader gate uses only the three numeric components). `compatible(required, provided)` is the single function used both by `PluginHandle::open()` to gate `thx_abi_version()` and by `PluginLoader` to check each `ServiceRequirement` reported by `IPlugin::required()`.
+[thx::Version](include/thx/version_type.h) is a three-component numeric version (`major.minor.patch`) with `constexpr` comparison. It is intentionally *not* full semver — there are no pre-release or build-metadata fields. The framework may grow them back if a real consumer needs them; for now the simpler shape keeps the type trivially layout-compatible across compilers, which matters because it crosses the DSO boundary by value. `thx::THORAX_VERSION` is generated from the CMake project version into [include/thx/version.h.in](include/thx/version.h.in). `Version::pack()` packs major/minor/patch into a `uint32_t` (8/8/16 bits) for crossing the C plugin ABI; the `Version(uint32_t)` constructor is the inverse. The packed form is a deliberate wire encoding, not a property of `Version`'s in-memory layout. `Version::compatible(required, provided)` is the static method used both by `PluginHandle::open()` to gate `thx_abi_version()` and by `PluginLoader` to check each `ServiceRequirement` reported by `IPlugin::required()`.
 
 ## Layout & conventions
 
 ```
 include/thx/         public API headers (one concern per header; thorax.h is the umbrella include)
-include/thx/detail/  implementation helpers (hash, semver parser, type_name, format) — installed alongside the public headers because they're transitively included, but not part of the user-facing surface
+include/thx/detail/  implementation helpers (hash, type_name) — installed alongside the public headers because they're transitively included, but not part of the user-facing surface
 src/                 .cpp for the headers above
 plugins/             in-tree plugins (logging, io). Each is a SHARED lib using THX_DEFINE_SERVICE_PLUGIN (or THX_DEFINE_PLUGIN for the multi-service form)
 plugins/<name>/include/thx/plugins/<name>/<name>_service.h  the shared interface header

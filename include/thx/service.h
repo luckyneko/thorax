@@ -27,7 +27,7 @@ namespace thx
 	//   {
 	//   public:
 	//       static constexpr thx::Version static_version()
-	//           { return thx::make_version(1, 0, 0); }
+	//           { return thx::Version{1, 0, 0}; }
 	//
 	//       // Service-specific API:
 	//       virtual void add_loader(std::shared_ptr<IImageLoader>) = 0;
@@ -49,7 +49,7 @@ namespace thx
 
 		// Must be provided by Derived, e.g.:
 		//   static constexpr thx::Version static_version()
-		//       { return thx::make_version(1, 0, 0); }
+		//       { return thx::Version{1, 0, 0}; }
 
 		// final prevents downstream types from changing the identity of an
 		// already-defined service interface.

@@ -1,4 +1,4 @@
-/*
+﻿/*
  *  Created by LuckyNeko on 25/04/2026.
  *  Copyright 2026 LuckyNeko
  *
@@ -41,7 +41,7 @@ class ILoggingService : public thx::Service<ILoggingService>
 public:
 	static constexpr thx::Version static_version()
 	{
-		return thx::make_version(1, 0, 0);
+		return thx::Version{1, 0, 0};
 	}
 
 	// Route a message to all live backends.

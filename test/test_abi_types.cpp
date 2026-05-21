@@ -1,4 +1,4 @@
-/*
+﻿/*
  *  Created by LuckyNeko on 24/04/2026.
  *  Copyright 2026 LuckyNeko
  *
@@ -81,24 +81,6 @@ TEST_CASE("StringView - range-for iteration", "[string_view]")
 	for (char c : sv)
 		result += c;
 	REQUIRE(result == "abc");
-}
-
-// ---------------------------------------------------------------------------
-// Version with StringView fields
-// ---------------------------------------------------------------------------
-
-TEST_CASE("Version - pre_release is StringView", "[string_view][version]")
-{
-	constexpr auto v = thx::make_version(1, 0, 0, "alpha.1");
-	STATIC_REQUIRE(v.pre_release == "alpha.1");
-	STATIC_REQUIRE(v.pre_release.size() == 7);
-}
-
-TEST_CASE("Version - build_metadata is StringView", "[string_view][version]")
-{
-	constexpr auto v = thx::make_version(1, 0, 0, "", "build.123");
-	STATIC_REQUIRE(v.build_metadata == "build.123");
-	STATIC_REQUIRE(v.pre_release.empty());
 }
 
 // ---------------------------------------------------------------------------

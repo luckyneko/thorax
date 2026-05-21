@@ -1,4 +1,4 @@
-/*
+﻿/*
  *  Created by LuckyNeko on 25/04/2026.
  *  Copyright 2026 LuckyNeko
  *
@@ -19,7 +19,7 @@ class BailingPlugin : public thx::IPlugin
 {
 public:
 	thx::StringView name()    const override { return "thx.mock.BailingPlugin"; }
-	thx::Version    version() const override { return thx::make_version(1, 0, 0); }
+	thx::Version    version() const override { return thx::Version{1, 0, 0}; }
 
 	bool onLoad(thx::ServiceManager&)   override { return false; }
 	void onUnload(thx::ServiceManager&) override {}

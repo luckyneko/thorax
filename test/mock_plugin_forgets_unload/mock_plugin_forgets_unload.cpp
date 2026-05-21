@@ -1,4 +1,4 @@
-/*
+﻿/*
  *  Created by LuckyNeko on 21/05/2026.
  *  Copyright 2026 LuckyNeko
  *
@@ -24,7 +24,7 @@ class ForgetsUnloadPlugin : public thx::IPlugin
 {
 public:
 	thx::StringView name()    const override { return "thx.mock.ForgetsUnloadPlugin"; }
-	thx::Version    version() const override { return thx::make_version(1, 0, 0); }
+	thx::Version    version() const override { return thx::Version{1, 0, 0}; }
 
 	bool onLoad(thx::ServiceManager& sm) override
 	{

@@ -1,4 +1,4 @@
-/*
+﻿/*
  *  Created by LuckyNeko on 25/04/2026.
  *  Copyright 2026 LuckyNeko
  *
@@ -13,12 +13,12 @@
 namespace examples
 {
 
-// Shared interface header — included by both the logging plugin and the host.
+// Shared interface header â€” included by both the logging plugin and the host.
 struct ILoggingService : thx::Service<ILoggingService>
 {
 	static constexpr thx::Version static_version()
 	{
-		return thx::make_version(1, 0, 0);
+		return thx::Version{1, 0, 0};
 	}
 
 	virtual void log(const char* message) = 0;

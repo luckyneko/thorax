@@ -1,4 +1,4 @@
-/*
+﻿/*
  *  Created by LuckyNeko on 25/04/2026.
  *  Copyright 2026 LuckyNeko
  *
@@ -18,7 +18,7 @@ namespace
 
 	struct ShimTestService : thx::Service<ShimTestService>
 	{
-		static constexpr thx::Version static_version() { return thx::make_version(1, 0, 0); }
+		static constexpr thx::Version static_version() { return thx::Version{1, 0, 0}; }
 
 		bool m_constructed{false};
 		bool onConstruct() override
@@ -33,7 +33,7 @@ namespace
 	struct EmptyPlugin : thx::IPlugin
 	{
 		thx::StringView name()    const override { return "thx.test.EmptyPlugin"; }
-		thx::Version    version() const override { return thx::make_version(2, 3, 4); }
+		thx::Version    version() const override { return thx::Version{2, 3, 4}; }
 
 		bool onLoad(thx::ServiceManager&)  override { return true; }
 		void onUnload(thx::ServiceManager&) override {}
@@ -43,17 +43,17 @@ namespace
 	// in onUnload. Demonstrates the multi-service capability.
 	struct ServiceA : thx::Service<ServiceA>
 	{
-		static constexpr thx::Version static_version() { return thx::make_version(1, 0, 0); }
+		static constexpr thx::Version static_version() { return thx::Version{1, 0, 0}; }
 	};
 	struct ServiceB : thx::Service<ServiceB>
 	{
-		static constexpr thx::Version static_version() { return thx::make_version(1, 0, 0); }
+		static constexpr thx::Version static_version() { return thx::Version{1, 0, 0}; }
 	};
 
 	struct MultiServicePlugin : thx::IPlugin
 	{
 		thx::StringView name()    const override { return "thx.test.MultiServicePlugin"; }
-		thx::Version    version() const override { return thx::make_version(1, 0, 0); }
+		thx::Version    version() const override { return thx::Version{1, 0, 0}; }
 
 		bool onLoad(thx::ServiceManager& sm) override
 		{
@@ -96,7 +96,7 @@ TEST_CASE("ServicePluginShim - reports name and version from the service type",
 	// Compare via the underlying string content; the shim returns the name
 	// derived from the C++ qualified type name.
 	REQUIRE(thx::StringView(ShimTestService::static_id().name()) == shim.name());
-	REQUIRE(shim.version() == thx::make_version(1, 0, 0));
+	REQUIRE(shim.version() == thx::Version{1, 0, 0});
 }
 
 TEST_CASE("IPlugin - default required() is empty",
@@ -128,7 +128,7 @@ TEST_CASE("IPlugin - onLoad returning false does not register anything",
 	struct BailingPlugin : thx::IPlugin
 	{
 		thx::StringView name()    const override { return "thx.test.Bailing"; }
-		thx::Version    version() const override { return thx::make_version(1, 0, 0); }
+		thx::Version    version() const override { return thx::Version{1, 0, 0}; }
 
 		bool onLoad(thx::ServiceManager&)   override { return false; }
 		void onUnload(thx::ServiceManager&) override {}

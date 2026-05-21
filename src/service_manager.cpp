@@ -7,7 +7,7 @@
  */
 
 #include "thx/service_manager.h"
-#include "thx/detail/format.h"
+#include "thx/to_string.h"
 #include "thx/log.h"
 
 namespace thx
@@ -77,9 +77,9 @@ bool ServiceManager::register_service(ServiceID id, Version version, ServiceFact
 			release_reservation();
 			thx::log(LogLevel::Error,
 			    std::string("register_service: declared version ")
-			    + detail::format_version(version)
+			    + to_string(version)
 			    + " does not match service-reported "
-			    + detail::format_version(service->version())
+			    + to_string(service->version())
 			    + " for '" + id.name() + "'");
 			return false;
 		}

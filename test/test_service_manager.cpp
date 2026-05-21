@@ -1,4 +1,4 @@
-/*
+﻿/*
  *  Created by LuckyNeko on 22/04/2026.
  *  Copyright 2026 LuckyNeko
  *
@@ -66,15 +66,15 @@ namespace
 	struct OtherService : thx::IService
 	{
 		thx::ServiceID id() const override { return thx::ServiceID("thx.test.Other"); }
-		thx::Version version() const override { return thx::make_version(1, 0, 0); }
+		thx::Version version() const override { return thx::Version{1, 0, 0}; }
 	};
 
 	constexpr auto kServiceA = thx::ServiceID("thx.test.ServiceA");
 	constexpr auto kServiceB = thx::ServiceID("thx.test.ServiceB");
-	constexpr auto kV100 = thx::make_version(1, 0, 0);
-	constexpr auto kV110 = thx::make_version(1, 1, 0);
-	constexpr auto kV090 = thx::make_version(0, 9, 0);
-	constexpr auto kV200 = thx::make_version(2, 0, 0);
+	constexpr auto kV100 = thx::Version{1, 0, 0};
+	constexpr auto kV110 = thx::Version{1, 1, 0};
+	constexpr auto kV090 = thx::Version{0, 9, 0};
+	constexpr auto kV200 = thx::Version{2, 0, 0};
 
 	// Helper: register a TestService without needing to name the factory every time.
 	bool reg(thx::ServiceManager& sm, const char* id, thx::Version ver,
@@ -153,7 +153,7 @@ TEST_CASE("ServiceManager - factory throwing releases the reservation",
 {
 	thx::ServiceManager sm;
 
-	// First call: factory throws. The reservation must not leak — a follow-up
+	// First call: factory throws. The reservation must not leak â€” a follow-up
 	// registration with the same ID must succeed.
 	REQUIRE_THROWS(sm.register_service(kServiceA, kV100,
 		[]() -> std::shared_ptr<thx::IService>
@@ -393,7 +393,7 @@ TEST_CASE("ServiceManager - concurrent register and get_service is safe",
 namespace
 {
 
-	// Interface header — what both Plugin A and Plugin B would include.
+	// Interface header â€” what both Plugin A and Plugin B would include.
 	struct ICountingService : thx::Service<ICountingService>
 	{
 		static constexpr thx::ServiceID static_id()
@@ -402,14 +402,14 @@ namespace
 		}
 		static constexpr thx::Version static_version()
 		{
-			return thx::make_version(1, 0, 0);
+			return thx::Version{1, 0, 0};
 		}
 
 		virtual int value() const = 0;
 		virtual void increment() = 0;
 	};
 
-	// Concrete implementation — what Plugin A's .cpp would contain.
+	// Concrete implementation â€” what Plugin A's .cpp would contain.
 	struct CountingServiceImpl : ICountingService
 	{
 		int m_value{0};
@@ -467,7 +467,7 @@ TEST_CASE("ServiceManager - type-deducing and explicit-ID APIs are interchangeab
 		[]()
 		{ return std::make_shared<CountingServiceImpl>(); });
 
-	// Retrieve via explicit-ID API — same entry.
+	// Retrieve via explicit-ID API â€” same entry.
 	auto svc = sm.get_service<ICountingService>(ICountingService::static_id());
 	REQUIRE(svc != nullptr);
 
@@ -489,7 +489,7 @@ namespace thx
 		{
 			static constexpr thx::Version static_version()
 			{
-				return thx::make_version(1, 0, 0);
+				return thx::Version{1, 0, 0};
 			}
 
 			virtual int ping() const = 0;
@@ -506,7 +506,7 @@ namespace thx
 TEST_CASE("service_id_of - auto-derived ID matches dotted qualified name",
 		  "[service_manager][type_name]")
 {
-	// thx::test::AutoService → "thx.test.AutoService"
+	// thx::test::AutoService â†’ "thx.test.AutoService"
 	constexpr auto id = thx::ServiceID::from<thx::test::AutoService>();
 	STATIC_REQUIRE(id == thx::ServiceID("thx.test.AutoService"));
 }

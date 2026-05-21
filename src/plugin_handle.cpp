@@ -7,7 +7,7 @@
  */
 
 #include "thx/plugin_handle.h"
-#include "thx/detail/format.h"
+#include "thx/to_string.h"
 #include "thx/version.h"
 
 #include <mutex>
@@ -181,13 +181,13 @@ Result<PluginHandle, Error> PluginHandle::open(std::string const& path)
 	}
 
 	{
-		Version plugin_v = unpack_version(abi_ver_fn());
-		if (!compatible(plugin_v, THORAX_VERSION))
+		Version plugin_v(abi_ver_fn());
+		if (!Version::compatible(plugin_v, THORAX_VERSION))
 		{
 			std::string msg = "Plugin built against thorax "
-			    + detail::format_version(plugin_v)
+			    + to_string(plugin_v)
 			    + " is not compatible with host "
-			    + detail::format_version(THORAX_VERSION)
+			    + to_string(THORAX_VERSION)
 			    + ": " + path;
 			native_close(h);
 			return Result<PluginHandle, Error>::err({ErrorCode::VersionMismatch, std::move(msg)});

@@ -7,7 +7,7 @@
  */
 
 #include "thx/plugin_loader.h"
-#include "thx/detail/format.h"
+#include "thx/to_string.h"
 #include "thx/platform.h"
 
 #include <algorithm>
@@ -84,8 +84,8 @@ std::string PluginLoader::resolve_canonical(std::string const& path)
 namespace
 {
 	// Returns ok if the registry has a service matching `req` (same ID, version
-	// satisfies compatible(req.version, registered.version)). Returns Err with
-	// a useful diagnostic otherwise.
+	// satisfies Version::compatible(req.version, registered.version)). Returns
+	// Err with a useful diagnostic otherwise.
 	Result<void, Error> check_requirement(ServiceManager const& sm,
 	                                     ServiceRequirement const& req)
 	{
@@ -95,13 +95,13 @@ namespace
 				std::string("plugin requires service '") + req.id.name()
 				+ "' which is not registered"});
 
-		if (compatible(req.version, svc->version()))
+		if (Version::compatible(req.version, svc->version()))
 			return Result<void, Error>::ok();
 
 		std::string msg = std::string("plugin requires service '") + req.id.name() + "' at "
-		    + detail::format_version(req.version)
+		    + to_string(req.version)
 		    + "; registered version is "
-		    + detail::format_version(svc->version());
+		    + to_string(svc->version());
 		return Result<void, Error>::err({ErrorCode::VersionMismatch, std::move(msg)});
 	}
 

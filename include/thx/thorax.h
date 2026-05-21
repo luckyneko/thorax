@@ -12,6 +12,7 @@
 #include "thx/span.h"
 #include "thx/service_id.h"
 #include "thx/version.h"
+#include "thx/to_string.h"
 #include "thx/iservice.h"
 #include "thx/service.h"
 #include "thx/service_manager.h"

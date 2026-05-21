@@ -33,8 +33,11 @@ remain useful as a reference for *why* things are shaped the way they are.
   original string literal; equality compares both so collisions can't produce
   false matches. Construction via `constexpr` constructor or `ServiceID::from<T>()`
   (which derives the name from the C++ qualified type).
-- **`thx::Version`** — full semver 2.0 with `constexpr` comparison; pre-release
-  precedence per spec; build-metadata excluded.
+- **`thx::Version`** — three-component numeric version (`major.minor.patch`)
+  with `constexpr` comparison. Full semver (pre-release / build-metadata) was
+  removed once it became clear nothing was consuming it; the simpler shape
+  keeps `Version` trivially layout-compatible for DSO-boundary value returns.
+  Can be reintroduced if a real consumer appears.
 - **`THORAX_VERSION`** — generated from CMake project version into
   `include/thx/version.h`.
 
@@ -301,19 +304,20 @@ CMake ≥ 3.24 can rely on `COMPILE_WARNING_AS_ERROR`. Resolves N8.
 consistently.
 
 **Decision:** The plugin reports its full compile-time `THORAX_VERSION` via
-`thx_abi_version()`. The loader uses `compatible(plugin_version, host_version)`
-as the single gate.
+`thx_abi_version()`. The loader uses
+`Version::compatible(plugin_version, host_version)` as the single gate.
 
 **Implementation:**
-- `pack_version(Version) → uint32_t` and `unpack_version(uint32_t) → Version`
-  helpers in `version_type.h`. Encoding: `(major<<24) | (minor<<16) | patch`
-  (8/8/16 bits). Pre-release / build metadata are not represented; the
-  loader gate uses major.minor.patch precedence which is sufficient for
-  binary compatibility checks.
+- `Version::pack() → uint32_t` member and `explicit Version(uint32_t)`
+  constructor in `version_type.h` form the wire-format bridge. Encoding:
+  `(major<<24) | (minor<<16) | patch` (8/8/16 bits). The packed form is a
+  deliberate wire encoding for crossing the C ABI; `Version`'s in-memory
+  layout is kept separate from it.
 - `THX_DEFINE_*_PLUGIN` macros now emit `thx_abi_version()` returning
-  `pack_version(THORAX_VERSION)` instead of just `THORAX_VERSION.major`.
-- `PluginHandle::open` unpacks the plugin version, calls `compatible()`,
-  and rejects with a diagnostic that includes both versions.
+  `THORAX_VERSION.pack()` instead of just `THORAX_VERSION.major`.
+- `PluginHandle::open` unpacks the plugin version, calls
+  `Version::compatible()`, and rejects with a diagnostic that includes both
+  versions.
 - `mock_plugin_bad_abi` updated to declare a clearly cross-major plugin
   version (99.0.0). The existing rejection test now also asserts the
   diagnostic carries the version numbers.
@@ -332,8 +336,8 @@ as the single gate.
 - **Version-aware `IPlugin::required()`** — `required()` now returns
   `Span<const ServiceRequirement>`, where `ServiceRequirement` pairs a
   `ServiceID` with a minimum `Version`. `PluginLoader` runs
-  `compatible(req.version, registered.version)` before allowing the load
-  and emits a diagnostic that names both versions on rejection.
+  `Version::compatible(req.version, registered.version)` before allowing the
+  load and emits a diagnostic that names both versions on rejection.
   `ServiceInfo` (returned by `ServiceManager::list_services`) gained a
   `version` field so the loader can read the registered version without
   type-erasing through `IService`.
@@ -402,7 +406,7 @@ thorax/
 │   ├── log.h
 │   ├── string_view.h
 │   ├── span.h
-│   └── detail/             # hash, semver, type_name
+│   └── detail/             # hash, type_name
 ├── src/
 │   ├── service_manager.cpp
 │   ├── plugin_handle.cpp

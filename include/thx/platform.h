@@ -62,7 +62,8 @@ namespace thx
 // symbol names and extern "C" cannot be expressed in standard C++ without one.
 //
 // thx_abi_version() returns THORAX_VERSION packed into a uint32_t (see
-// pack_version()). PluginHandle::open() unpacks it and asks compatible():
+// Version::pack()). PluginHandle::open() unpacks it (Version(uint32_t)) and
+// asks compatible():
 // the plugin's major must match the host's, and the host's full
 // major.minor.patch must be ≥ the plugin's. A plugin built against a newer
 // thorax than the host is rejected; a plugin built against the same major
@@ -89,7 +90,7 @@ namespace thx
 	}                                                                         \
 	THX_PLUGIN_API uint32_t thx_abi_version()                                 \
 	{                                                                         \
-		return thx::pack_version(thx::THORAX_VERSION);                        \
+		return thx::THORAX_VERSION.pack();                                    \
 	}
 
 // THX_DEFINE_PLUGIN(PluginType) — power-user form. The plugin author supplies
@@ -108,5 +109,5 @@ namespace thx
 	}                                                                         \
 	THX_PLUGIN_API uint32_t thx_abi_version()                                 \
 	{                                                                         \
-		return thx::pack_version(thx::THORAX_VERSION);                        \
+		return thx::THORAX_VERSION.pack();                                    \
 	}

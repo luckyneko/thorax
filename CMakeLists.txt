@@ -51,7 +51,6 @@ find_package(Threads REQUIRED)
 add_library(${PROJECT_NAME} STATIC
     # Headers
     include/thx/detail/hash.h
-    include/thx/detail/semver.h
     include/thx/detail/type_name.h
     include/thx/thorax.h
     include/thx/string_view.h
@@ -59,6 +58,7 @@ add_library(${PROJECT_NAME} STATIC
     include/thx/service_id.h
     include/thx/version_type.h
     include/thx/version.h.in
+    include/thx/to_string.h
     include/thx/iservice.h
     include/thx/service.h
     include/thx/service_manager.h

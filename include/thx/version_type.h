@@ -8,97 +8,76 @@
 
 #pragma once
 
-#include "thx/detail/semver.h"
-#include "thx/string_view.h"
+#include <cstdint>
 
 namespace thx
 {
-	// Semantic version following semver.org 2.0.
-	// build_metadata is stored but ignored for all precedence comparisons.
+	// A three-component numeric version (major.minor.patch).
+	// Trivial layout — safe to pass through virtual signatures across DSO
+	// boundaries.
 	//
-	// pre_release and build_metadata use thx::StringView (not std::string_view)
-	// so that Version has a guaranteed binary layout when passed through virtual
-	// methods across DSO boundaries.
-	struct Version
-	{
-		uint32_t   major{0};
-		uint32_t   minor{0};
-		uint32_t   patch{0};
-		StringView pre_release{};    // empty means release version
-		StringView build_metadata{}; // ignored for precedence per semver 2.0
-
-		constexpr Version() noexcept = default;
-
-		constexpr Version(uint32_t maj, uint32_t min, uint32_t pat,
-						  StringView pre   = {},
-						  StringView build = {}) noexcept
-			: major(maj)
-			, minor(min)
-			, patch(pat)
-			, pre_release(pre)
-			, build_metadata(build)
-		{
-		}
-
-		// Returns -1, 0, or 1. build_metadata is ignored per semver 2.0.
-		constexpr int compare(Version const& other) const noexcept
-		{
-			if (major != other.major)
-				return major < other.major ? -1 : 1;
-			if (minor != other.minor)
-				return minor < other.minor ? -1 : 1;
-			if (patch != other.patch)
-				return patch < other.patch ? -1 : 1;
-			return detail::compare_pre_release(
-				static_cast<std::string_view>(pre_release),
-				static_cast<std::string_view>(other.pre_release));
-		}
-
-		constexpr bool operator==(Version const& o) const noexcept { return compare(o) == 0; }
-		constexpr bool operator!=(Version const& o) const noexcept { return compare(o) != 0; }
-		constexpr bool operator<(Version const& o) const noexcept { return compare(o) < 0; }
-		constexpr bool operator<=(Version const& o) const noexcept { return compare(o) <= 0; }
-		constexpr bool operator>(Version const& o) const noexcept { return compare(o) > 0; }
-		constexpr bool operator>=(Version const& o) const noexcept { return compare(o) >= 0; }
-	};
-
-	constexpr Version make_version(uint32_t major, uint32_t minor, uint32_t patch,
-								   StringView pre_release    = {},
-								   StringView build_metadata = {}) noexcept
-	{
-		return {major, minor, patch, pre_release, build_metadata};
-	}
-
-	// Returns true if `provided` is backwards-compatible with `required`:
-	// same major version and provided >= required (pre-release aware).
-	constexpr bool compatible(Version const& required, Version const& provided) noexcept
-	{
-		return provided.major == required.major && provided >= required;
-	}
-
-	// Packs major/minor/patch into a single uint32_t for crossing the C plugin
-	// ABI (where struct returns are unsafe). Encoding is fixed:
+	// pack() / Version(uint32_t) convert to and from a fixed wire encoding used
+	// to cross the C plugin ABI (where struct returns are unsafe). The encoding
+	// is the bridge for thx_abi_version(); Version's in-memory layout is
+	// deliberately separate from it.
+	//
 	//   bits 24..31 → major  (0..255)
 	//   bits 16..23 → minor  (0..255)
 	//   bits  0..15 → patch  (0..65535)
-	// Pre-release / build metadata are not represented; the loader gate uses
-	// only major.minor.patch precedence, which is sufficient for runtime
-	// compatibility checks. Components above their bit range are truncated.
-	constexpr uint32_t pack_version(Version const& v) noexcept
+	//
+	// Components above their bit range are truncated on pack().
+	struct Version
 	{
-		return ((v.major & 0xFFu) << 24)
-		     | ((v.minor & 0xFFu) << 16)
-		     |  (v.patch & 0xFFFFu);
-	}
+		uint32_t major{0};
+		uint32_t minor{0};
+		uint32_t patch{0};
 
-	// Inverse of pack_version. Returns a Version with empty pre_release and
-	// build_metadata.
-	constexpr Version unpack_version(uint32_t packed) noexcept
-	{
-		return Version{
-			(packed >> 24) & 0xFFu,
-			(packed >> 16) & 0xFFu,
-			 packed        & 0xFFFFu};
-	}
+		constexpr Version() noexcept = default;
+
+		constexpr Version(uint32_t maj, uint32_t min, uint32_t pat) noexcept
+			: major(maj)
+			, minor(min)
+			, patch(pat)
+		{
+		}
+
+		// Unpack from the wire encoding (see comment on the struct).
+		constexpr explicit Version(uint32_t packed) noexcept
+			: major((packed >> 24) & 0xFFu)
+			, minor((packed >> 16) & 0xFFu)
+			, patch( packed        & 0xFFFFu)
+		{
+		}
+
+		// Pack to the wire encoding (see comment on the struct).
+		constexpr uint32_t pack() const noexcept
+		{
+			return ((major & 0xFFu) << 24)
+			     | ((minor & 0xFFu) << 16)
+			     |  (patch & 0xFFFFu);
+		}
+
+		constexpr bool operator==(Version const& o) const noexcept
+		{
+			return major == o.major && minor == o.minor && patch == o.patch;
+		}
+		constexpr bool operator!=(Version const& o) const noexcept { return !(*this == o); }
+		constexpr bool operator<(Version const& o) const noexcept
+		{
+			if (major != o.major) return major < o.major;
+			if (minor != o.minor) return minor < o.minor;
+			return patch < o.patch;
+		}
+		constexpr bool operator<=(Version const& o) const noexcept { return !(o < *this); }
+		constexpr bool operator>(Version const& o) const noexcept  { return  o < *this; }
+		constexpr bool operator>=(Version const& o) const noexcept { return !(*this < o); }
+
+		// Returns true if `provided` is backwards-compatible with `required`:
+		// same major version and provided >= required.
+		static constexpr bool compatible(Version const& required, Version const& provided) noexcept
+		{
+			return provided.major == required.major && provided >= required;
+		}
+	};
 
 } // namespace thx

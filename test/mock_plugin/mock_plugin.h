@@ -1,4 +1,4 @@
-/*
+﻿/*
  *  Created by LuckyNeko on 24/04/2026.
  *  Copyright 2026 LuckyNeko
  *
@@ -19,7 +19,7 @@ struct MockService : thx::Service<MockService>
 {
 	static constexpr thx::Version static_version()
 	{
-		return thx::make_version(1, 0, 0);
+		return thx::Version{1, 0, 0};
 	}
 
 	virtual int ping() const = 0;
@@ -31,7 +31,7 @@ struct ServiceA : thx::Service<ServiceA>
 {
 	static constexpr thx::Version static_version()
 	{
-		return thx::make_version(1, 0, 0);
+		return thx::Version{1, 0, 0};
 	}
 };
 
@@ -39,7 +39,7 @@ struct ServiceB : thx::Service<ServiceB>
 {
 	static constexpr thx::Version static_version()
 	{
-		return thx::make_version(1, 0, 0);
+		return thx::Version{1, 0, 0};
 	}
 };
 

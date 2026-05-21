@@ -1,4 +1,4 @@
-/*
+﻿/*
  *  Created by LuckyNeko on 25/04/2026.
  *  Copyright 2026 LuckyNeko
  *
@@ -49,11 +49,11 @@ class IIOService : public thx::Service<IIOService>
 public:
 	static constexpr thx::Version static_version()
 	{
-		return thx::make_version(1, 0, 0);
+		return thx::Version{1, 0, 0};
 	}
 
 	// Read a file using the first registered reader whose can_read() is true.
-	// Returns bytes read (≥ 0), -1 if no reader accepted the path, or -2 if a
+	// Returns bytes read (â‰¥ 0), -1 if no reader accepted the path, or -2 if a
 	// reader accepted but the underlying read failed.
 	virtual int read(const char* path, char* buffer, int buffer_size) = 0;
 

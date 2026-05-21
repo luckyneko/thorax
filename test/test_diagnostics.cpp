@@ -1,4 +1,4 @@
-/*
+﻿/*
  *  Created by LuckyNeko on 24/04/2026.
  *  Copyright 2026 LuckyNeko
  *
@@ -63,7 +63,7 @@ struct SinkGuard
 struct MinimalService : thx::IService
 {
 	thx::ServiceID id()      const override { return thx::ServiceID("test.Minimal"); }
-	thx::Version   version() const override { return thx::make_version(1, 0, 0);     }
+	thx::Version   version() const override { return thx::Version{1, 0, 0};     }
 };
 
 auto make_minimal = []() -> std::shared_ptr<thx::IService>
@@ -116,7 +116,7 @@ TEST_CASE("log - captures call-site source location", "[log]")
 TEST_CASE("set_log_sink - nullptr silences logging", "[log]")
 {
 	thx::set_log_sink(nullptr);
-	// No crash, no output anywhere — the call simply drops.
+	// No crash, no output anywhere â€” the call simply drops.
 	thx::log(thx::LogLevel::Info, "this goes nowhere");
 	thx::restore_default_log_sink();
 }
@@ -195,7 +195,7 @@ TEST_CASE("ServiceManager - null factory logs Error", "[log][service_manager]")
 	SinkGuard g;
 	thx::ServiceManager sm;
 
-	sm.register_service(thx::ServiceID("test.Null"), thx::make_version(1, 0, 0), nullptr);
+	sm.register_service(thx::ServiceID("test.Null"), thx::Version{1, 0, 0}, nullptr);
 
 	REQUIRE(g.has_level(thx::LogLevel::Error));
 }
@@ -205,9 +205,9 @@ TEST_CASE("ServiceManager - incompatible major version logs Warn", "[log][servic
 	SinkGuard g;
 	thx::ServiceManager sm;
 
-	sm.register_service(thx::ServiceID("test.Minimal"), thx::make_version(1, 0, 0), make_minimal);
-	// Attempt to register same ID at major version 2 — incompatible.
-	sm.register_service(thx::ServiceID("test.Minimal"), thx::make_version(2, 0, 0), make_minimal);
+	sm.register_service(thx::ServiceID("test.Minimal"), thx::Version{1, 0, 0}, make_minimal);
+	// Attempt to register same ID at major version 2 â€” incompatible.
+	sm.register_service(thx::ServiceID("test.Minimal"), thx::Version{2, 0, 0}, make_minimal);
 
 	REQUIRE(g.has_level(thx::LogLevel::Warn));
 }
@@ -228,7 +228,7 @@ TEST_CASE("ServiceManager - errors route to installed sink", "[log][service_mana
 	thx::set_log_sink(sink);
 
 	thx::ServiceManager sm;
-	sm.register_service(thx::ServiceID("test.Static"), thx::make_version(1, 0, 0), nullptr);
+	sm.register_service(thx::ServiceID("test.Static"), thx::Version{1, 0, 0}, nullptr);
 
 	thx::restore_default_log_sink();
 
@@ -248,7 +248,7 @@ TEST_CASE("ServiceManager::list_services - empty initially", "[introspection]")
 TEST_CASE("ServiceManager::list_services - returns registered entry", "[introspection]")
 {
 	thx::ServiceManager sm;
-	sm.register_service(thx::ServiceID("test.Minimal"), thx::make_version(1, 0, 0), make_minimal);
+	sm.register_service(thx::ServiceID("test.Minimal"), thx::Version{1, 0, 0}, make_minimal);
 
 	auto svcs = sm.list_services();
 	REQUIRE(svcs.size() == 1);
@@ -260,9 +260,9 @@ TEST_CASE("ServiceManager - duplicate registration is rejected",
 {
 	thx::ServiceManager sm;
 	REQUIRE(sm.register_service(thx::ServiceID("test.Minimal"),
-	                            thx::make_version(1, 0, 0), make_minimal));
+	                            thx::Version{1, 0, 0}, make_minimal));
 	REQUIRE_FALSE(sm.register_service(thx::ServiceID("test.Minimal"),
-	                                  thx::make_version(1, 0, 0), make_minimal));
+	                                  thx::Version{1, 0, 0}, make_minimal));
 	REQUIRE(sm.list_services().size() == 1);
 }
 
@@ -270,7 +270,7 @@ TEST_CASE("ServiceManager::list_services - entry removed after unregister",
           "[introspection]")
 {
 	thx::ServiceManager sm;
-	sm.register_service(thx::ServiceID("test.Minimal"), thx::make_version(1, 0, 0), make_minimal);
+	sm.register_service(thx::ServiceID("test.Minimal"), thx::Version{1, 0, 0}, make_minimal);
 	sm.unregister_service(thx::ServiceID("test.Minimal"));
 
 	REQUIRE(sm.list_services().empty());
@@ -280,8 +280,8 @@ TEST_CASE("ServiceManager::list_services - multiple independent services",
           "[introspection]")
 {
 	thx::ServiceManager sm;
-	sm.register_service(thx::ServiceID("test.A"), thx::make_version(1, 0, 0), make_minimal);
-	sm.register_service(thx::ServiceID("test.B"), thx::make_version(1, 0, 0), make_minimal);
+	sm.register_service(thx::ServiceID("test.A"), thx::Version{1, 0, 0}, make_minimal);
+	sm.register_service(thx::ServiceID("test.B"), thx::Version{1, 0, 0}, make_minimal);
 
 	REQUIRE(sm.list_services().size() == 2);
 }
