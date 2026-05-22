@@ -22,4 +22,5 @@
 #include "thx/plugin_handle.h"
 #include "thx/plugin_garbage.h"
 #include "thx/plugin_manager.h"
+#include "thx/registry.h"
 #include "thx/log.h"

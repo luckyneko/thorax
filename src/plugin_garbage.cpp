@@ -7,6 +7,7 @@
  */
 
 #include "thx/plugin_garbage.h"
+#include "thx/registry.h"
 
 #if defined(_WIN32)
 #  define WIN32_LEAN_AND_MEAN
@@ -34,8 +35,9 @@ namespace
 
 PluginGarbage& PluginGarbage::instance() noexcept
 {
-	static PluginGarbage g;
-	return g;
+	// Forwards to the Registry-owned PluginGarbage; Registry::instance() is
+	// the only static singleton in the framework.
+	return Registry::instance().pluginGarbage();
 }
 
 void PluginGarbage::schedule(void* handle) noexcept

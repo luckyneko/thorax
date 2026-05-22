@@ -37,9 +37,9 @@ namespace thx
 		PluginGarbage(PluginGarbage const&)            = delete;
 		PluginGarbage& operator=(PluginGarbage const&) = delete;
 
-		// Process-wide singleton. PluginHandle / PluginManager go through this
-		// accessor today; an eventual top-level Registry would hold one of these
-		// directly and route all callers through it instead.
+		// Process-wide singleton accessor. Forwards to the Registry-owned
+		// PluginGarbage — Registry::instance() owns the actual queue, this
+		// accessor is the legacy entry point.
 		static PluginGarbage& instance() noexcept;
 
 		// Queues a native DSO handle for deferred unmap. Null is a safe no-op.

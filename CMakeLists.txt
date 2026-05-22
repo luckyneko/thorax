@@ -69,6 +69,7 @@ add_library(${PROJECT_NAME} STATIC
     include/thx/plugin_handle.h
     include/thx/plugin_garbage.h
     include/thx/plugin_manager.h
+    include/thx/registry.h
     include/thx/log.h
 
     # Source
@@ -78,6 +79,7 @@ add_library(${PROJECT_NAME} STATIC
     src/plugin_handle.cpp
     src/plugin_garbage.cpp
     src/plugin_manager.cpp
+    src/registry.cpp
 )
 target_include_directories(${PROJECT_NAME} PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -196,6 +198,7 @@ if(THORAX_BUILD_TESTING)
         test/test_plugin_manager.cpp
         test/test_diagnostics.cpp
         test/test_iplugin.cpp
+        test/test_registry.cpp
     )
     target_link_libraries(test-${PROJECT_NAME} ${PROJECT_NAME} Catch2::Catch2WithMain)
     target_include_directories(test-${PROJECT_NAME} PRIVATE test/mock_plugin)

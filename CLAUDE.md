@@ -56,9 +56,21 @@ A service interface is just `struct IFooService : thx::Service<IFooService> { st
 
 The common one-service-per-DSO case is handled by `thx::ServicePluginShim<T>` (same header), which the `THX_DEFINE_SERVICE_PLUGIN(ServiceType)` macro emits for you.
 
+### Registry
+
+[thx::Registry](include/thx/registry.h) is the framework's single static singleton. It owns the `ServiceManager` and the `PluginGarbage` queue by value; future revisions are expected to fold `PluginManager` ownership in as well. `Registry::instance()` constructs lazily on first call and persists until program exit. Members have stable addresses — callers may take and hold references freely.
+
+Lifecycle hooks (all free functions in the `thx` namespace, declared in `registry.h`):
+
+- `thx::initialise(debugName)` — records an optional human-readable name on the Registry. Returns `true` if this call set the name, `false` if a previous `initialise()` already did. Calling `initialise()` is *not* required to use the framework; it's purely for diagnostics.
+- `thx::shutdown()` — drains the deferred-close queue (via `PluginGarbage::collect()`) and clears the debug name. Does **not** destroy the Registry — the singleton persists until program exit. Safe to call multiple times. Callers MUST release any `shared_ptr<IService>` references into unloaded DSOs before invoking it.
+- `thx::registry()` — shorthand for `Registry::instance()`.
+
+`ServiceManager::instance()` and `PluginGarbage::instance()` are preserved as forwarding accessors; they return references into the Registry's owned members.
+
 ### ServiceManager
 
-[thx::ServiceManager](include/thx/service_manager.h) is a process-wide singleton (`ServiceManager::instance()`) — but the class is also default-constructible, and tests routinely use a local instance. Reads use `std::shared_lock` so concurrent `getService<T>()` calls never block each other; `registerService`/`unregisterService` take exclusive locks.
+[thx::ServiceManager](include/thx/service_manager.h) is owned by the process-wide [thx::Registry](include/thx/registry.h) singleton; `ServiceManager::instance()` is preserved as a forwarding accessor that returns `Registry::instance().serviceManager()`. The class is also default-constructible, and tests routinely use a local instance. Reads use `std::shared_lock` so concurrent `getService<T>()` calls never block each other; `registerService`/`unregisterService` take exclusive locks.
 
 **Single-owner semantics:** each `ServiceID` may be registered exactly once. A duplicate `registerService` returns `false` with a `Warn` diagnostic and *does not* invoke the supplied factory. Plugins that want to *contribute* to an existing service (rather than replace it) use the provider pattern exposed by that service — see the logging/io services for the canonical shape (`addBackend` / `addReader`, holding `weak_ptr` to providers).
 
@@ -99,12 +111,12 @@ Anything that crosses a virtual boundary on an `IService` API must use ABI-stabl
 
 The manager keys entries by canonical path so loading the same file twice via `load(path)` is a no-op (and via `open()` reports `AlreadyLoaded`). It is **not** thread-safe; serialise externally if needed. The garbage queue itself is thread-safe.
 
-**DSO keep-alive (Milestone 8b).** The deferred-close queue lives in [thx::PluginGarbage](include/thx/plugin_garbage.h) — a process-wide singleton (`PluginGarbage::instance()`) wrapping a mutex + handle list, with `schedule(void*)`, `collect()`, and `pending()` members. `PluginHandle::close()` calls `schedule()` instead of `dlclose`/`FreeLibrary`. This indirection is what makes it safe for callers to hold `shared_ptr<IService>` handles across `unload()`: the service's destructor and its `shared_ptr` control block both live in plugin code, so the DSO must stay mapped until every reference into it has been released. The queue drains on two occasions:
+**DSO keep-alive (Milestone 8b).** The deferred-close queue lives in [thx::PluginGarbage](include/thx/plugin_garbage.h) — owned by the process-wide `Registry`, accessible via `Registry::instance().pluginGarbage()` (and the legacy forwarder `PluginGarbage::instance()`). The class wraps a mutex + handle list with `schedule(void*)`, `collect()`, and `pending()` members. `PluginHandle::close()` calls `schedule()` instead of `dlclose`/`FreeLibrary`. This indirection is what makes it safe for callers to hold `shared_ptr<IService>` handles across `unload()`: the service's destructor and its `shared_ptr` control block both live in plugin code, so the DSO must stay mapped until every reference into it has been released. The queue drains on two occasions:
 
 1. Automatically at the start of `PluginManager::open()` (and therefore also the convenience `load(path)` overload, which calls `open()` internally), so long-running programs don't accumulate mapped-but-unused DSOs. `load(OpenedPlugin)` itself does *not* drain — meaning a `discover → open* → load*` batch drains exactly once, at the start of the open phase, and never yanks a DSO while another plugin is still being inspected;
 2. On demand via `PluginGarbage::instance().collect()` (or the equivalent free-function shim `thx::collectPluginGarbage()`). `PluginGarbage::pending()` / `thx::pendingPluginGarbage()` expose the current queue depth.
 
-The class lives separately from `PluginManager` because the queue has to outlive any individual manager: a caller may destroy the `PluginManager` and still hold a service reference, which the queue keeps the DSO mapped for. The `PluginGarbage::instance()` singleton is also what the eventual top-level `Registry` is expected to own directly — moving from "static singleton" to "Registry-owned member" is a swap of accessor without changing the class shape.
+The class lives separately from `PluginManager` because the queue has to outlive any individual manager: a caller may destroy the `PluginManager` and still hold a service reference, which the queue keeps the DSO mapped for. `Registry` owns the `PluginGarbage` by value, declared *before* the `ServiceManager` so it is destroyed *after* — anything that schedules at teardown still finds a live queue.
 
 **Hard rule:** every `shared_ptr<IService>` into a DSO must be released before the next drain. Because `open()` drains first, this means: if you have unloaded a plugin and are still holding service references, do **not** call `open()` (or `load(path)`) until those references have been dropped. Tests that exercise this contract live in [test/test_plugin_manager.cpp](test/test_plugin_manager.cpp) under the `[lifetime]` tag.
 
