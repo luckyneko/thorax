@@ -89,19 +89,22 @@ Anything that crosses a virtual boundary on an `IService` API must use ABI-stabl
 
 [thx::PluginHandle](include/thx/plugin_handle.h) is the RAII DSO wrapper (`dlopen`/`dlclose` on POSIX, `LoadLibraryEx`/`FreeLibrary` on Windows). It resolves the three exports on `open()` and rejects an incompatible `thx_abi_version()` before any service is registered.
 
-[thx::PluginLoader](include/thx/plugin_loader.h) sits on top:
-- `load(path)` opens the DSO, instantiates the `IPlugin`, checks `required()`, calls `onLoad`, and attributes any newly-registered service IDs to that plugin.
+[thx::PluginLoader](include/thx/plugin_loader.h) sits on top. The full lifecycle is **discover → open → load**:
+- `discover(dir)` returns the sorted list of files matching `kPluginExtension`. Pure filesystem scan; nothing is mapped.
+- `open(path)` opens the DSO, ABI-checks it, and instantiates its `IPlugin`, returning a move-only `OpenedPlugin` value. **`required()` is NOT yet checked and `onLoad` is NOT yet called.** The caller queries `name()`/`version()`/`required()`/`path()` to plan load order across many plugins, then commits with `load(OpenedPlugin)`. Dropping the value without loading destroys the `IPlugin` and queues the DSO to the graveyard. `open()` is the entry point that drains the graveyard (see "DSO keep-alive" below).
+- `load(OpenedPlugin)` checks `required()` against the registry, calls `onLoad`, and takes ownership of the DSO + `IPlugin` on success. The `OpenedPlugin` is consumed either way; on failure its DSO is released to the graveyard at the next drain. `PluginLoader::check_requirements(sm, reqs)` is exposed as a static dry-run helper so callers can pre-check a requirement set without consuming an `OpenedPlugin`.
+- `load(path)` is a convenience wrapper that does `open(path)` + `load(OpenedPlugin)` in one step. Unlike `open()` (which returns `AlreadyLoaded` on duplicate paths), `load(path)` preserves the historical "loading the same file twice is a no-op" behavior by checking `is_loaded()` first.
 - `unload(path)` calls `IPlugin::onUnload` and removes the loader's entry. **It does not call `dlclose` directly** — instead the native handle goes onto a process-wide deferred-close graveyard.
-- `discover(dir)` returns the sorted list of files matching `kPluginExtension`; `discover_and_load(dir)` calls `load` on each and returns a `LoadSummary { loaded, failed }` rather than a single `Result`, so callers can decide what counts as success.
+- `discover_and_load(dir)` calls `load(path)` on each discovered file and returns a `LoadSummary { loaded, failed }` rather than a single `Result`, so callers can decide what counts as success. It does not surface `required()` or do any ordering — use the explicit `discover → open* → sort → load*` flow when you need that.
 
-The loader keys entries by canonical path so loading the same file twice is a no-op. It is **not** thread-safe; serialise externally if needed. The graveyard itself is thread-safe.
+The loader keys entries by canonical path so loading the same file twice via `load(path)` is a no-op (and via `open()` reports `AlreadyLoaded`). It is **not** thread-safe; serialise externally if needed. The graveyard itself is thread-safe.
 
 **DSO keep-alive (Milestone 8b).** The deferred-close graveyard is what makes it safe for callers to hold `shared_ptr<IService>` handles across `unload()`: the service's destructor and its `shared_ptr` control block both live in plugin code, so the DSO must stay mapped until every reference into it has been released. The graveyard drains on two occasions:
 
-1. Automatically at the start of `PluginLoader::load()`, so long-running programs don't accumulate mapped-but-unused DSOs;
+1. Automatically at the start of `PluginLoader::open()` (and therefore also the convenience `load(path)` overload, which calls `open()` internally), so long-running programs don't accumulate mapped-but-unused DSOs. `load(OpenedPlugin)` itself does *not* drain — meaning a `discover → open* → load*` batch drains exactly once, at the start of the open phase, and never yanks a DSO while another plugin is still being inspected;
 2. On demand via `thx::collect_plugin_garbage()` (returns the number of DSOs actually unmapped). `thx::pending_plugin_garbage()` exposes the current queue depth.
 
-**Hard rule:** every `shared_ptr<IService>` into a DSO must be released before the next drain. Because `load()` drains first, this means: if you have unloaded a plugin and are still holding service references, do **not** call `load()` until those references have been dropped. Tests that exercise this contract live in [test/test_plugin_loader.cpp](test/test_plugin_loader.cpp) under the `[lifetime]` tag.
+**Hard rule:** every `shared_ptr<IService>` into a DSO must be released before the next drain. Because `open()` drains first, this means: if you have unloaded a plugin and are still holding service references, do **not** call `open()` (or `load(path)`) until those references have been dropped. Tests that exercise this contract live in [test/test_plugin_loader.cpp](test/test_plugin_loader.cpp) under the `[lifetime]` tag.
 
 `PluginLoader::~PluginLoader` calls `onUnload` for every still-loaded plugin and clears its entries, but does **not** drain the graveyard. Drain explicitly when no service references into those DSOs remain.
 

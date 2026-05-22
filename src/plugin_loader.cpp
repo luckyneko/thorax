@@ -37,6 +37,43 @@ std::size_t pending_plugin_garbage() noexcept
 
 PluginLoader::PluginLoader(ServiceManager& sm) : sm_(sm) {}
 
+// --- OpenedPlugin ----------------------------------------------------------
+
+OpenedPlugin::OpenedPlugin(PluginHandle handle,
+                           std::shared_ptr<IPlugin> plugin,
+                           std::string canonical)
+    : handle_(std::move(handle))
+    , plugin_(std::move(plugin))
+    , canonical_(std::move(canonical))
+{
+}
+
+OpenedPlugin::OpenedPlugin(OpenedPlugin&&) noexcept            = default;
+OpenedPlugin& OpenedPlugin::operator=(OpenedPlugin&&) noexcept = default;
+
+OpenedPlugin::~OpenedPlugin()
+{
+	// Reset plugin_ before handle_ goes out of scope so the IPlugin destructor
+	// (which lives in DSO code) runs while the DSO is still mapped. ~PluginHandle
+	// then defers the dlclose into the graveyard.
+	plugin_.reset();
+}
+
+StringView OpenedPlugin::name() const noexcept
+{
+	return plugin_ ? plugin_->name() : StringView{};
+}
+
+Version OpenedPlugin::version() const noexcept
+{
+	return plugin_ ? plugin_->version() : Version{};
+}
+
+Span<const ServiceRequirement> OpenedPlugin::required() const noexcept
+{
+	return plugin_ ? plugin_->required() : Span<const ServiceRequirement>{};
+}
+
 namespace
 {
 	// Force-unregister any service IDs the plugin's onUnload neglected to drop.
@@ -81,132 +118,142 @@ std::string PluginLoader::resolve_canonical(std::string const& path)
 	return ec ? std::string{} : c.string();
 }
 
-namespace
+Result<void, Error> PluginLoader::check_requirements(ServiceManager const&          sm,
+                                                     Span<const ServiceRequirement> reqs)
 {
-	// Returns ok if the registry has a service matching `req` (same ID, version
-	// satisfies Version::compatible(req.version, registered.version)). Returns
-	// Err with a useful diagnostic otherwise.
-	Result<void, Error> check_requirement(ServiceManager const& sm,
-	                                     ServiceRequirement const& req)
+	for (std::size_t i = 0; i < reqs.size(); ++i)
 	{
+		auto const& req = reqs[i];
 		auto svc = sm.get_service<IService>(req.id);
 		if (!svc)
 			return Result<void, Error>::err({ErrorCode::NotLoaded,
 				std::string("plugin requires service '") + req.id.name()
 				+ "' which is not registered"});
 
-		if (Version::compatible(req.version, svc->version()))
-			return Result<void, Error>::ok();
-
-		std::string msg = std::string("plugin requires service '") + req.id.name() + "' at "
-		    + to_string(req.version)
-		    + "; registered version is "
-		    + to_string(svc->version());
-		return Result<void, Error>::err({ErrorCode::VersionMismatch, std::move(msg)});
-	}
-
-	Result<void, Error> load_iplugin(ServiceManager& sm,
-	                                 PluginHandle&   handle,
-	                                 std::string const&             canonical,
-	                                 std::shared_ptr<IPlugin>&      out_plugin,
-	                                 std::vector<ServiceID>&        out_new_ids)
-	{
-		auto* destroy = handle.destroy_fn();
-		IPlugin* raw  = handle.create_fn()();
-		if (!raw)
-			return Result<void, Error>::err({ErrorCode::FactoryFailed,
-				"thx_create_plugin returned null for: " + canonical});
-
-		// Wrap in shared_ptr now so the deleter runs even on error returns below.
-		// The destroy function pointer remains valid while `handle` is alive,
-		// which is guaranteed to outlive the IPlugin (Entry destruction order).
-		std::shared_ptr<IPlugin> plugin(raw, [destroy](IPlugin* p)
+		if (!Version::compatible(req.version, svc->version()))
 		{
-			if (p && destroy)
-				destroy(p);
-		});
-
-		// Reject if any required() service is missing or too old.
-		auto reqs = plugin->required();
-		for (std::size_t i = 0; i < reqs.size(); ++i)
-		{
-			if (auto r = check_requirement(sm, reqs[i]); !r)
-				return r;
+			std::string msg = std::string("plugin requires service '") + req.id.name() + "' at "
+			    + to_string(req.version)
+			    + "; registered version is "
+			    + to_string(svc->version());
+			return Result<void, Error>::err({ErrorCode::VersionMismatch, std::move(msg)});
 		}
-
-		// Snapshot the registry so we can attribute new registrations to this plugin.
-		auto before = sm.list_services();
-		std::unordered_set<ServiceID> before_ids;
-		before_ids.reserve(before.size());
-		for (auto const& s : before)
-			before_ids.insert(s.id);
-
-		auto diff_new_ids = [&]() -> std::vector<ServiceID>
-		{
-			std::vector<ServiceID> ids;
-			for (auto const& s : sm.list_services())
-				if (!before_ids.count(s.id))
-					ids.push_back(s.id);
-			std::sort(ids.begin(), ids.end(),
-			    [](ServiceID const& a, ServiceID const& b)
-			    {
-			        return std::string_view(a.name()) < std::string_view(b.name());
-			    });
-			return ids;
-		};
-
-		if (!plugin->onLoad(sm))
-		{
-			// onLoad may have partially registered services before returning false.
-			// Unregister them so the failed load leaves the registry as it was.
-			for (auto const& id : diff_new_ids())
-				sm.unregister_service(id);
-			return Result<void, Error>::err({ErrorCode::RegistrationFailed,
-				"IPlugin::onLoad returned false for: " + canonical});
-		}
-
-		out_new_ids = diff_new_ids();
-		out_plugin = std::move(plugin);
-		return Result<void, Error>::ok();
 	}
-} // namespace
+	return Result<void, Error>::ok();
+}
 
-Result<void, Error> PluginLoader::load(std::string const& path)
+Result<OpenedPlugin, Error> PluginLoader::open(std::string const& path)
 {
 	// Drain the deferred-close queue before any new dlopen so we don't
 	// accumulate a long tail of mapped-but-released DSOs in long-running
 	// processes. Safe at this point: any references that survived the previous
 	// unload have either been released by now (the user's responsibility) or
 	// the user is intentionally keeping them alive — in which case they should
-	// not be calling load() yet.
+	// not be calling open() yet.
 	detail::drain_dso_graveyard();
 
 	auto canonical = resolve_canonical(path);
 	if (canonical.empty())
-		return Result<void, Error>::err({ErrorCode::FileNotFound,
+		return Result<OpenedPlugin, Error>::err({ErrorCode::FileNotFound,
 			"Cannot resolve path: " + path});
 
 	if (plugins_.count(canonical))
-		return Result<void, Error>::ok(); // already loaded — no-op
+		return Result<OpenedPlugin, Error>::err({ErrorCode::AlreadyLoaded,
+			"Plugin already loaded: " + canonical});
 
 	auto open_result = PluginHandle::open(canonical);
 	if (!open_result)
-		return Result<void, Error>::err(open_result.error());
+		return Result<OpenedPlugin, Error>::err(open_result.error());
 
 	PluginHandle handle = std::move(open_result.value());
 
-	std::shared_ptr<IPlugin> plugin;
-	std::vector<ServiceID>   new_ids;
-	auto r = load_iplugin(sm_, handle, canonical, plugin, new_ids);
-	if (!r)
+	auto* destroy = handle.destroy_fn();
+	IPlugin* raw  = handle.create_fn()();
+	if (!raw)
+		return Result<OpenedPlugin, Error>::err({ErrorCode::FactoryFailed,
+			"thx_create_plugin returned null for: " + canonical});
+
+	// Wrap in shared_ptr so destruction routes back through the DSO's destroy
+	// function. The destroy function pointer remains valid while the handle is
+	// alive — OpenedPlugin's destruction order (plugin_ before handle_)
+	// guarantees that.
+	std::shared_ptr<IPlugin> plugin(raw, [destroy](IPlugin* p)
+	{
+		if (p && destroy)
+			destroy(p);
+	});
+
+	return Result<OpenedPlugin, Error>::ok(
+	    OpenedPlugin(std::move(handle), std::move(plugin), std::move(canonical)));
+}
+
+Result<void, Error> PluginLoader::load(OpenedPlugin opened)
+{
+	if (!opened)
+		return Result<void, Error>::err({ErrorCode::Unknown,
+			"PluginLoader::load called with empty OpenedPlugin"});
+
+	// Guard against a race / programming error: another entry with the same
+	// canonical path appearing between open() and load().
+	if (plugins_.count(opened.canonical_))
+		return Result<void, Error>::err({ErrorCode::AlreadyLoaded,
+			"Plugin already loaded: " + opened.canonical_});
+
+	if (auto r = check_requirements(sm_, opened.plugin_->required()); !r)
 		return r;
 
+	// Snapshot the registry so we can attribute new registrations to this plugin.
+	auto before = sm_.list_services();
+	std::unordered_set<ServiceID> before_ids;
+	before_ids.reserve(before.size());
+	for (auto const& s : before)
+		before_ids.insert(s.id);
+
+	auto diff_new_ids = [&]() -> std::vector<ServiceID>
+	{
+		std::vector<ServiceID> ids;
+		for (auto const& s : sm_.list_services())
+			if (!before_ids.count(s.id))
+				ids.push_back(s.id);
+		std::sort(ids.begin(), ids.end(),
+		    [](ServiceID const& a, ServiceID const& b)
+		    {
+		        return std::string_view(a.name()) < std::string_view(b.name());
+		    });
+		return ids;
+	};
+
+	if (!opened.plugin_->onLoad(sm_))
+	{
+		// onLoad may have partially registered services before returning false.
+		// Unregister them so the failed load leaves the registry as it was.
+		for (auto const& id : diff_new_ids())
+			sm_.unregister_service(id);
+		return Result<void, Error>::err({ErrorCode::RegistrationFailed,
+			"IPlugin::onLoad returned false for: " + opened.canonical_});
+	}
+
 	Entry entry;
-	entry.handle      = std::move(handle);
-	entry.service_ids = std::move(new_ids);
-	entry.plugin      = std::move(plugin);
-	plugins_.emplace(canonical, std::move(entry));
+	entry.handle      = std::move(opened.handle_);
+	entry.service_ids = diff_new_ids();
+	entry.plugin      = std::move(opened.plugin_);
+	plugins_.emplace(opened.canonical_, std::move(entry));
 	return Result<void, Error>::ok();
+}
+
+Result<void, Error> PluginLoader::load(std::string const& path)
+{
+	// Preserve the historical "loading the same path twice is a no-op"
+	// behaviour. open() reports AlreadyLoaded as an error; here we swallow it.
+	auto canonical = resolve_canonical(path);
+	if (!canonical.empty() && plugins_.count(canonical))
+		return Result<void, Error>::ok();
+
+	auto opened = open(path);
+	if (!opened)
+		return Result<void, Error>::err(std::move(opened.error()));
+
+	return load(std::move(opened.value()));
 }
 
 Result<void, Error> PluginLoader::unload(std::string const& path)

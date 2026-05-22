@@ -30,6 +30,54 @@ namespace thx
 		std::vector<ServiceID>   services;    // all service IDs registered by this plugin
 	};
 
+	// A plugin DSO that has been opened and its IPlugin instantiated, but whose
+	// onLoad has NOT yet been called and whose required() services have NOT yet
+	// been checked. The caller queries name()/version()/required() to plan load
+	// order, then passes the value to PluginLoader::load(OpenedPlugin) to
+	// commit. Three-step flow: discover -> open -> load.
+	//
+	// Move-only. A default-constructed or moved-from OpenedPlugin is empty and
+	// converts to false.
+	//
+	// Lifetime: while alive, the DSO is mapped and the IPlugin instance exists.
+	// Dropping the value without passing it to load() destroys the IPlugin and
+	// queues the DSO into the deferred-close graveyard (drained at the next
+	// PluginLoader::open() or thx::collect_plugin_garbage()).
+	class OpenedPlugin
+	{
+	public:
+		OpenedPlugin() = default;
+		~OpenedPlugin();
+
+		OpenedPlugin(OpenedPlugin&&) noexcept;
+		OpenedPlugin& operator=(OpenedPlugin&&) noexcept;
+
+		OpenedPlugin(OpenedPlugin const&)            = delete;
+		OpenedPlugin& operator=(OpenedPlugin const&) = delete;
+
+		explicit operator bool() const noexcept { return static_cast<bool>(plugin_); }
+
+		// Canonical filesystem path of the DSO.
+		std::string const& path() const noexcept { return canonical_; }
+
+		// Plugin-reported metadata. Valid once open() has succeeded.
+		StringView                     name() const noexcept;
+		Version                        version() const noexcept;
+		Span<const ServiceRequirement> required() const noexcept;
+
+	private:
+		friend class PluginLoader;
+		OpenedPlugin(PluginHandle handle,
+		             std::shared_ptr<IPlugin> plugin,
+		             std::string canonical);
+
+		// Destruction order matters: plugin_ (whose destructor lives in plugin
+		// code) is reset before handle_ is destroyed.
+		PluginHandle             handle_;
+		std::shared_ptr<IPlugin> plugin_;
+		std::string              canonical_;
+	};
+
 	// Loads, unloads, and discovers plugin shared libraries.
 	//
 	// Owns the DSO handles and integrates with a ServiceManager. Each loaded
@@ -53,15 +101,45 @@ namespace thx
 		PluginLoader(PluginLoader const&)            = delete;
 		PluginLoader& operator=(PluginLoader const&) = delete;
 
-		// Loads the plugin DSO at path and registers its service.
-		// If the canonical path is already loaded, returns ok (no-op).
+		// Opens the DSO at path, ABI-checks it, and instantiates its IPlugin —
+		// but does NOT call onLoad and does NOT check required(). Use this to
+		// inspect a plugin's name/version/required() before committing to a
+		// load order across many plugins.
 		//
 		// As a side effect, drains the deferred-close queue (see unload). This
 		// keeps the queue bounded in long-running programs but means any
 		// service references held over from an earlier unload MUST be released
-		// before calling load() — otherwise the drain unmaps the DSO out from
+		// before calling open() — otherwise the drain unmaps the DSO out from
 		// under them.
+		//
+		// Returns Err(AlreadyLoaded) if this PluginLoader already has the
+		// canonical path loaded.
+		Result<OpenedPlugin, Error> open(std::string const& path);
+
+		// Completes the load of a previously opened plugin: checks required()
+		// against the registry, calls IPlugin::onLoad, and takes ownership of
+		// the DSO + IPlugin on success.
+		//
+		// The OpenedPlugin is consumed either way; on failure its DSO is
+		// released to the graveyard at the next drain.
+		//
+		// Returns Err(AlreadyLoaded) if another entry with the same canonical
+		// path has appeared since the plugin was opened.
+		Result<void, Error> load(OpenedPlugin opened);
+
+		// Convenience: opens the DSO at path and immediately loads it.
+		// If the canonical path is already loaded, returns ok (no-op).
+		// Equivalent to a chained open() + load(OpenedPlugin), except that
+		// duplicate paths are treated as a successful no-op rather than an
+		// AlreadyLoaded error.
 		Result<void, Error> load(std::string const& path);
+
+		// Dry-runs the requirement check that load(OpenedPlugin) would perform.
+		// Returns ok if every requirement is satisfied by a service currently
+		// registered in sm at a compatible version, or the first failure.
+		// Does not mutate sm.
+		static Result<void, Error> check_requirements(ServiceManager const&            sm,
+		                                              Span<const ServiceRequirement>   reqs);
 
 		// Unregisters the plugin's services and releases the DSO from this loader.
 		// Returns Err(NotLoaded) if path was not previously loaded.
