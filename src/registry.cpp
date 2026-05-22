@@ -11,6 +11,8 @@
 namespace thx
 {
 
+Registry::Registry() : m_pluginManager(m_serviceManager) {}
+
 Registry& Registry::instance() noexcept
 {
 	static Registry inst;

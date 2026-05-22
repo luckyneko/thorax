@@ -37,11 +37,6 @@ namespace thx
 		PluginGarbage(PluginGarbage const&)            = delete;
 		PluginGarbage& operator=(PluginGarbage const&) = delete;
 
-		// Process-wide singleton accessor. Forwards to the Registry-owned
-		// PluginGarbage — Registry::instance() owns the actual queue, this
-		// accessor is the legacy entry point.
-		static PluginGarbage& instance() noexcept;
-
 		// Queues a native DSO handle for deferred unmap. Null is a safe no-op.
 		// The handle is opaque to this class — it's whatever PluginHandle stores
 		// (void* / HMODULE), and the platform-specific unmap call happens inside
@@ -65,8 +60,8 @@ namespace thx
 		std::vector<void*>  m_handles;
 	};
 
-	// Free-function shims preserved for callers that don't want to reach for
-	// PluginGarbage::instance() directly. Both forward to the singleton.
+	// Free-function shims that operate on the Registry-owned PluginGarbage.
+	// Equivalent to thx::registry().pluginGarbage().collect() / .pending().
 	std::size_t collectPluginGarbage() noexcept;
 	std::size_t pendingPluginGarbage() noexcept;
 

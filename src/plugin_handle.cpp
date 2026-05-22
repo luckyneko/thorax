@@ -7,7 +7,7 @@
  */
 
 #include "thx/plugin_handle.h"
-#include "thx/plugin_garbage.h"
+#include "thx/registry.h"
 #include "thx/to_string.h"
 #include "thx/version.h"
 
@@ -58,7 +58,7 @@ void PluginHandle::close() noexcept
 		return;
 	// Hand the native handle to PluginGarbage rather than unmapping immediately;
 	// see plugin_garbage.h for the lifetime contract.
-	PluginGarbage::instance().schedule(m_handle);
+	Registry::instance().pluginGarbage().schedule(m_handle);
 	m_handle      = nullptr;
 	m_createFn   = nullptr;
 	m_destroyFn  = nullptr;

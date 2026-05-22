@@ -51,11 +51,6 @@ namespace thx
 		ServiceManager(ServiceManager const&) = delete;
 		ServiceManager& operator=(ServiceManager const&) = delete;
 
-		// Process-wide singleton accessor. Forwards to the Registry-owned
-		// ServiceManager — Registry::instance() owns the actual object; this
-		// accessor is the legacy entry point.
-		static ServiceManager& instance();
-
 		// Registers a service by ID, version, and a factory callable.
 		//
 		// The factory is invoked exactly once; the resulting shared_ptr is

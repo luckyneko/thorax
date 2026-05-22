@@ -33,13 +33,6 @@ namespace
 	}
 } // namespace
 
-PluginGarbage& PluginGarbage::instance() noexcept
-{
-	// Forwards to the Registry-owned PluginGarbage; Registry::instance() is
-	// the only static singleton in the framework.
-	return Registry::instance().pluginGarbage();
-}
-
 void PluginGarbage::schedule(void* handle) noexcept
 {
 	if (!handle)
@@ -71,12 +64,12 @@ std::size_t PluginGarbage::pending() const noexcept
 
 std::size_t collectPluginGarbage() noexcept
 {
-	return PluginGarbage::instance().collect();
+	return Registry::instance().pluginGarbage().collect();
 }
 
 std::size_t pendingPluginGarbage() noexcept
 {
-	return PluginGarbage::instance().pending();
+	return Registry::instance().pluginGarbage().pending();
 }
 
 } // namespace thx

@@ -7,7 +7,7 @@
  */
 
 #include "thx/plugin_manager.h"
-#include "thx/plugin_garbage.h"
+#include "thx/registry.h"
 #include "thx/to_string.h"
 #include "thx/platform.h"
 
@@ -133,7 +133,7 @@ Result<OpenedPlugin, Error> PluginManager::open(std::string const& path)
 	// unload have either been released by now (the user's responsibility) or
 	// the user is intentionally keeping them alive — in which case they should
 	// not be calling open() yet.
-	PluginGarbage::instance().collect();
+	Registry::instance().pluginGarbage().collect();
 
 	auto canonical = resolveCanonical(path);
 	if (canonical.empty())

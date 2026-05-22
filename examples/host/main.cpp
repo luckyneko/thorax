@@ -14,6 +14,7 @@
 // and FileService interfaces contributed by the two example plugins.
 
 #include <thx/plugin_manager.h>
+#include <thx/registry.h>
 #include <thx/service_manager.h>
 
 #include "interfaces/file_service.h"
@@ -30,10 +31,11 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-	auto& sm = thx::ServiceManager::instance();
-	thx::PluginManager loader(sm);
+	auto& reg = thx::registry();
+	auto& sm  = reg.serviceManager();
+	auto& pm  = reg.pluginManager();
 
-	auto summary = loader.discoverAndLoad(argv[1]);
+	auto summary = pm.discoverAndLoad(argv[1]);
 	if (summary.loaded.empty())
 	{
 		std::fprintf(stderr, "discoverAndLoad: no plugins loaded from %s\n", argv[1]);

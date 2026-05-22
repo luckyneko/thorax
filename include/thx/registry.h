@@ -9,6 +9,7 @@
 #pragma once
 
 #include "thx/plugin_garbage.h"
+#include "thx/plugin_manager.h"
 #include "thx/service_manager.h"
 
 #include <string>
@@ -17,18 +18,19 @@ namespace thx
 {
 	// Top-level container that owns the framework's process-wide state.
 	//
-	// Today Registry owns:
+	// Registry owns:
+	//   - the PluginGarbage queue (deferred-dlclose queue for plugin DSOs);
 	//   - the ServiceManager (process-wide service registry);
-	//   - the PluginGarbage queue (deferred-dlclose queue for plugin DSOs).
+	//   - the PluginManager (loaded plugins, indexed by canonical path).
 	//
-	// Both members are accessible by reference and have stable addresses across
-	// the lifetime of the singleton — callers may take and hold references
-	// freely. The class is intentionally non-copyable / non-movable.
+	// All three members are accessible by reference and have stable addresses
+	// across the lifetime of the singleton — callers may take and hold
+	// references freely. The class is intentionally non-copyable / non-movable.
 	//
-	// PluginManager is *not* owned by Registry yet. It still takes a
-	// ServiceManager& in its constructor and is constructed by the host. A
-	// future revision is expected to add Registry::pluginManager() and move
-	// that ownership in.
+	// Registry::instance() is the framework's only static singleton; the
+	// individual manager classes no longer expose their own instance()
+	// accessors. Tests that need isolated state continue to construct local
+	// ServiceManager / PluginManager instances directly.
 	class Registry
 	{
 	public:
@@ -41,6 +43,7 @@ namespace thx
 		static Registry& instance() noexcept;
 
 		ServiceManager& serviceManager() noexcept { return m_serviceManager; }
+		PluginManager&  pluginManager()  noexcept { return m_pluginManager;  }
 		PluginGarbage&  pluginGarbage()  noexcept { return m_pluginGarbage;  }
 
 		// Optional human-readable name set via thx::initialise(). Used for
@@ -49,19 +52,24 @@ namespace thx
 		std::string const& debugName() const noexcept { return m_debugName; }
 
 	private:
-		Registry() = default;
+		Registry();
 
 		// Allow the free-function lifecycle hooks to mutate state without
 		// exposing it on the public surface.
 		friend bool initialise(std::string debugName);
 		friend void shutdown() noexcept;
 
-		// Declaration order matters: m_pluginGarbage is declared first so that
-		// it is destroyed last. Anything else (notably future PluginManager
-		// ownership) that schedules handles into the garbage queue at
-		// destruction will then still find a live queue to push into.
+		// Declaration (= initialisation) order matters in two ways:
+		//   - m_pluginGarbage must be initialised first so it outlives both
+		//     m_serviceManager and m_pluginManager: at destruction, ~PluginManager
+		//     schedules each plugin's DSO into the queue, so the queue must
+		//     still be alive at that point.
+		//   - m_serviceManager must be initialised before m_pluginManager
+		//     because m_pluginManager's constructor takes m_serviceManager by
+		//     reference.
 		PluginGarbage   m_pluginGarbage;
 		ServiceManager  m_serviceManager;
+		PluginManager   m_pluginManager;
 		std::string     m_debugName;
 	};
 

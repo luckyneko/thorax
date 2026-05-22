@@ -9,6 +9,7 @@
 #include <catch2/catch_all.hpp>
 #include <thx/registry.h>
 #include <thx/plugin_garbage.h>
+#include <thx/plugin_manager.h>
 #include <thx/service_manager.h>
 
 // The Registry is a process-wide singleton; tests that mutate its state
@@ -27,18 +28,29 @@ TEST_CASE("thx::registry is a shorthand for Registry::instance", "[registry]")
 	REQUIRE(&thx::registry() == &thx::Registry::instance());
 }
 
-TEST_CASE("ServiceManager::instance returns the Registry-owned ServiceManager",
+TEST_CASE("Registry exposes ServiceManager, PluginManager, and PluginGarbage",
           "[registry]")
 {
-	REQUIRE(&thx::ServiceManager::instance()
-	    == &thx::Registry::instance().serviceManager());
+	auto& reg = thx::Registry::instance();
+	auto& sm  = reg.serviceManager();
+	auto& pm  = reg.pluginManager();
+	auto& gc  = reg.pluginGarbage();
+
+	// Calling the accessors again yields the same objects.
+	REQUIRE(&sm == &reg.serviceManager());
+	REQUIRE(&pm == &reg.pluginManager());
+	REQUIRE(&gc == &reg.pluginGarbage());
 }
 
-TEST_CASE("PluginGarbage::instance returns the Registry-owned PluginGarbage",
+TEST_CASE("collectPluginGarbage / pendingPluginGarbage operate on the Registry-owned queue",
           "[registry]")
 {
-	REQUIRE(&thx::PluginGarbage::instance()
-	    == &thx::Registry::instance().pluginGarbage());
+	auto& gc = thx::registry().pluginGarbage();
+	// Drain in case earlier tests left handles queued.
+	gc.collect();
+
+	REQUIRE(thx::pendingPluginGarbage() == 0);
+	REQUIRE(thx::collectPluginGarbage() == 0);
 }
 
 TEST_CASE("thx::initialise sets the debug name when previously empty",

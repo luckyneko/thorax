@@ -7,19 +7,11 @@
  */
 
 #include "thx/service_manager.h"
-#include "thx/registry.h"
 #include "thx/to_string.h"
 #include "thx/log.h"
 
 namespace thx
 {
-
-ServiceManager& ServiceManager::instance()
-{
-	// Forwards to the Registry-owned ServiceManager; Registry::instance() is
-	// the only static singleton in the framework.
-	return Registry::instance().serviceManager();
-}
 
 bool ServiceManager::registerService(ServiceID id, Version version, ServiceFactory factory)
 {
