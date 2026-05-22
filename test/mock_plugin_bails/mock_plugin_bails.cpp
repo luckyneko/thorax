@@ -15,14 +15,14 @@
 namespace
 {
 
-class BailingPlugin : public thx::IPlugin
+class BailingPlugin : public thx::plugin::IPlugin
 {
 public:
 	thx::StringView name()    const override { return "thx.mock.BailingPlugin"; }
 	thx::Version    version() const override { return thx::Version{1, 0, 0}; }
 
-	bool onLoad(thx::ServiceManager&)   override { return false; }
-	void onUnload(thx::ServiceManager&) override {}
+	bool onLoad(thx::service::ServiceManager&)   override { return false; }
+	void onUnload(thx::service::ServiceManager&) override {}
 };
 
 } // namespace

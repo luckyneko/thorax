@@ -19,23 +19,23 @@
 namespace
 {
 
-class BailsAfterRegisterPlugin : public thx::IPlugin
+class BailsAfterRegisterPlugin : public thx::plugin::IPlugin
 {
 public:
 	thx::StringView name()    const override { return "thx.mock.BailsAfterRegisterPlugin"; }
 	thx::Version    version() const override { return thx::Version{1, 0, 0}; }
 
-	bool onLoad(thx::ServiceManager& sm) override
+	bool onLoad(thx::service::ServiceManager& sm) override
 	{
 		sm.registerService<thx_mock::ServiceA>(
-			[]() -> std::shared_ptr<thx::IService>
+			[]() -> std::shared_ptr<thx::service::IService>
 			{
 				return std::make_shared<thx_mock::ServiceA>();
 			});
 		return false; // PluginManager must roll back the ServiceA registration.
 	}
 
-	void onUnload(thx::ServiceManager&) override {}
+	void onUnload(thx::service::ServiceManager&) override {}
 };
 
 } // namespace

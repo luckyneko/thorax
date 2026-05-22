@@ -10,7 +10,7 @@
 #include "thx/to_string.h"
 #include "thx/log.h"
 
-namespace thx
+namespace thx::service
 {
 
 bool ServiceManager::registerService(ServiceID id, Version version, ServiceFactory factory)
@@ -137,4 +137,4 @@ std::vector<ServiceInfo> ServiceManager::listServices() const
 	return result;
 }
 
-} // namespace thx
+} // namespace thx::service

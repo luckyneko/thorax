@@ -1,5 +1,5 @@
 
-namespace thx
+namespace thx::service
 {
 	// ---------------------------------------------------------------------------
 	// Template implementation
@@ -32,4 +32,4 @@ namespace thx
 	{
 		return unregisterService(T::staticId());
 	}
-} // namespace thx
+} // namespace thx::service

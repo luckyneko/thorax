@@ -44,7 +44,7 @@ public:
 //   auto txt = io->makeTextReader();
 //   io->addReader(txt);            // generic fallback
 //   int n = io->read("file.txt", buf, sizeof(buf));
-class IIOService : public thx::Service<IIOService>
+class IIOService : public thx::service::Service<IIOService>
 {
 public:
 	static constexpr thx::Version staticVersion()

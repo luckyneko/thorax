@@ -19,23 +19,23 @@
 namespace
 {
 
-class BadAbiPlugin : public thx::IPlugin
+class BadAbiPlugin : public thx::plugin::IPlugin
 {
 public:
 	thx::StringView name()    const override { return "test.BadAbi"; }
 	thx::Version    version() const override { return thx::Version{1, 0, 0}; }
 
-	bool onLoad(thx::ServiceManager&)   override { return true; }
-	void onUnload(thx::ServiceManager&) override {}
+	bool onLoad(thx::service::ServiceManager&)   override { return true; }
+	void onUnload(thx::service::ServiceManager&) override {}
 };
 
 } // namespace
 
-THX_PLUGIN_API thx::IPlugin* thx_create_plugin()
+THX_PLUGIN_API thx::plugin::IPlugin* thx_create_plugin()
 {
 	return new (std::nothrow) BadAbiPlugin();
 }
-THX_PLUGIN_API void thx_destroy_plugin(thx::IPlugin* p)
+THX_PLUGIN_API void thx_destroy_plugin(thx::plugin::IPlugin* p)
 {
 	delete p;
 }

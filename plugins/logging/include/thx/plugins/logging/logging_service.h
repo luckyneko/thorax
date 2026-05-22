@@ -36,7 +36,7 @@ public:
 //   log->addBackend(con);
 //   log->log(LogLevel::Info, "hello");
 //   log->removeBackend(con.get());   // or just let con go out of scope
-class ILoggingService : public thx::Service<ILoggingService>
+class ILoggingService : public thx::service::Service<ILoggingService>
 {
 public:
 	static constexpr thx::Version staticVersion()

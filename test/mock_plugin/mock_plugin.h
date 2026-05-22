@@ -15,7 +15,7 @@
 namespace thx_mock
 {
 
-struct MockService : thx::Service<MockService>
+struct MockService : thx::service::Service<MockService>
 {
 	static constexpr thx::Version staticVersion()
 	{
@@ -27,7 +27,7 @@ struct MockService : thx::Service<MockService>
 
 // Additional services registered by mock_plugin_multi (used by the
 // IPlugin-multi-service tests).
-struct ServiceA : thx::Service<ServiceA>
+struct ServiceA : thx::service::Service<ServiceA>
 {
 	static constexpr thx::Version staticVersion()
 	{
@@ -35,7 +35,7 @@ struct ServiceA : thx::Service<ServiceA>
 	}
 };
 
-struct ServiceB : thx::Service<ServiceB>
+struct ServiceB : thx::service::Service<ServiceB>
 {
 	static constexpr thx::Version staticVersion()
 	{

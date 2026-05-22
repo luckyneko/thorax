@@ -14,7 +14,7 @@
 #include <mutex>
 #include <vector>
 
-namespace thx
+namespace thx::plugin
 {
 	// Process-wide deferred-dlclose queue for plugin DSOs.
 	//
@@ -61,7 +61,11 @@ namespace thx
 		std::vector<Library> m_libraries;
 	};
 
-	// Free-function shims that operate on the Registry-owned PluginGarbage.
+} // namespace thx::plugin
+
+namespace thx
+{
+	// User-facing convenience shims; operate on the Registry-owned PluginGarbage.
 	// Equivalent to thx::registry().pluginGarbage().collect() / .pending().
 	std::size_t collectPluginGarbage() noexcept;
 	std::size_t pendingPluginGarbage() noexcept;

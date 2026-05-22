@@ -11,7 +11,7 @@
 
 #include <utility>
 
-namespace thx
+namespace thx::plugin
 {
 
 void PluginGarbage::schedule(Library lib) noexcept
@@ -43,6 +43,11 @@ std::size_t PluginGarbage::pending() const noexcept
 	std::lock_guard<std::mutex> lock(m_mutex);
 	return m_libraries.size();
 }
+
+} // namespace thx::plugin
+
+namespace thx
+{
 
 std::size_t collectPluginGarbage() noexcept
 {

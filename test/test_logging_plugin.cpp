@@ -50,8 +50,8 @@ struct CaptureBackend : ILogBackend
 // Returns the loader (RAII — unloads on destruction) or reports failure.
 struct Fixture
 {
-	thx::ServiceManager sm;
-	thx::PluginManager   loader{sm};
+	thx::service::ServiceManager sm;
+	thx::plugin::PluginManager   loader{sm};
 
 	explicit Fixture()
 	{

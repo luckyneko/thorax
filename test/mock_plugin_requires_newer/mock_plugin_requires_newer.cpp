@@ -17,22 +17,22 @@
 namespace
 {
 
-class RequiresNewerPlugin : public thx::IPlugin
+class RequiresNewerPlugin : public thx::plugin::IPlugin
 {
 public:
 	thx::StringView name()    const override { return "thx.mock.RequiresNewerPlugin"; }
 	thx::Version    version() const override { return thx::Version{1, 0, 0}; }
 
-	bool onLoad(thx::ServiceManager&)   override { return true; }
-	void onUnload(thx::ServiceManager&) override {}
+	bool onLoad(thx::service::ServiceManager&)   override { return true; }
+	void onUnload(thx::service::ServiceManager&) override {}
 
-	thx::Span<const thx::ServiceRequirement> required() const override
+	thx::Span<const thx::plugin::ServiceRequirement> required() const override
 	{
 		// Require MockService at 2.0.0; the registered MockService is only 1.0.0.
-		static const thx::ServiceRequirement kReqs[] = {
+		static const thx::plugin::ServiceRequirement kReqs[] = {
 			{ thx_mock::MockService::staticId(), thx::Version{2, 0, 0} }
 		};
-		return thx::Span<const thx::ServiceRequirement>(kReqs, 1);
+		return thx::Span<const thx::plugin::ServiceRequirement>(kReqs, 1);
 	}
 };
 

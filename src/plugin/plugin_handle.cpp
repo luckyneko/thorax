@@ -13,7 +13,7 @@
 
 #include <utility>
 
-namespace thx
+namespace thx::plugin
 {
 
 PluginHandle::~PluginHandle()
@@ -103,4 +103,4 @@ Result<PluginHandle, Error> PluginHandle::open(std::string const& path)
 	return Result<PluginHandle, Error>::ok(std::move(handle));
 }
 
-} // namespace thx
+} // namespace thx::plugin

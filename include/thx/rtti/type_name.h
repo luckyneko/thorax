@@ -12,139 +12,135 @@
 #include <cstddef>
 #include <string_view>
 
-namespace thx
+namespace thx::rtti
 {
-	namespace detail
+	// Returns a string_view of the C++ qualified name for T, extracted from
+	// the compiler's function-signature macro. The backing storage is the
+	// string literal inside the instantiation of this function template, which
+	// has static storage duration.
+	//
+	// Examples (after extraction):
+	//   extractTypeName<thx::io::FileService>() -> "thx::io::FileService"
+	//   extractTypeName<int>()                   -> "int"
+	template <typename T>
+	constexpr std::string_view extractTypeName() noexcept
 	{
-
-		// Returns a string_view of the C++ qualified name for T, extracted from
-		// the compiler's function-signature macro. The backing storage is the
-		// string literal inside the instantiation of this function template, which
-		// has static storage duration.
-		//
-		// Examples (after extraction):
-		//   extractTypeName<thx::io::FileService>() -> "thx::io::FileService"
-		//   extractTypeName<int>()                   -> "int"
-		template <typename T>
-		constexpr std::string_view extractTypeName() noexcept
-		{
 #if defined(_MSC_VER) && !defined(__clang__)
-			// __FUNCSIG__ example:
-			//   "... __cdecl thx::detail::extractTypeName<class thx::io::FileService>(void)"
-			// Strategy: find "extractTypeName<" then match angle brackets to
-			// locate the closing '>'.
-			std::string_view fn{__FUNCSIG__};
-			constexpr std::string_view marker = "extractTypeName<";
-			auto mpos = fn.find(marker);
-			// Defensive: if a future MSVC ever stops emitting the marker, return
-			// an empty string_view rather than walking off the end. Empty names
-			// are observable downstream (the ServiceID will have an empty name)
-			// which surfaces the problem instead of UB.
-			if (mpos == std::string_view::npos)
-				return {};
-			auto start = mpos + marker.size();
+		// __FUNCSIG__ example:
+		//   "... __cdecl thx::rtti::extractTypeName<class thx::io::FileService>(void)"
+		// Strategy: find "extractTypeName<" then match angle brackets to
+		// locate the closing '>'.
+		std::string_view fn{__FUNCSIG__};
+		constexpr std::string_view marker = "extractTypeName<";
+		auto mpos = fn.find(marker);
+		// Defensive: if a future MSVC ever stops emitting the marker, return
+		// an empty string_view rather than walking off the end. Empty names
+		// are observable downstream (the ServiceID will have an empty name)
+		// which surfaces the problem instead of UB.
+		if (mpos == std::string_view::npos)
+			return {};
+		auto start = mpos + marker.size();
 
-			// Walk forward counting '<' and '>' to find the matching '>'.
-			std::size_t end = start;
-			int depth = 1;
-			while (end < fn.size() && depth > 0)
+		// Walk forward counting '<' and '>' to find the matching '>'.
+		std::size_t end = start;
+		int depth = 1;
+		while (end < fn.size() && depth > 0)
+		{
+			if (fn[end] == '<')
+				++depth;
+			else if (fn[end] == '>')
 			{
-				if (fn[end] == '<')
-					++depth;
-				else if (fn[end] == '>')
-				{
-					--depth;
-					if (depth == 0)
-						break;
-				}
-				++end;
+				--depth;
+				if (depth == 0)
+					break;
 			}
+			++end;
+		}
 
-			auto raw = fn.substr(start, end - start);
+		auto raw = fn.substr(start, end - start);
 
-			// MSVC prepends "class " or "struct " to user-defined types.
-			constexpr std::size_t kClassLen  = std::size_t{6}; // "class "
-			constexpr std::size_t kStructLen = std::size_t{7}; // "struct "
-			if (raw.size() >= kClassLen && raw.substr(std::size_t{0}, kClassLen) == "class ")
-				return raw.substr(kClassLen);
-			if (raw.size() >= kStructLen && raw.substr(std::size_t{0}, kStructLen) == "struct ")
-				return raw.substr(kStructLen);
-			return raw;
+		// MSVC prepends "class " or "struct " to user-defined types.
+		constexpr std::size_t kClassLen  = std::size_t{6}; // "class "
+		constexpr std::size_t kStructLen = std::size_t{7}; // "struct "
+		if (raw.size() >= kClassLen && raw.substr(std::size_t{0}, kClassLen) == "class ")
+			return raw.substr(kClassLen);
+		if (raw.size() >= kStructLen && raw.substr(std::size_t{0}, kStructLen) == "struct ")
+			return raw.substr(kStructLen);
+		return raw;
 
 #else
-			// GCC __PRETTY_FUNCTION__ example:
-			//   "... [with T = thx::io::FileService; std::string_view = ...]"
-			// Clang __PRETTY_FUNCTION__ example:
-			//   "... [T = thx::io::FileService]"
-			// Both contain "T = " followed by the type name, terminated by ';' or ']'.
-			std::string_view fn{__PRETTY_FUNCTION__};
-			auto pos = fn.find("T = ");
-			if (pos == std::string_view::npos)
-				return {};
-			auto start = pos + 4;
-			auto end = fn.find_first_of(";]", start);
-			if (end == std::string_view::npos)
-				end = fn.size();
-			return fn.substr(start, end - start);
+		// GCC __PRETTY_FUNCTION__ example:
+		//   "... [with T = thx::io::FileService; std::string_view = ...]"
+		// Clang __PRETTY_FUNCTION__ example:
+		//   "... [T = thx::io::FileService]"
+		// Both contain "T = " followed by the type name, terminated by ';' or ']'.
+		std::string_view fn{__PRETTY_FUNCTION__};
+		auto pos = fn.find("T = ");
+		if (pos == std::string_view::npos)
+			return {};
+		auto start = pos + 4;
+		auto end = fn.find_first_of(";]", start);
+		if (end == std::string_view::npos)
+			end = fn.size();
+		return fn.substr(start, end - start);
 #endif
-		}
+	}
 
-		// Returns the number of characters in `name` after replacing each "::"
-		// with a single '.'.
-		constexpr std::size_t dottedLength(std::string_view name) noexcept
+	// Returns the number of characters in `name` after replacing each "::"
+	// with a single '.'.
+	constexpr std::size_t dottedLength(std::string_view name) noexcept
+	{
+		std::size_t len = 0, i = 0;
+		while (i < name.size())
 		{
-			std::size_t len = 0, i = 0;
-			while (i < name.size())
+			if (i + 1 < name.size() && name[i] == ':' && name[i + 1] == ':')
 			{
-				if (i + 1 < name.size() && name[i] == ':' && name[i + 1] == ':')
-				{
-					++len;
-					i += 2;
-				}
-				else
-				{
-					++len;
-					++i;
-				}
+				++len;
+				i += 2;
 			}
-			return len;
-		}
-
-		// Returns a null-terminated char array containing `name` with every "::"
-		// replaced by '.'. Template parameter N must equal dottedLength(name).
-		template <std::size_t N>
-		constexpr std::array<char, N + 1> makeDotted(std::string_view name) noexcept
-		{
-			std::array<char, N + 1> result{};
-			std::size_t j = 0, i = 0;
-			while (i < name.size())
+			else
 			{
-				if (i + 1 < name.size() && name[i] == ':' && name[i + 1] == ':')
-				{
-					result[j++] = '.';
-					i += 2;
-				}
-				else
-				{
-					result[j++] = name[i++];
-				}
+				++len;
+				++i;
 			}
-			result[j] = '\0';
-			return result;
 		}
+		return len;
+	}
 
-		// Provides the dot-separated service name for type T as a constexpr
-		// null-terminated char array with static storage duration.
-		//
-		// TypeName<thx::io::FileService>::value  contains  "thx.io.FileService\0"
-		// TypeName<MyService>::value             contains  "MyService\0"
-		template <typename T>
-		struct TypeName
+	// Returns a null-terminated char array containing `name` with every "::"
+	// replaced by '.'. Template parameter N must equal dottedLength(name).
+	template <std::size_t N>
+	constexpr std::array<char, N + 1> makeDotted(std::string_view name) noexcept
+	{
+		std::array<char, N + 1> result{};
+		std::size_t j = 0, i = 0;
+		while (i < name.size())
 		{
-			static constexpr std::string_view raw = extractTypeName<T>();
-			static constexpr std::size_t len = dottedLength(raw);
-			static constexpr auto value = makeDotted<len>(raw);
-		};
+			if (i + 1 < name.size() && name[i] == ':' && name[i + 1] == ':')
+			{
+				result[j++] = '.';
+				i += 2;
+			}
+			else
+			{
+				result[j++] = name[i++];
+			}
+		}
+		result[j] = '\0';
+		return result;
+	}
 
-	} // namespace detail
-} // namespace thx
+	// Provides the dot-separated service name for type T as a constexpr
+	// null-terminated char array with static storage duration.
+	//
+	// TypeName<thx::io::FileService>::value  contains  "thx.io.FileService\0"
+	// TypeName<MyService>::value             contains  "MyService\0"
+	template <typename T>
+	struct TypeName
+	{
+		static constexpr std::string_view raw = extractTypeName<T>();
+		static constexpr std::size_t len = dottedLength(raw);
+		static constexpr auto value = makeDotted<len>(raw);
+	};
+
+} // namespace thx::rtti

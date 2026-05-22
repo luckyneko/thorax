@@ -17,14 +17,14 @@
 #include <memory>
 #include <new>
 
-namespace thx
+namespace thx::plugin
 {
 	// Pairs a ServiceID with a minimum acceptable Version. Used by
 	// IPlugin::required() to declare versioned dependencies.
 	struct ServiceRequirement
 	{
-		ServiceID id;
-		Version   version;
+		thx::service::ServiceID id;
+		Version                 version;
 	};
 
 	// Plugin abstraction. A DSO produces exactly one IPlugin via thx_create_plugin
@@ -50,11 +50,11 @@ namespace thx
 		// becomes visible to callers. Register any services here. Return false
 		// to abort the load; the plugin will be destroyed and the DSO closed
 		// without becoming visible.
-		virtual bool onLoad(ServiceManager& sm) = 0;
+		virtual bool onLoad(thx::service::ServiceManager& sm) = 0;
 
 		// Called by PluginManager before the DSO is closed. Unregister any
 		// services registered in onLoad.
-		virtual void onUnload(ServiceManager& sm) = 0;
+		virtual void onUnload(thx::service::ServiceManager& sm) = 0;
 
 		// Optional: services that must already be registered (at a sufficient
 		// version) before onLoad runs. PluginManager rejects the load if any
@@ -67,7 +67,7 @@ namespace thx
 	// one service of type T in onLoad and unregisters it in onUnload.
 	//
 	// T must satisfy:
-	//   - inherits from thx::Service<T> (provides staticId() and id()/version())
+	//   - inherits from thx::service::Service<T> (provides staticId() and id()/version())
 	//   - provides static constexpr Version staticVersion()
 	//   - is default-constructible
 	template <typename T>
@@ -77,18 +77,18 @@ namespace thx
 		StringView name() const override { return T::staticId().name(); }
 		Version    version() const override { return T::staticVersion(); }
 
-		bool onLoad(ServiceManager& sm) override
+		bool onLoad(thx::service::ServiceManager& sm) override
 		{
-			return sm.template registerService<T>([]() -> std::shared_ptr<IService>
+			return sm.template registerService<T>([]() -> std::shared_ptr<thx::service::IService>
 			{
 				return std::make_shared<T>();
 			});
 		}
 
-		void onUnload(ServiceManager& sm) override
+		void onUnload(thx::service::ServiceManager& sm) override
 		{
 			sm.template unregisterService<T>();
 		}
 	};
 
-} // namespace thx
+} // namespace thx::plugin

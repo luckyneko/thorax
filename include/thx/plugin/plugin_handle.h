@@ -14,7 +14,7 @@
 
 #include <string>
 
-namespace thx
+namespace thx::plugin
 {
 	// Plugin-specific layer on top of Library: holds an opened DSO plus the
 	// three thx_* entry points resolved out of it. PluginManager manages
@@ -59,4 +59,4 @@ namespace thx
 		PluginDestroyFn m_destroyFn = nullptr;
 	};
 
-} // namespace thx
+} // namespace thx::plugin

@@ -12,20 +12,18 @@
 #include <cstdint>
 #include <string_view>
 
-namespace thx
+namespace thx::detail
 {
-	namespace detail
+	// FNV-1a 64-bit hash of a string.
+	constexpr uint64_t fnv1a_hash(std::string_view str) noexcept
 	{
-		// FNV-1a 64-bit hash of a string.
-		constexpr uint64_t fnv1a_hash(std::string_view str) noexcept
+		uint64_t hash = 14695981039346656037ULL;
+		for (unsigned char c : str)
 		{
-			uint64_t hash = 14695981039346656037ULL;
-			for (unsigned char c : str)
-			{
-				hash ^= static_cast<uint64_t>(c);
-				hash *= 1099511628211ULL;
-			}
-			return hash;
+			hash ^= static_cast<uint64_t>(c);
+			hash *= 1099511628211ULL;
 		}
-	} // namespace detail
-} // namespace thx
+		return hash;
+	}
+
+} // namespace thx::detail

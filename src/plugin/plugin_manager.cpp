@@ -16,8 +16,15 @@
 #include <filesystem>
 #include <unordered_set>
 
-namespace thx
+namespace thx::plugin
 {
+
+// Bring the service-layer types we touch heavily into scope, so the
+// implementation reads the same as before the namespace split. The public
+// header still uses fully-qualified names.
+using thx::service::IService;
+using thx::service::ServiceID;
+using thx::service::ServiceManager;
 
 PluginManager::PluginManager(ServiceManager& sm) : m_sm(sm) {}
 
@@ -327,4 +334,4 @@ std::vector<LoadedPluginInfo> PluginManager::listPlugins() const
 	return result;
 }
 
-} // namespace thx
+} // namespace thx::plugin

@@ -22,9 +22,9 @@
 namespace
 {
 
-	struct TestService : thx::IService
+	struct TestService : thx::service::IService
 	{
-		thx::ServiceID const m_id;
+		thx::service::ServiceID const m_id;
 		thx::Version const m_version;
 		bool m_constructResult{true};
 		bool* m_constructed{nullptr};
@@ -45,7 +45,7 @@ namespace
 				*m_destroyed = true;
 		}
 
-		thx::ServiceID id() const override { return m_id; }
+		thx::service::ServiceID id() const override { return m_id; }
 		thx::Version version() const override { return m_version; }
 
 		bool onConstruct() override
@@ -63,25 +63,25 @@ namespace
 	};
 
 	// A distinct service type used to verify dynamic_cast behaviour.
-	struct OtherService : thx::IService
+	struct OtherService : thx::service::IService
 	{
-		thx::ServiceID id() const override { return thx::ServiceID("thx.test.Other"); }
+		thx::service::ServiceID id() const override { return thx::service::ServiceID("thx.test.Other"); }
 		thx::Version version() const override { return thx::Version{1, 0, 0}; }
 	};
 
-	constexpr auto kServiceA = thx::ServiceID("thx.test.ServiceA");
-	constexpr auto kServiceB = thx::ServiceID("thx.test.ServiceB");
+	constexpr auto kServiceA = thx::service::ServiceID("thx.test.ServiceA");
+	constexpr auto kServiceB = thx::service::ServiceID("thx.test.ServiceB");
 	constexpr auto kV100 = thx::Version{1, 0, 0};
 	constexpr auto kV110 = thx::Version{1, 1, 0};
 	constexpr auto kV090 = thx::Version{0, 9, 0};
 	constexpr auto kV200 = thx::Version{2, 0, 0};
 
 	// Helper: register a TestService without needing to name the factory every time.
-	bool reg(thx::ServiceManager& sm, const char* id, thx::Version ver,
+	bool reg(thx::service::ServiceManager& sm, const char* id, thx::Version ver,
 			 bool* constructed = nullptr, bool* destroyed = nullptr)
 	{
 		return sm.registerService(
-			thx::ServiceID(id), ver,
+			thx::service::ServiceID(id), ver,
 			[=]()
 			{ return std::make_shared<TestService>(id, ver, constructed, destroyed); });
 	}
@@ -94,7 +94,7 @@ namespace
 
 TEST_CASE("ServiceManager - register and retrieve a service", "[service_manager]")
 {
-	thx::ServiceManager sm;
+	thx::service::ServiceManager sm;
 
 	REQUIRE(reg(sm, "thx.test.ServiceA", kV100));
 	REQUIRE(sm.getService<TestService>(kServiceA) != nullptr);
@@ -102,14 +102,14 @@ TEST_CASE("ServiceManager - register and retrieve a service", "[service_manager]
 
 TEST_CASE("ServiceManager - getService returns nullptr for unknown ID", "[service_manager]")
 {
-	thx::ServiceManager sm;
+	thx::service::ServiceManager sm;
 
 	REQUIRE(sm.getService<TestService>(kServiceA) == nullptr);
 }
 
 TEST_CASE("ServiceManager - getService returns nullptr for wrong type", "[service_manager]")
 {
-	thx::ServiceManager sm;
+	thx::service::ServiceManager sm;
 	reg(sm, "thx.test.ServiceA", kV100);
 
 	REQUIRE(sm.getService<OtherService>(kServiceA) == nullptr);
@@ -117,7 +117,7 @@ TEST_CASE("ServiceManager - getService returns nullptr for wrong type", "[servic
 
 TEST_CASE("ServiceManager - unregister removes a service", "[service_manager]")
 {
-	thx::ServiceManager sm;
+	thx::service::ServiceManager sm;
 	reg(sm, "thx.test.ServiceA", kV100);
 
 	REQUIRE(sm.unregisterService(kServiceA));
@@ -126,24 +126,24 @@ TEST_CASE("ServiceManager - unregister removes a service", "[service_manager]")
 
 TEST_CASE("ServiceManager - unregister unknown ID returns false", "[service_manager]")
 {
-	thx::ServiceManager sm;
+	thx::service::ServiceManager sm;
 
 	REQUIRE_FALSE(sm.unregisterService(kServiceA));
 }
 
 TEST_CASE("ServiceManager - null factory rejected", "[service_manager]")
 {
-	thx::ServiceManager sm;
+	thx::service::ServiceManager sm;
 
 	REQUIRE_FALSE(sm.registerService(kServiceA, kV100, nullptr));
 }
 
 TEST_CASE("ServiceManager - factory returning null rejected", "[service_manager]")
 {
-	thx::ServiceManager sm;
+	thx::service::ServiceManager sm;
 
 	REQUIRE_FALSE(sm.registerService(kServiceA, kV100,
-									  []() -> std::shared_ptr<thx::IService>
+									  []() -> std::shared_ptr<thx::service::IService>
 									  { return nullptr; }));
 	REQUIRE(sm.getService<TestService>(kServiceA) == nullptr);
 }
@@ -151,12 +151,12 @@ TEST_CASE("ServiceManager - factory returning null rejected", "[service_manager]
 TEST_CASE("ServiceManager - factory throwing releases the reservation",
 		  "[service_manager]")
 {
-	thx::ServiceManager sm;
+	thx::service::ServiceManager sm;
 
 	// First call: factory throws. The reservation must not leak â€” a follow-up
 	// registration with the same ID must succeed.
 	REQUIRE_THROWS(sm.registerService(kServiceA, kV100,
-		[]() -> std::shared_ptr<thx::IService>
+		[]() -> std::shared_ptr<thx::service::IService>
 		{
 			throw std::runtime_error("boom");
 		}));
@@ -168,7 +168,7 @@ TEST_CASE("ServiceManager - factory throwing releases the reservation",
 TEST_CASE("ServiceManager - declared version mismatch rejected",
 		  "[service_manager]")
 {
-	thx::ServiceManager sm;
+	thx::service::ServiceManager sm;
 
 	// Factory returns a service whose version() doesn't match the declared
 	// version. registerService must refuse the registration (Release-safe;
@@ -185,7 +185,7 @@ TEST_CASE("ServiceManager - declared version mismatch rejected",
 
 TEST_CASE("ServiceManager - onConstruct called on first registration", "[service_manager]")
 {
-	thx::ServiceManager sm;
+	thx::service::ServiceManager sm;
 	bool constructed = false;
 
 	reg(sm, "thx.test.ServiceA", kV100, &constructed);
@@ -196,7 +196,7 @@ TEST_CASE("ServiceManager - onConstruct called on first registration", "[service
 TEST_CASE("ServiceManager - duplicate registration is rejected",
 		  "[service_manager]")
 {
-	thx::ServiceManager sm;
+	thx::service::ServiceManager sm;
 	int construct_count = 0;
 	bool flag = false;
 
@@ -219,7 +219,7 @@ TEST_CASE("ServiceManager - duplicate registration is rejected",
 TEST_CASE("ServiceManager - onConstruct failure aborts registration",
 		  "[service_manager]")
 {
-	thx::ServiceManager sm;
+	thx::service::ServiceManager sm;
 
 	bool aborted = false;
 	sm.registerService(kServiceA, kV100, [&]()
@@ -236,7 +236,7 @@ TEST_CASE("ServiceManager - onConstruct failure aborts registration",
 TEST_CASE("ServiceManager - onDestroy called when last registrant unregisters",
 		  "[service_manager]")
 {
-	thx::ServiceManager sm;
+	thx::service::ServiceManager sm;
 	bool destroyed = false;
 
 	sm.registerService(kServiceA, kV100, [&]()
@@ -251,7 +251,7 @@ TEST_CASE("ServiceManager - onDestroy called when last registrant unregisters",
 TEST_CASE("ServiceManager - re-registration after unregister succeeds",
 		  "[service_manager]")
 {
-	thx::ServiceManager sm;
+	thx::service::ServiceManager sm;
 	bool destroyed_first = false;
 
 	REQUIRE(sm.registerService(kServiceA, kV100, [&]()
@@ -268,7 +268,7 @@ TEST_CASE("ServiceManager - re-registration after unregister succeeds",
 TEST_CASE("ServiceManager - unregister releases shared_ptr ownership after onDestroy",
 		  "[service_manager]")
 {
-	thx::ServiceManager sm;
+	thx::service::ServiceManager sm;
 	bool dtor_called = false;
 
 	{
@@ -293,7 +293,7 @@ TEST_CASE("ServiceManager - unregister releases shared_ptr ownership after onDes
 TEST_CASE("ServiceManager - second registration with any version is rejected",
 		  "[service_manager]")
 {
-	thx::ServiceManager sm;
+	thx::service::ServiceManager sm;
 	reg(sm, "thx.test.ServiceA", kV100);
 
 	// All of these must fail under single-owner semantics, regardless of
@@ -314,7 +314,7 @@ TEST_CASE("ServiceManager - second registration with any version is rejected",
 
 TEST_CASE("ServiceManager - independent services coexist", "[service_manager]")
 {
-	thx::ServiceManager sm;
+	thx::service::ServiceManager sm;
 	reg(sm, "thx.test.ServiceA", kV100);
 	reg(sm, "thx.test.ServiceB", kV100);
 
@@ -332,7 +332,7 @@ TEST_CASE("ServiceManager - independent services coexist", "[service_manager]")
 
 TEST_CASE("ServiceManager - concurrent getService is safe", "[service_manager]")
 {
-	thx::ServiceManager sm;
+	thx::service::ServiceManager sm;
 	reg(sm, "thx.test.ServiceA", kV100);
 
 	constexpr int kThreads = 8;
@@ -358,7 +358,7 @@ TEST_CASE("ServiceManager - concurrent getService is safe", "[service_manager]")
 TEST_CASE("ServiceManager - concurrent register and getService is safe",
 		  "[service_manager]")
 {
-	thx::ServiceManager sm;
+	thx::service::ServiceManager sm;
 	std::atomic<int> registered = 0;
 
 	constexpr int kThreads = 8;
@@ -394,11 +394,11 @@ namespace
 {
 
 	// Interface header â€” what both Plugin A and Plugin B would include.
-	struct ICountingService : thx::Service<ICountingService>
+	struct ICountingService : thx::service::Service<ICountingService>
 	{
-		static constexpr thx::ServiceID staticId()
+		static constexpr thx::service::ServiceID staticId()
 		{
-			return thx::ServiceID("thx.test.CountingService");
+			return thx::service::ServiceID("thx.test.CountingService");
 		}
 		static constexpr thx::Version staticVersion()
 		{
@@ -421,7 +421,7 @@ namespace
 
 TEST_CASE("ServiceManager - type-deducing register and get", "[service_manager][crtp]")
 {
-	thx::ServiceManager sm;
+	thx::service::ServiceManager sm;
 
 	REQUIRE(sm.registerService<ICountingService>(
 		[]()
@@ -435,7 +435,7 @@ TEST_CASE("ServiceManager - type-deducing register and get", "[service_manager][
 
 TEST_CASE("ServiceManager - type-deducing unregister", "[service_manager][crtp]")
 {
-	thx::ServiceManager sm;
+	thx::service::ServiceManager sm;
 	sm.registerService<ICountingService>(
 		[]()
 		{ return std::make_shared<CountingServiceImpl>(); });
@@ -446,7 +446,7 @@ TEST_CASE("ServiceManager - type-deducing unregister", "[service_manager][crtp]"
 
 TEST_CASE("ServiceManager - id() and version() match static metadata", "[service_manager][crtp]")
 {
-	thx::ServiceManager sm;
+	thx::service::ServiceManager sm;
 	sm.registerService<ICountingService>(
 		[]()
 		{ return std::make_shared<CountingServiceImpl>(); });
@@ -460,7 +460,7 @@ TEST_CASE("ServiceManager - id() and version() match static metadata", "[service
 TEST_CASE("ServiceManager - type-deducing and explicit-ID APIs are interchangeable",
 		  "[service_manager][crtp]")
 {
-	thx::ServiceManager sm;
+	thx::service::ServiceManager sm;
 
 	// Register via type-deducing API.
 	sm.registerService<ICountingService>(
@@ -485,7 +485,7 @@ namespace thx
 	namespace test
 	{
 
-		struct AutoService : thx::Service<AutoService>
+		struct AutoService : thx::service::Service<AutoService>
 		{
 			static constexpr thx::Version staticVersion()
 			{
@@ -507,14 +507,14 @@ TEST_CASE("service_id_of - auto-derived ID matches dotted qualified name",
 		  "[service_manager][type_name]")
 {
 	// thx::test::AutoService â†’ "thx.test.AutoService"
-	constexpr auto id = thx::ServiceID::from<thx::test::AutoService>();
-	STATIC_REQUIRE(id == thx::ServiceID("thx.test.AutoService"));
+	constexpr auto id = thx::service::ServiceID::from<thx::test::AutoService>();
+	STATIC_REQUIRE(id == thx::service::ServiceID("thx.test.AutoService"));
 }
 
 TEST_CASE("ServiceManager - auto-derived ID used for register and get",
 		  "[service_manager][type_name]")
 {
-	thx::ServiceManager sm;
+	thx::service::ServiceManager sm;
 
 	REQUIRE(sm.registerService<thx::test::AutoService>(
 		[]()
@@ -532,5 +532,5 @@ TEST_CASE("ServiceManager - explicit staticId overrides auto-derived name",
 	// ICountingService overrides staticId() to "thx.test.CountingService",
 	// which differs from the auto-derived "ICountingService".
 	constexpr auto explicit_id = ICountingService::staticId();
-	STATIC_REQUIRE(explicit_id == thx::ServiceID("thx.test.CountingService"));
+	STATIC_REQUIRE(explicit_id == thx::service::ServiceID("thx.test.CountingService"));
 }

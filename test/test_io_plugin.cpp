@@ -32,8 +32,8 @@ namespace
 
 struct Fixture
 {
-	thx::ServiceManager sm;
-	thx::PluginManager   loader{sm};
+	thx::service::ServiceManager sm;
+	thx::plugin::PluginManager   loader{sm};
 
 	explicit Fixture() { REQUIRE(loader.load(THX_IO_PLUGIN_PATH)); }
 

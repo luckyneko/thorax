@@ -2,7 +2,7 @@
 
 Thorax is a C++17 cross-platform plugin framework. The core is a static library;
 plugins are shared libraries (`.dylib` / `.so` / `.dll`) loaded at runtime through
-`thx::PluginManager` and registered with the `thx::ServiceManager` singleton.
+`thx::plugin::PluginManager` and registered with the `thx::service::ServiceManager` singleton.
 macOS, Windows, and Linux are first-class targets.
 
 ---
@@ -29,7 +29,7 @@ remain useful as a reference for *why* things are shaped the way they are.
 
 ### Milestone 1 — Core Identifiers & Versioning
 
-- **`thx::ServiceID`** — `constexpr` value object holding an FNV-1a hash plus the
+- **`thx::service::ServiceID`** — `constexpr` value object holding an FNV-1a hash plus the
   original string literal; equality compares both so collisions can't produce
   false matches. Construction via `constexpr` constructor or `ServiceID::from<T>()`
   (which derives the name from the C++ qualified type).
@@ -43,11 +43,11 @@ remain useful as a reference for *why* things are shaped the way they are.
 
 ### Milestone 2 — Service Interface & Registry
 
-- **`thx::IService`** — pure-virtual base; `id()`, `version()`, `onConstruct()`,
+- **`thx::service::IService`** — pure-virtual base; `id()`, `version()`, `onConstruct()`,
   `onDestroy()` virtuals.
-- **`thx::Service<Derived>`** — CRTP base that auto-derives `id()` from the C++
+- **`thx::service::Service<Derived>`** — CRTP base that auto-derives `id()` from the C++
   qualified type name. The convention plugins should use.
-- **`thx::ServiceManager`** — singleton registry; `std::shared_mutex` for
+- **`thx::service::ServiceManager`** — singleton registry; `std::shared_mutex` for
   reader-parallel `getService`; ref-counted entries, structured diagnostics on
   every state change.
 
@@ -62,9 +62,9 @@ remain useful as a reference for *why* things are shaped the way they are.
 
 ### Milestone 4 — Plugin Loader & Discovery
 
-- **`thx::PluginHandle`** — RAII DSO wrapper (`dlopen`/`LoadLibraryEx`),
+- **`thx::plugin::PluginHandle`** — RAII DSO wrapper (`dlopen`/`LoadLibraryEx`),
   resolves the C exports, ABI-version checks before any service is registered.
-- **`thx::PluginManager`** — `load`, `unload`, separated `discover` and
+- **`thx::plugin::PluginManager`** — `load`, `unload`, separated `discover` and
   `discoverAndLoad`, canonical-path keyed so double-loads are no-ops.
 
 ### Milestone 5 — Diagnostics & Debuggability
@@ -111,7 +111,7 @@ want to register more than one service or pre-populate provider lists.
 
 #### 8.1 `IPlugin` interface
 
-A new `thx::IPlugin` interface owned and produced by each DSO:
+A new `thx::plugin::IPlugin` interface owned and produced by each DSO:
 
 ```cpp
 class IPlugin
@@ -137,8 +137,8 @@ public:
 Each DSO exports:
 
 ```cpp
-extern "C" thx::IPlugin* thx_create_plugin();
-extern "C" void          thx_destroy_plugin(thx::IPlugin*);
+extern "C" thx::plugin::IPlugin* thx_create_plugin();
+extern "C" void          thx_destroy_plugin(thx::plugin::IPlugin*);
 extern "C" uint32_t      thx_abi_version();
 ```
 

@@ -42,9 +42,9 @@ namespace thx
 		// Process-wide singleton accessor. Constructs lazily on first call.
 		static Registry& instance() noexcept;
 
-		ServiceManager& serviceManager() noexcept { return m_serviceManager; }
-		PluginManager&  pluginManager()  noexcept { return m_pluginManager;  }
-		PluginGarbage&  pluginGarbage()  noexcept { return m_pluginGarbage;  }
+		thx::service::ServiceManager& serviceManager() noexcept { return m_serviceManager; }
+		thx::plugin::PluginManager&   pluginManager()  noexcept { return m_pluginManager;  }
+		thx::plugin::PluginGarbage&   pluginGarbage()  noexcept { return m_pluginGarbage;  }
 
 		// Optional human-readable name set via thx::initialise(). Used for
 		// diagnostics; has no effect on framework behaviour. Empty until
@@ -67,10 +67,10 @@ namespace thx
 		//   - m_serviceManager must be initialised before m_pluginManager
 		//     because m_pluginManager's constructor takes m_serviceManager by
 		//     reference.
-		PluginGarbage   m_pluginGarbage;
-		ServiceManager  m_serviceManager;
-		PluginManager   m_pluginManager;
-		std::string     m_debugName;
+		thx::plugin::PluginGarbage    m_pluginGarbage;
+		thx::service::ServiceManager  m_serviceManager;
+		thx::plugin::PluginManager    m_pluginManager;
+		std::string                   m_debugName;
 	};
 
 	// Free-function lifecycle for the Registry singleton.

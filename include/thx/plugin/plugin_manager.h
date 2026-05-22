@@ -21,14 +21,14 @@
 #include <unordered_map>
 #include <vector>
 
-namespace thx
+namespace thx::plugin
 {
 	// Snapshot entry returned by PluginManager::listPlugins().
 	struct LoadedPluginInfo
 	{
-		std::string              path;
-		std::string              pluginName; // from IPlugin::name()
-		std::vector<ServiceID>   services;    // all service IDs registered by this plugin
+		std::string                            path;
+		std::string                            pluginName; // from IPlugin::name()
+		std::vector<thx::service::ServiceID>   services;   // all service IDs registered by this plugin
 	};
 
 	// A plugin DSO that has been opened and its IPlugin instantiated, but whose
@@ -96,7 +96,7 @@ namespace thx
 	class PluginManager
 	{
 	public:
-		explicit PluginManager(ServiceManager& sm);
+		explicit PluginManager(thx::service::ServiceManager& sm);
 		~PluginManager();
 
 		PluginManager(PluginManager const&)            = delete;
@@ -139,8 +139,8 @@ namespace thx
 		// Returns ok if every requirement is satisfied by a service currently
 		// registered in sm at a compatible version, or the first failure.
 		// Does not mutate sm.
-		static Result<void, Error> checkRequirements(ServiceManager const&            sm,
-		                                              Span<const ServiceRequirement>   reqs);
+		static Result<void, Error> checkRequirements(thx::service::ServiceManager const& sm,
+		                                              Span<const ServiceRequirement>     reqs);
 
 		// Unregisters the plugin's services and releases the DSO from this loader.
 		// Returns Err(NotLoaded) if path was not previously loaded.
@@ -187,15 +187,15 @@ namespace thx
 			// Declaration order matters: `plugin` is destroyed before `handle`,
 			// so the IPlugin's destructor (which lives in plugin code) runs
 			// before the DSO is dlclose()d.
-			PluginHandle             handle;
-			std::vector<ServiceID>   serviceIds;
-			std::shared_ptr<IPlugin> plugin;
+			PluginHandle                         handle;
+			std::vector<thx::service::ServiceID> serviceIds;
+			std::shared_ptr<IPlugin>             plugin;
 		};
 
-		ServiceManager& m_sm;
+		thx::service::ServiceManager& m_sm;
 		std::unordered_map<std::string, Entry> m_plugins; // canonical_path → entry
 
 		static std::string resolveCanonical(std::string const& path);
 	};
 
-} // namespace thx
+} // namespace thx::plugin

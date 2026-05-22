@@ -11,18 +11,18 @@
 #include "thx/detail/hash.h"
 #include "thx/rtti/type_name.h"
 
-namespace thx
+namespace thx::service
 {
 	// Stable cross-DSO service identifier. Constructed from a string literal;
 	// equality is determined by comparing both the hash and the string content
 	// so that hash collisions cannot produce false equality.
 	//
-	// Example: constexpr thx::ServiceID kFileService("thx.io.FileService");
+	// Example: constexpr thx::service::ServiceID kFileService("thx.io.FileService");
 	class ServiceID
 	{
 	public:
 		constexpr explicit ServiceID(const char* name) noexcept
-			: m_hash(detail::fnv1a_hash(name))
+			: m_hash(thx::detail::fnv1a_hash(name))
 			, m_name(name)
 		{
 		}
@@ -30,7 +30,7 @@ namespace thx
 		template <typename T>
 		static constexpr ServiceID from() noexcept
 		{
-			return ServiceID(detail::TypeName<T>::value.data());
+			return ServiceID(thx::rtti::TypeName<T>::value.data());
 		}
 
 		constexpr bool operator==(ServiceID const& other) const noexcept
@@ -52,13 +52,13 @@ namespace thx
 		const char* m_name;
 	};
 
-} // namespace thx
+} // namespace thx::service
 
 // std::hash specialisation so ServiceID can be used as an unordered_map key.
 template <>
-struct std::hash<thx::ServiceID>
+struct std::hash<thx::service::ServiceID>
 {
-	std::size_t operator()(thx::ServiceID const& id) const noexcept
+	std::size_t operator()(thx::service::ServiceID const& id) const noexcept
 	{
 		return static_cast<std::size_t>(id.hash());
 	}

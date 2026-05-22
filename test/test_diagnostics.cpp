@@ -60,13 +60,13 @@ struct SinkGuard
 };
 
 // Minimal concrete IService for unit tests that don't need a real plugin.
-struct MinimalService : thx::IService
+struct MinimalService : thx::service::IService
 {
-	thx::ServiceID id()      const override { return thx::ServiceID("test.Minimal"); }
+	thx::service::ServiceID id()      const override { return thx::service::ServiceID("test.Minimal"); }
 	thx::Version   version() const override { return thx::Version{1, 0, 0};     }
 };
 
-auto make_minimal = []() -> std::shared_ptr<thx::IService>
+auto make_minimal = []() -> std::shared_ptr<thx::service::IService>
 {
 	return std::make_shared<MinimalService>();
 };
@@ -193,9 +193,9 @@ TEST_CASE("assertThat - captures source location on failure", "[assert]")
 TEST_CASE("ServiceManager - null factory logs Error", "[log][service_manager]")
 {
 	SinkGuard g;
-	thx::ServiceManager sm;
+	thx::service::ServiceManager sm;
 
-	sm.registerService(thx::ServiceID("test.Null"), thx::Version{1, 0, 0}, nullptr);
+	sm.registerService(thx::service::ServiceID("test.Null"), thx::Version{1, 0, 0}, nullptr);
 
 	REQUIRE(g.hasLevel(thx::LogLevel::Error));
 }
@@ -203,11 +203,11 @@ TEST_CASE("ServiceManager - null factory logs Error", "[log][service_manager]")
 TEST_CASE("ServiceManager - incompatible major version logs Warn", "[log][service_manager]")
 {
 	SinkGuard g;
-	thx::ServiceManager sm;
+	thx::service::ServiceManager sm;
 
-	sm.registerService(thx::ServiceID("test.Minimal"), thx::Version{1, 0, 0}, make_minimal);
+	sm.registerService(thx::service::ServiceID("test.Minimal"), thx::Version{1, 0, 0}, make_minimal);
 	// Attempt to register same ID at major version 2 â€” incompatible.
-	sm.registerService(thx::ServiceID("test.Minimal"), thx::Version{2, 0, 0}, make_minimal);
+	sm.registerService(thx::service::ServiceID("test.Minimal"), thx::Version{2, 0, 0}, make_minimal);
 
 	REQUIRE(g.hasLevel(thx::LogLevel::Warn));
 }
@@ -215,9 +215,9 @@ TEST_CASE("ServiceManager - incompatible major version logs Warn", "[log][servic
 TEST_CASE("ServiceManager - unregister unknown ID logs Warn", "[log][service_manager]")
 {
 	SinkGuard g;
-	thx::ServiceManager sm;
+	thx::service::ServiceManager sm;
 
-	sm.unregisterService(thx::ServiceID("test.Unknown"));
+	sm.unregisterService(thx::service::ServiceID("test.Unknown"));
 
 	REQUIRE(g.hasLevel(thx::LogLevel::Warn));
 }
@@ -227,8 +227,8 @@ TEST_CASE("ServiceManager - errors route to installed sink", "[log][service_mana
 	auto sink = std::make_shared<CapturingSink>();
 	thx::setLogSink(sink);
 
-	thx::ServiceManager sm;
-	sm.registerService(thx::ServiceID("test.Static"), thx::Version{1, 0, 0}, nullptr);
+	thx::service::ServiceManager sm;
+	sm.registerService(thx::service::ServiceID("test.Static"), thx::Version{1, 0, 0}, nullptr);
 
 	thx::restoreDefaultLogSink();
 
@@ -241,27 +241,27 @@ TEST_CASE("ServiceManager - errors route to installed sink", "[log][service_mana
 
 TEST_CASE("ServiceManager::listServices - empty initially", "[introspection]")
 {
-	thx::ServiceManager sm;
+	thx::service::ServiceManager sm;
 	REQUIRE(sm.listServices().empty());
 }
 
 TEST_CASE("ServiceManager::listServices - returns registered entry", "[introspection]")
 {
-	thx::ServiceManager sm;
-	sm.registerService(thx::ServiceID("test.Minimal"), thx::Version{1, 0, 0}, make_minimal);
+	thx::service::ServiceManager sm;
+	sm.registerService(thx::service::ServiceID("test.Minimal"), thx::Version{1, 0, 0}, make_minimal);
 
 	auto svcs = sm.listServices();
 	REQUIRE(svcs.size() == 1);
-	REQUIRE(svcs[0].id == thx::ServiceID("test.Minimal"));
+	REQUIRE(svcs[0].id == thx::service::ServiceID("test.Minimal"));
 }
 
 TEST_CASE("ServiceManager - duplicate registration is rejected",
           "[introspection]")
 {
-	thx::ServiceManager sm;
-	REQUIRE(sm.registerService(thx::ServiceID("test.Minimal"),
+	thx::service::ServiceManager sm;
+	REQUIRE(sm.registerService(thx::service::ServiceID("test.Minimal"),
 	                            thx::Version{1, 0, 0}, make_minimal));
-	REQUIRE_FALSE(sm.registerService(thx::ServiceID("test.Minimal"),
+	REQUIRE_FALSE(sm.registerService(thx::service::ServiceID("test.Minimal"),
 	                                  thx::Version{1, 0, 0}, make_minimal));
 	REQUIRE(sm.listServices().size() == 1);
 }
@@ -269,9 +269,9 @@ TEST_CASE("ServiceManager - duplicate registration is rejected",
 TEST_CASE("ServiceManager::listServices - entry removed after unregister",
           "[introspection]")
 {
-	thx::ServiceManager sm;
-	sm.registerService(thx::ServiceID("test.Minimal"), thx::Version{1, 0, 0}, make_minimal);
-	sm.unregisterService(thx::ServiceID("test.Minimal"));
+	thx::service::ServiceManager sm;
+	sm.registerService(thx::service::ServiceID("test.Minimal"), thx::Version{1, 0, 0}, make_minimal);
+	sm.unregisterService(thx::service::ServiceID("test.Minimal"));
 
 	REQUIRE(sm.listServices().empty());
 }
@@ -279,9 +279,9 @@ TEST_CASE("ServiceManager::listServices - entry removed after unregister",
 TEST_CASE("ServiceManager::listServices - multiple independent services",
           "[introspection]")
 {
-	thx::ServiceManager sm;
-	sm.registerService(thx::ServiceID("test.A"), thx::Version{1, 0, 0}, make_minimal);
-	sm.registerService(thx::ServiceID("test.B"), thx::Version{1, 0, 0}, make_minimal);
+	thx::service::ServiceManager sm;
+	sm.registerService(thx::service::ServiceID("test.A"), thx::Version{1, 0, 0}, make_minimal);
+	sm.registerService(thx::service::ServiceID("test.B"), thx::Version{1, 0, 0}, make_minimal);
 
 	REQUIRE(sm.listServices().size() == 2);
 }
@@ -292,16 +292,16 @@ TEST_CASE("ServiceManager::listServices - multiple independent services",
 
 TEST_CASE("PluginManager::listPlugins - empty before load", "[introspection]")
 {
-	thx::ServiceManager sm;
-	thx::PluginManager   loader(sm);
+	thx::service::ServiceManager sm;
+	thx::plugin::PluginManager   loader(sm);
 
 	REQUIRE(loader.listPlugins().empty());
 }
 
 TEST_CASE("PluginManager::listPlugins - entry present after load", "[introspection]")
 {
-	thx::ServiceManager sm;
-	thx::PluginManager   loader(sm);
+	thx::service::ServiceManager sm;
+	thx::plugin::PluginManager   loader(sm);
 	loader.load(THX_MOCK_PLUGIN_PATH);
 
 	auto plugins = loader.listPlugins();
@@ -313,8 +313,8 @@ TEST_CASE("PluginManager::listPlugins - entry present after load", "[introspecti
 
 TEST_CASE("PluginManager::listPlugins - empty after unload", "[introspection]")
 {
-	thx::ServiceManager sm;
-	thx::PluginManager   loader(sm);
+	thx::service::ServiceManager sm;
+	thx::plugin::PluginManager   loader(sm);
 	loader.load(THX_MOCK_PLUGIN_PATH);
 	loader.unload(THX_MOCK_PLUGIN_PATH);
 

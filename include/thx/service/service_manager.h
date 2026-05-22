@@ -18,7 +18,7 @@
 #include <unordered_set>
 #include <vector>
 
-namespace thx
+namespace thx::service
 {
 
 	// Factory callable type used by registerService.
@@ -103,6 +103,5 @@ namespace thx
 		// kept here so concurrent registers see it as taken and bail out.
 		std::unordered_set<ServiceID> m_reserved;
 	};
-} // namespace thx
-
+} // namespace thx::service
 #include "thx/service/service_manager.inl"

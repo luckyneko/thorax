@@ -16,7 +16,7 @@
 namespace
 {
 
-	struct ShimTestService : thx::Service<ShimTestService>
+	struct ShimTestService : thx::service::Service<ShimTestService>
 	{
 		static constexpr thx::Version staticVersion() { return thx::Version{1, 0, 0}; }
 
@@ -30,39 +30,39 @@ namespace
 
 	// A custom IPlugin that registers no services, just exercises the interface
 	// shape and required() default.
-	struct EmptyPlugin : thx::IPlugin
+	struct EmptyPlugin : thx::plugin::IPlugin
 	{
 		thx::StringView name()    const override { return "thx.test.EmptyPlugin"; }
 		thx::Version    version() const override { return thx::Version{2, 3, 4}; }
 
-		bool onLoad(thx::ServiceManager&)  override { return true; }
-		void onUnload(thx::ServiceManager&) override {}
+		bool onLoad(thx::service::ServiceManager&)  override { return true; }
+		void onUnload(thx::service::ServiceManager&) override {}
 	};
 
 	// A custom IPlugin that registers two services in onLoad and unregisters them
 	// in onUnload. Demonstrates the multi-service capability.
-	struct ServiceA : thx::Service<ServiceA>
+	struct ServiceA : thx::service::Service<ServiceA>
 	{
 		static constexpr thx::Version staticVersion() { return thx::Version{1, 0, 0}; }
 	};
-	struct ServiceB : thx::Service<ServiceB>
+	struct ServiceB : thx::service::Service<ServiceB>
 	{
 		static constexpr thx::Version staticVersion() { return thx::Version{1, 0, 0}; }
 	};
 
-	struct MultiServicePlugin : thx::IPlugin
+	struct MultiServicePlugin : thx::plugin::IPlugin
 	{
 		thx::StringView name()    const override { return "thx.test.MultiServicePlugin"; }
 		thx::Version    version() const override { return thx::Version{1, 0, 0}; }
 
-		bool onLoad(thx::ServiceManager& sm) override
+		bool onLoad(thx::service::ServiceManager& sm) override
 		{
 			bool ok_a = sm.registerService<ServiceA>([] { return std::make_shared<ServiceA>(); });
 			bool ok_b = sm.registerService<ServiceB>([] { return std::make_shared<ServiceB>(); });
 			return ok_a && ok_b;
 		}
 
-		void onUnload(thx::ServiceManager& sm) override
+		void onUnload(thx::service::ServiceManager& sm) override
 		{
 			sm.unregisterService<ServiceB>();
 			sm.unregisterService<ServiceA>();
@@ -74,8 +74,8 @@ namespace
 TEST_CASE("ServicePluginShim - registers and unregisters one service",
 		  "[iplugin]")
 {
-	thx::ServiceManager sm;
-	thx::ServicePluginShim<ShimTestService> shim;
+	thx::service::ServiceManager sm;
+	thx::plugin::ServicePluginShim<ShimTestService> shim;
 
 	REQUIRE(sm.getService<ShimTestService>() == nullptr);
 	REQUIRE(shim.onLoad(sm));
@@ -91,7 +91,7 @@ TEST_CASE("ServicePluginShim - registers and unregisters one service",
 TEST_CASE("ServicePluginShim - reports name and version from the service type",
 		  "[iplugin]")
 {
-	thx::ServicePluginShim<ShimTestService> shim;
+	thx::plugin::ServicePluginShim<ShimTestService> shim;
 
 	// Compare via the underlying string content; the shim returns the name
 	// derived from the C++ qualified type name.
@@ -110,7 +110,7 @@ TEST_CASE("IPlugin - default required() is empty",
 TEST_CASE("IPlugin - custom plugin can register multiple services",
 		  "[iplugin]")
 {
-	thx::ServiceManager sm;
+	thx::service::ServiceManager sm;
 	MultiServicePlugin plugin;
 
 	REQUIRE(plugin.onLoad(sm));
@@ -125,16 +125,16 @@ TEST_CASE("IPlugin - custom plugin can register multiple services",
 TEST_CASE("IPlugin - onLoad returning false does not register anything",
 		  "[iplugin]")
 {
-	struct BailingPlugin : thx::IPlugin
+	struct BailingPlugin : thx::plugin::IPlugin
 	{
 		thx::StringView name()    const override { return "thx.test.Bailing"; }
 		thx::Version    version() const override { return thx::Version{1, 0, 0}; }
 
-		bool onLoad(thx::ServiceManager&)   override { return false; }
-		void onUnload(thx::ServiceManager&) override {}
+		bool onLoad(thx::service::ServiceManager&)   override { return false; }
+		void onUnload(thx::service::ServiceManager&) override {}
 	};
 
-	thx::ServiceManager sm;
+	thx::service::ServiceManager sm;
 	BailingPlugin p;
 
 	REQUIRE_FALSE(p.onLoad(sm));

@@ -10,7 +10,7 @@
 
 #include "thx/service/iservice.h"
 
-namespace thx
+namespace thx::service
 {
 	// CRTP base that wires the IService virtual interface to static metadata on
 	// the derived type. Derived must provide:
@@ -23,7 +23,7 @@ namespace thx
 	//
 	// Example:
 	//
-	//   class ImageLoadingService : public thx::Service<ImageLoadingService>
+	//   class ImageLoadingService : public thx::service::Service<ImageLoadingService>
 	//   {
 	//   public:
 	//       static constexpr thx::Version staticVersion()
@@ -57,4 +57,4 @@ namespace thx
 		Version version() const final { return Derived::staticVersion(); }
 	};
 
-} // namespace thx
+} // namespace thx::service

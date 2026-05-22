@@ -11,7 +11,7 @@
 #include "thx/service/service_id.h"
 #include "thx/version_type.h"
 
-namespace thx
+namespace thx::service
 {
 	// Base interface for all services registered with the ServiceManager.
 	// Concrete services inherit this and add their own API on top.
@@ -43,4 +43,4 @@ namespace thx
 		virtual void onDestroy() {}
 	};
 
-} // namespace thx
+} // namespace thx::service

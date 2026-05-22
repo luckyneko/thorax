@@ -22,39 +22,39 @@
 namespace
 {
 
-class MultiPlugin : public thx::IPlugin
+class MultiPlugin : public thx::plugin::IPlugin
 {
 public:
 	thx::StringView name()    const override { return "thx.mock.MultiPlugin"; }
 	thx::Version    version() const override { return thx::Version{1, 0, 0}; }
 
-	bool onLoad(thx::ServiceManager& sm) override
+	bool onLoad(thx::service::ServiceManager& sm) override
 	{
 		bool a = sm.registerService<thx_mock::ServiceA>(
-			[]() -> std::shared_ptr<thx::IService>
+			[]() -> std::shared_ptr<thx::service::IService>
 			{
 				return std::make_shared<thx_mock::ServiceA>();
 			});
 		bool b = sm.registerService<thx_mock::ServiceB>(
-			[]() -> std::shared_ptr<thx::IService>
+			[]() -> std::shared_ptr<thx::service::IService>
 			{
 				return std::make_shared<thx_mock::ServiceB>();
 			});
 		return a && b;
 	}
 
-	void onUnload(thx::ServiceManager& sm) override
+	void onUnload(thx::service::ServiceManager& sm) override
 	{
 		sm.unregisterService<thx_mock::ServiceB>();
 		sm.unregisterService<thx_mock::ServiceA>();
 	}
 
-	thx::Span<const thx::ServiceRequirement> required() const override
+	thx::Span<const thx::plugin::ServiceRequirement> required() const override
 	{
-		static const thx::ServiceRequirement kReqs[] = {
+		static const thx::plugin::ServiceRequirement kReqs[] = {
 			{ thx_mock::MockService::staticId(), thx_mock::MockService::staticVersion() }
 		};
-		return thx::Span<const thx::ServiceRequirement>(kReqs, 1);
+		return thx::Span<const thx::plugin::ServiceRequirement>(kReqs, 1);
 	}
 };
 
