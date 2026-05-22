@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "thx/iplugin.h"
-#include "thx/iservice.h"
+#include "thx/plugin/iplugin.h"
+#include "thx/service/iservice.h"
 #include "thx/version.h"
 
 #include <cstdint>

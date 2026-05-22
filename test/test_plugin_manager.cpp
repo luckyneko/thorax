@@ -8,7 +8,7 @@
 
 #include <catch2/catch_all.hpp>
 #include <thx/library.h>
-#include <thx/plugin_manager.h>
+#include <thx/plugin/plugin_manager.h>
 #include <thx/result.h>
 #include "mock_plugin.h"
 

@@ -6,7 +6,7 @@
  *  (See accompanying file LICENSE.md)
  */
 
-#include "thx/service_manager.h"
+#include "thx/service/service_manager.h"
 #include "thx/to_string.h"
 #include "thx/log.h"
 

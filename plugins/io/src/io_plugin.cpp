@@ -7,7 +7,7 @@
  */
 
 #include "thx/plugins/io/io_service.h"
-#include <thx/platform.h>
+#include <thx/plugin/platform.h>
 
 #include <algorithm>
 #include <fstream>

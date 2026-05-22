@@ -7,7 +7,7 @@
  */
 
 #include "interfaces/logging_service.h"
-#include <thx/platform.h>
+#include <thx/plugin/platform.h>
 
 #include <cstdio>
 

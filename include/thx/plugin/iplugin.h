@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "thx/iservice.h"
-#include "thx/service_manager.h"
+#include "thx/service/iservice.h"
+#include "thx/service/service_manager.h"
 #include "thx/span.h"
 #include "thx/string_view.h"
 #include "thx/version_type.h"

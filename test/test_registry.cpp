@@ -8,9 +8,9 @@
 
 #include <catch2/catch_all.hpp>
 #include <thx/registry.h>
-#include <thx/plugin_garbage.h>
-#include <thx/plugin_manager.h>
-#include <thx/service_manager.h>
+#include <thx/plugin/plugin_garbage.h>
+#include <thx/plugin/plugin_manager.h>
+#include <thx/service/service_manager.h>
 
 // The Registry is a process-wide singleton; tests that mutate its state
 // (debug name, garbage queue) share it. Each test that pokes at lifecycle

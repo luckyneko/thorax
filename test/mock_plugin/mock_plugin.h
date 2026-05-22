@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <thx/service.h>
+#include <thx/service/service.h>
 
 // Minimal service interface used by PluginManager integration tests.
 // Both the mock_plugin shared library and the test binary include this header.

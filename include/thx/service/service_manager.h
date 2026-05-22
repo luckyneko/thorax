@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "thx/iservice.h"
+#include "thx/service/iservice.h"
 
 #include <functional>
 #include <memory>
@@ -105,4 +105,4 @@ namespace thx
 	};
 } // namespace thx
 
-#include "thx/detail/service_manager.inl"
+#include "thx/service/service_manager.inl"

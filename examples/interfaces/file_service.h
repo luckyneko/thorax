@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <thx/service.h>
+#include <thx/service/service.h>
 
 namespace examples
 {

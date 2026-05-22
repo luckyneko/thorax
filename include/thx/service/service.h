@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "thx/iservice.h"
+#include "thx/service/iservice.h"
 
 namespace thx
 {

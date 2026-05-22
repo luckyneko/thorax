@@ -8,12 +8,12 @@
 
 #pragma once
 
-#include "thx/iplugin.h"
-#include "thx/plugin_garbage.h"
-#include "thx/plugin_handle.h"
+#include "thx/plugin/iplugin.h"
+#include "thx/plugin/plugin_garbage.h"
+#include "thx/plugin/plugin_handle.h"
 #include "thx/result.h"
-#include "thx/service_id.h"
-#include "thx/service_manager.h"
+#include "thx/service/service_id.h"
+#include "thx/service/service_manager.h"
 #include "thx/log.h"
 
 #include <memory>

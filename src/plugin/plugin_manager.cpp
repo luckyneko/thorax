@@ -6,11 +6,11 @@
  *  (See accompanying file LICENSE.md)
  */
 
-#include "thx/plugin_manager.h"
+#include "thx/plugin/plugin_manager.h"
 #include "thx/library.h"
 #include "thx/registry.h"
 #include "thx/to_string.h"
-#include "thx/platform.h"
+#include "thx/plugin/platform.h"
 
 #include <algorithm>
 #include <filesystem>

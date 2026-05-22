@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include "thx/plugin_garbage.h"
-#include "thx/plugin_manager.h"
-#include "thx/service_manager.h"
+#include "thx/plugin/plugin_garbage.h"
+#include "thx/plugin/plugin_manager.h"
+#include "thx/service/service_manager.h"
 
 #include <string>
 

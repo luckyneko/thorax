@@ -7,7 +7,7 @@
  */
 
 #include <catch2/catch_all.hpp>
-#include <thx/service_id.h>
+#include <thx/service/service_id.h>
 
 #include <unordered_map>
 

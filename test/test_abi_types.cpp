@@ -7,7 +7,7 @@
  */
 
 #include <catch2/catch_all.hpp>
-#include <thx/platform.h>
+#include <thx/plugin/platform.h>
 #include <thx/span.h>
 #include <thx/string_view.h>
 #include <thx/version_type.h>

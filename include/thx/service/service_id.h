@@ -9,7 +9,7 @@
 #pragma once
 
 #include "thx/detail/hash.h"
-#include "thx/detail/type_name.h"
+#include "thx/rtti/type_name.h"
 
 namespace thx
 {

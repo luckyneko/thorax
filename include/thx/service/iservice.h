@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "thx/service_id.h"
+#include "thx/service/service_id.h"
 #include "thx/version_type.h"
 
 namespace thx

@@ -6,7 +6,7 @@
  *  (See accompanying file LICENSE.md)
  */
 
-#include "thx/plugin_garbage.h"
+#include "thx/plugin/plugin_garbage.h"
 #include "thx/registry.h"
 
 #include <utility>

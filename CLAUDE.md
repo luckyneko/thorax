@@ -43,13 +43,13 @@ The framework is built around four intertwined concepts: **stable identity**, **
 
 ### Service identity & lookup
 
-`thx::ServiceID` ([include/thx/service_id.h](include/thx/service_id.h)) is a `constexpr` value object holding an FNV-1a hash plus the original string literal. Equality compares both, so collisions can't produce false matches. The CRTP base [thx::Service<Derived>](include/thx/service.h) auto-derives an ID from the qualified type name (`thx::io::FileService` → `"thx.io.FileService"`) using `detail::TypeName`, so headers shared between plugin and host yield the same ID without any registry lookup. `ServiceID::from<T>()` is the path most code should use; passing a raw string is a fallback.
+`thx::ServiceID` ([include/thx/service/service_id.h](include/thx/service/service_id.h)) is a `constexpr` value object holding an FNV-1a hash plus the original string literal. Equality compares both, so collisions can't produce false matches. The CRTP base [thx::Service<Derived>](include/thx/service/service.h) auto-derives an ID from the qualified type name (`thx::io::FileService` → `"thx.io.FileService"`) using `detail::TypeName`, so headers shared between plugin and host yield the same ID without any registry lookup. `ServiceID::from<T>()` is the path most code should use; passing a raw string is a fallback.
 
 A service interface is just `struct IFooService : thx::Service<IFooService> { static constexpr thx::Version staticVersion() {…}; /* virtuals */ };` — the host and the plugin both `#include` that one header. The concrete implementation lives in the plugin's `.cpp` and is wired up via one of the export macros described below.
 
 ### Plugin vs. service
 
-`thx::IPlugin` ([include/thx/iplugin.h](include/thx/iplugin.h)) and `thx::IService` ([include/thx/iservice.h](include/thx/iservice.h)) are distinct concepts:
+`thx::IPlugin` ([include/thx/plugin/iplugin.h](include/thx/plugin/iplugin.h)) and `thx::IService` ([include/thx/service/iservice.h](include/thx/service/iservice.h)) are distinct concepts:
 
 - **`IPlugin`** is what a DSO produces. Each DSO instantiates exactly one `IPlugin`, which reports a name and version, may declare versioned `required()` service dependencies, and registers any number of services in `onLoad(ServiceManager&)` / unregisters them in `onUnload(ServiceManager&)`. The loader rejects the load if `onLoad` returns false or if any `required()` entry is missing or registered at a too-old version.
 - **`IService`** is what gets registered in `ServiceManager`. Services have their own `id()`, `version()`, and optional `onConstruct()` / `onDestroy()` lifecycle hooks; they have no concept of which DSO they came from.
@@ -72,7 +72,7 @@ User-facing free-function shims `thx::collectPluginGarbage()` / `thx::pendingPlu
 
 ### ServiceManager
 
-[thx::ServiceManager](include/thx/service_manager.h) is owned by the process-wide [thx::Registry](include/thx/registry.h); reach for it via `thx::registry().serviceManager()`. The class is also default-constructible, and tests routinely use a local instance. Reads use `std::shared_lock` so concurrent `getService<T>()` calls never block each other; `registerService`/`unregisterService` take exclusive locks.
+[thx::ServiceManager](include/thx/service/service_manager.h) is owned by the process-wide [thx::Registry](include/thx/registry.h); reach for it via `thx::registry().serviceManager()`. The class is also default-constructible, and tests routinely use a local instance. Reads use `std::shared_lock` so concurrent `getService<T>()` calls never block each other; `registerService`/`unregisterService` take exclusive locks.
 
 **Single-owner semantics:** each `ServiceID` may be registered exactly once. A duplicate `registerService` returns `false` with a `Warn` diagnostic and *does not* invoke the supplied factory. Plugins that want to *contribute* to an existing service (rather than replace it) use the provider pattern exposed by that service — see the logging/io services for the canonical shape (`addBackend` / `addReader`, holding `weak_ptr` to providers).
 
@@ -82,7 +82,7 @@ User-facing free-function shims `thx::collectPluginGarbage()` / `thx::pendingPlu
 
 ### Plugin ABI & memory safety
 
-The ABI contract is "allocate and free on the same side of the DSO boundary." Every plugin shared library exports exactly three C symbols, decorated via the single `THX_PLUGIN_API` macro ([include/thx/platform.h](include/thx/platform.h)) — `extern "C"` plus the platform DLL-export attribute, plus default visibility so a plugin built with `-fvisibility=hidden` still exports them:
+The ABI contract is "allocate and free on the same side of the DSO boundary." Every plugin shared library exports exactly three C symbols, decorated via the single `THX_PLUGIN_API` macro ([include/thx/plugin/platform.h](include/thx/plugin/platform.h)) — `extern "C"` plus the platform DLL-export attribute, plus default visibility so a plugin built with `-fvisibility=hidden` still exports them:
 
 ```
 THX_PLUGIN_API thx::IPlugin* thx_create_plugin();
@@ -101,11 +101,11 @@ Anything that crosses a virtual boundary on an `IService` API must use ABI-stabl
 
 ### Plugin loader & DSO lifetimes
 
-DSO loading is layered: [thx::Library](include/thx/library.h) is the generic RAII wrapper around `dlopen`/`dlclose` on POSIX and `LoadLibraryEx`/`FreeLibrary` on Windows. It offers a fluent `open(path).bind("symbol", fnPtr).bind(...)` chain — `valid()` / `operator bool()` tells you whether the chain succeeded, `error()` carries the platform diagnostic. [thx::PluginHandle](include/thx/plugin_handle.h) sits on top of `Library`, resolving the three `thx_*` exports on `open()` and rejecting an incompatible `thx_abi_version()` before any service is registered. Failure paths in `PluginHandle::open()` close the `Library` synchronously (no plugin code has run yet); successful unloads move the `Library` into `PluginGarbage` for deferred close.
+DSO loading is layered: [thx::Library](include/thx/library.h) is the generic RAII wrapper around `dlopen`/`dlclose` on POSIX and `LoadLibraryEx`/`FreeLibrary` on Windows. It offers a fluent `open(path).bind("symbol", fnPtr).bind(...)` chain — `valid()` / `operator bool()` tells you whether the chain succeeded, `error()` carries the platform diagnostic. [thx::PluginHandle](include/thx/plugin/plugin_handle.h) sits on top of `Library`, resolving the three `thx_*` exports on `open()` and rejecting an incompatible `thx_abi_version()` before any service is registered. Failure paths in `PluginHandle::open()` close the `Library` synchronously (no plugin code has run yet); successful unloads move the `Library` into `PluginGarbage` for deferred close.
 
 `thx::LIBRARY_EXTENSION` (in `library.h`) is the platform DSO suffix — `.dylib` / `.so` / `.dll` — used by `PluginManager::discover()` and any consumer that scans a directory.
 
-[thx::PluginManager](include/thx/plugin_manager.h) sits on top. The full lifecycle is **discover → open → load**:
+[thx::PluginManager](include/thx/plugin/plugin_manager.h) sits on top. The full lifecycle is **discover → open → load**:
 - `discover(dir)` returns the sorted list of files matching `LIBRARY_EXTENSION`. Pure filesystem scan; nothing is mapped.
 - `open(path)` opens the DSO, ABI-checks it, and instantiates its `IPlugin`, returning a move-only `OpenedPlugin` value. **`required()` is NOT yet checked and `onLoad` is NOT yet called.** The caller queries `name()`/`version()`/`required()`/`path()` to plan load order across many plugins, then commits with `load(OpenedPlugin)`. Dropping the value without loading destroys the `IPlugin` and queues the DSO to the graveyard. `open()` is the entry point that drains the graveyard (see "DSO keep-alive" below).
 - `load(OpenedPlugin)` checks `required()` against the registry, calls `onLoad`, and takes ownership of the DSO + `IPlugin` on success. The `OpenedPlugin` is consumed either way; on failure its DSO is released to the graveyard at the next drain. `PluginManager::checkRequirements(sm, reqs)` is exposed as a static dry-run helper so callers can pre-check a requirement set without consuming an `OpenedPlugin`.
@@ -115,7 +115,7 @@ DSO loading is layered: [thx::Library](include/thx/library.h) is the generic RAI
 
 The manager keys entries by canonical path so loading the same file twice via `load(path)` is a no-op (and via `open()` reports `AlreadyLoaded`). It is **not** thread-safe; serialise externally if needed. The garbage queue itself is thread-safe.
 
-**DSO keep-alive (Milestone 8b).** The deferred-close queue lives in [thx::PluginGarbage](include/thx/plugin_garbage.h) — owned by the process-wide `Registry`, accessible via `thx::registry().pluginGarbage()`. The class wraps a mutex + `vector<Library>` with `schedule(Library)`, `collect()`, and `pending()` members. `PluginHandle::close()` moves its `Library` into the queue instead of letting `~Library` run `dlclose`/`FreeLibrary` synchronously. This indirection is what makes it safe for callers to hold `shared_ptr<IService>` handles across `unload()`: the service's destructor and its `shared_ptr` control block both live in plugin code, so the DSO must stay mapped until every reference into it has been released. The queue drains on two occasions:
+**DSO keep-alive (Milestone 8b).** The deferred-close queue lives in [thx::PluginGarbage](include/thx/plugin/plugin_garbage.h) — owned by the process-wide `Registry`, accessible via `thx::registry().pluginGarbage()`. The class wraps a mutex + `vector<Library>` with `schedule(Library)`, `collect()`, and `pending()` members. `PluginHandle::close()` moves its `Library` into the queue instead of letting `~Library` run `dlclose`/`FreeLibrary` synchronously. This indirection is what makes it safe for callers to hold `shared_ptr<IService>` handles across `unload()`: the service's destructor and its `shared_ptr` control block both live in plugin code, so the DSO must stay mapped until every reference into it has been released. The queue drains on two occasions:
 
 1. Automatically at the start of `PluginManager::open()` (and therefore also the convenience `load(path)` overload, which calls `open()` internally), so long-running programs don't accumulate mapped-but-unused DSOs. `load(OpenedPlugin)` itself does *not* drain — meaning a `discover → open* → load*` batch drains exactly once, at the start of the open phase, and never yanks a DSO while another plugin is still being inspected;
 2. On demand via `thx::registry().pluginGarbage().collect()` (or the equivalent free-function shim `thx::collectPluginGarbage()`). `thx::pendingPluginGarbage()` exposes the current queue depth.
@@ -148,9 +148,14 @@ thx::assertThat(condition, "message");   // logs at Error if false; std::abort()
 ## Layout & conventions
 
 ```
-include/thx/         public API headers (one concern per header; thorax.h is the umbrella include)
-include/thx/detail/  implementation helpers (hash, type_name) — installed alongside the public headers because they're transitively included, but not part of the user-facing surface
-src/                 .cpp for the headers above
+include/thx/         cross-cutting public headers (thorax umbrella, Library, Registry, Result, Version, log, StringView/Span, to_string)
+include/thx/service/ ServiceManager, Service<>, ServiceID, IService (+ .inl)
+include/thx/plugin/  PluginManager, PluginHandle, PluginGarbage, IPlugin, plugin ABI macros (platform.h)
+include/thx/rtti/    public compile-time helpers (TypeName)
+include/thx/detail/  private implementation helpers (hash) — installed alongside the public headers because transitively included, but not part of the user-facing surface
+src/                 cross-cutting .cpp (thorax, log, library, registry)
+src/service/         service-layer .cpp
+src/plugin/          plugin-layer .cpp
 plugins/             in-tree plugins (logging, io). Each is a SHARED lib using THX_DEFINE_SERVICE_PLUGIN (or THX_DEFINE_PLUGIN for the multi-service form)
 plugins/<name>/include/thx/plugins/<name>/<name>_service.h  the shared interface header
 examples/            example host + two example plugins; integration test runs example_host

@@ -7,7 +7,7 @@
  */
 
 #include "mock_plugin.h"
-#include <thx/platform.h>
+#include <thx/plugin/platform.h>
 
 namespace
 {

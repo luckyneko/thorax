@@ -12,8 +12,8 @@
 // diagnostic.
 
 #include "mock_plugin.h"
-#include <thx/iplugin.h>
-#include <thx/platform.h>
+#include <thx/plugin/iplugin.h>
+#include <thx/plugin/platform.h>
 
 #include <memory>
 

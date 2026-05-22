@@ -7,7 +7,7 @@
  */
 
 #include "interfaces/file_service.h"
-#include <thx/platform.h>
+#include <thx/plugin/platform.h>
 
 #include <fstream>
 

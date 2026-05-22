@@ -13,9 +13,9 @@
 // Loads all plugins found in <plugin-dir>, then exercises the LoggingService
 // and FileService interfaces contributed by the two example plugins.
 
-#include <thx/plugin_manager.h>
+#include <thx/plugin/plugin_manager.h>
 #include <thx/registry.h>
-#include <thx/service_manager.h>
+#include <thx/service/service_manager.h>
 
 #include "interfaces/file_service.h"
 #include "interfaces/logging_service.h"

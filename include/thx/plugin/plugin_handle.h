@@ -9,7 +9,7 @@
 #pragma once
 
 #include "thx/library.h"
-#include "thx/platform.h"
+#include "thx/plugin/platform.h"
 #include "thx/result.h"
 
 #include <string>

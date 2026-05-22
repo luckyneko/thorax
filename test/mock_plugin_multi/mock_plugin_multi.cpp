@@ -14,8 +14,8 @@
 // thx_mock::ServiceA and thx_mock::ServiceB in onLoad.
 
 #include "mock_plugin.h"
-#include <thx/iplugin.h>
-#include <thx/platform.h>
+#include <thx/plugin/iplugin.h>
+#include <thx/plugin/platform.h>
 
 #include <memory>
 

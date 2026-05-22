@@ -49,39 +49,45 @@ configure_file(
 # Static Library Target
 find_package(Threads REQUIRED)
 add_library(${PROJECT_NAME} STATIC
-    # Headers
-    include/thx/detail/hash.h
-    include/thx/detail/service_manager.inl
-    include/thx/detail/type_name.h
+    # Headers — top-level (cross-cutting types and umbrella)
     include/thx/thorax.h
     include/thx/string_view.h
     include/thx/span.h
-    include/thx/service_id.h
     include/thx/version_type.h
     include/thx/version.h.in
     include/thx/to_string.h
-    include/thx/iservice.h
-    include/thx/service.h
-    include/thx/service_manager.h
-    include/thx/iplugin.h
-    include/thx/platform.h
     include/thx/result.h
     include/thx/library.h
-    include/thx/plugin_handle.h
-    include/thx/plugin_garbage.h
-    include/thx/plugin_manager.h
     include/thx/registry.h
     include/thx/log.h
+    include/thx/detail/hash.h
+
+    # Headers — service/
+    include/thx/service/iservice.h
+    include/thx/service/service.h
+    include/thx/service/service_id.h
+    include/thx/service/service_manager.h
+    include/thx/service/service_manager.inl
+
+    # Headers — plugin/
+    include/thx/plugin/iplugin.h
+    include/thx/plugin/platform.h
+    include/thx/plugin/plugin_handle.h
+    include/thx/plugin/plugin_garbage.h
+    include/thx/plugin/plugin_manager.h
+
+    # Headers — rtti/
+    include/thx/rtti/type_name.h
 
     # Source
     src/thorax.cpp
     src/log.cpp
-    src/service_manager.cpp
     src/library.cpp
-    src/plugin_handle.cpp
-    src/plugin_garbage.cpp
-    src/plugin_manager.cpp
     src/registry.cpp
+    src/service/service_manager.cpp
+    src/plugin/plugin_handle.cpp
+    src/plugin/plugin_garbage.cpp
+    src/plugin/plugin_manager.cpp
 )
 target_include_directories(${PROJECT_NAME} PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
