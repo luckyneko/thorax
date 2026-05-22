@@ -26,42 +26,42 @@ namespace thx
 	class StringView
 	{
 	public:
-		constexpr StringView() noexcept : data_(""), size_(0) {}
+		constexpr StringView() noexcept : m_data(""), m_size(0) {}
 
 		constexpr StringView(const char* str, std::size_t len) noexcept
-			: data_(str ? str : ""), size_(len)
+			: m_data(str ? str : ""), m_size(len)
 		{
 		}
 
 		// Implicit construction from string literals so existing call sites
 		// (e.g. Version{1, 0, 0, "alpha"}) do not need updating.
 		constexpr StringView(const char* str) noexcept  // NOLINT(google-explicit-constructor)
-			: data_(str ? str : "")
-			, size_(str ? std::char_traits<char>::length(str) : 0)
+			: m_data(str ? str : "")
+			, m_size(str ? std::char_traits<char>::length(str) : 0)
 		{
 		}
 
-		constexpr const char* data() const noexcept { return data_; }
-		constexpr std::size_t size() const noexcept { return size_; }
-		constexpr bool        empty() const noexcept { return size_ == 0; }
+		constexpr const char* data() const noexcept { return m_data; }
+		constexpr std::size_t size() const noexcept { return m_size; }
+		constexpr bool        empty() const noexcept { return m_size == 0; }
 
-		constexpr const char* begin() const noexcept { return data_; }
-		constexpr const char* end() const noexcept { return data_ + size_; }
+		constexpr const char* begin() const noexcept { return m_data; }
+		constexpr const char* end() const noexcept { return m_data + m_size; }
 
-		constexpr char operator[](std::size_t i) const noexcept { return data_[i]; }
+		constexpr char operator[](std::size_t i) const noexcept { return m_data[i]; }
 
 		// Explicit conversion for code that needs the stdlib type internally.
 		explicit constexpr operator std::string_view() const noexcept
 		{
-			return {data_, size_};
+			return {m_data, m_size};
 		}
 
 		constexpr bool operator==(StringView const& other) const noexcept
 		{
-			if (size_ != other.size_)
+			if (m_size != other.m_size)
 				return false;
-			for (std::size_t i = 0; i < size_; ++i)
-				if (data_[i] != other.data_[i])
+			for (std::size_t i = 0; i < m_size; ++i)
+				if (m_data[i] != other.m_data[i])
 					return false;
 			return true;
 		}
@@ -73,15 +73,15 @@ namespace thx
 
 		constexpr bool operator<(StringView const& other) const noexcept
 		{
-			std::size_t n = size_ < other.size_ ? size_ : other.size_;
+			std::size_t n = m_size < other.m_size ? m_size : other.m_size;
 			for (std::size_t i = 0; i < n; ++i)
 			{
-				if (data_[i] < other.data_[i])
+				if (m_data[i] < other.m_data[i])
 					return true;
-				if (data_[i] > other.data_[i])
+				if (m_data[i] > other.m_data[i])
 					return false;
 			}
-			return size_ < other.size_;
+			return m_size < other.m_size;
 		}
 
 		constexpr bool operator<=(StringView const& other) const noexcept
@@ -98,8 +98,8 @@ namespace thx
 		}
 
 	private:
-		const char*  data_;
-		std::size_t  size_;
+		const char*  m_data;
+		std::size_t  m_size;
 	};
 
 } // namespace thx

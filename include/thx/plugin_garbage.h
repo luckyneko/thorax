@@ -19,7 +19,7 @@ namespace thx
 	// PluginHandle::close() pushes its native handle here instead of calling
 	// dlclose/FreeLibrary immediately. The actual unmap is delayed until
 	// collect() runs (PluginManager::open invokes it implicitly; callers may
-	// also drive it via thx::collect_plugin_garbage()).
+	// also drive it via thx::collectPluginGarbage()).
 	//
 	// This indirection is what makes "hold a service across unload" safe: the
 	// service's destructor and shared_ptr control block both live in plugin
@@ -61,13 +61,13 @@ namespace thx
 		std::size_t pending() const noexcept;
 
 	private:
-		mutable std::mutex  mutex_;
-		std::vector<void*>  handles_;
+		mutable std::mutex  m_mutex;
+		std::vector<void*>  m_handles;
 	};
 
 	// Free-function shims preserved for callers that don't want to reach for
 	// PluginGarbage::instance() directly. Both forward to the singleton.
-	std::size_t collect_plugin_garbage() noexcept;
-	std::size_t pending_plugin_garbage() noexcept;
+	std::size_t collectPluginGarbage() noexcept;
+	std::size_t pendingPluginGarbage() noexcept;
 
 } // namespace thx

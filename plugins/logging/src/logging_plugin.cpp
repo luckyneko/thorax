@@ -26,7 +26,7 @@ using namespace thx::plugins::logging;
 namespace
 {
 
-const char* level_tag(LogLevel l) noexcept
+const char* levelTag(LogLevel l) noexcept
 {
 	switch (l)
 	{
@@ -46,7 +46,7 @@ struct ConsoleSink : ILogBackend
 {
 	void write(LogLevel level, const char* message) override
 	{
-		std::fprintf(stderr, "[%s] %s\n", level_tag(level), message);
+		std::fprintf(stderr, "[%s] %s\n", levelTag(level), message);
 		std::fflush(stderr);
 	}
 };
@@ -65,7 +65,7 @@ struct FileSink : ILogBackend
 	{
 		if (!m_file)
 			return;
-		m_file << "[" << level_tag(level) << "] " << message << "\n";
+		m_file << "[" << levelTag(level) << "] " << message << "\n";
 		m_file.flush();
 	}
 };
@@ -83,22 +83,22 @@ struct FileSink : ILogBackend
 struct RotatingFileSink : ILogBackend
 {
 	std::string   m_path;
-	long          m_max_size{0};
-	int           m_max_files{0};
+	long          m_maxSize{0};
+	int           m_maxFiles{0};
 	std::ofstream m_file;
-	long          m_current_size{0};
+	long          m_currentSize{0};
 
 	RotatingFileSink(const char* path, int max_size_bytes, int max_files)
 		: m_path(path)
-		, m_max_size(static_cast<long>(max_size_bytes))
-		, m_max_files(max_files)
+		, m_maxSize(static_cast<long>(max_size_bytes))
+		, m_maxFiles(max_files)
 	{
 		m_file.open(path, std::ios::app);
 		if (m_file)
 		{
 			auto pos = m_file.tellp();
 			if (pos >= 0)
-				m_current_size = static_cast<long>(pos);
+				m_currentSize = static_cast<long>(pos);
 		}
 	}
 
@@ -107,14 +107,14 @@ struct RotatingFileSink : ILogBackend
 		m_file.close();
 
 		// Shift numbered files outward (high → low index to avoid overwrite).
-		for (int i = m_max_files; i > 1; --i)
+		for (int i = m_maxFiles; i > 1; --i)
 		{
 			auto from = m_path + "." + std::to_string(i - 1);
 			auto to   = m_path + "." + std::to_string(i);
 			std::rename(from.c_str(), to.c_str());
 		}
 		// Base file → .1
-		if (m_max_files >= 1)
+		if (m_maxFiles >= 1)
 			std::rename(m_path.c_str(), (m_path + ".1").c_str());
 
 		m_file.open(m_path, std::ios::trunc);
@@ -125,7 +125,7 @@ struct RotatingFileSink : ILogBackend
 			std::rename((m_path + ".1").c_str(), m_path.c_str());
 			m_file.open(m_path, std::ios::app);
 		}
-		m_current_size = 0;
+		m_currentSize = 0;
 	}
 
 	void write(LogLevel level, const char* message) override
@@ -133,17 +133,17 @@ struct RotatingFileSink : ILogBackend
 		if (!m_file)
 			return;
 
-		if (m_current_size > m_max_size)
+		if (m_currentSize > m_maxSize)
 			rotate();
 
 		if (!m_file)
 			return;
 
-		auto line = std::string("[") + level_tag(level) + "] " + message + "\n";
+		auto line = std::string("[") + levelTag(level) + "] " + message + "\n";
 		m_file << line;
 		m_file.flush();
 		if (m_file)
-			m_current_size += static_cast<long>(line.size());
+			m_currentSize += static_cast<long>(line.size());
 	}
 };
 
@@ -183,7 +183,7 @@ struct LoggingServiceImpl : ILoggingService
 			b->write(level, message);
 	}
 
-	void add_backend(std::shared_ptr<ILogBackend> backend) override
+	void addBackend(std::shared_ptr<ILogBackend> backend) override
 	{
 		if (!backend)
 			return;
@@ -191,7 +191,7 @@ struct LoggingServiceImpl : ILoggingService
 		m_backends.push_back(std::move(backend));
 	}
 
-	void remove_backend(ILogBackend* key) override
+	void removeBackend(ILogBackend* key) override
 	{
 		std::lock_guard lock(m_mutex);
 		m_backends.erase(
@@ -204,12 +204,12 @@ struct LoggingServiceImpl : ILoggingService
 			m_backends.end());
 	}
 
-	std::shared_ptr<ILogBackend> make_console_backend() override
+	std::shared_ptr<ILogBackend> makeConsoleBackend() override
 	{
 		return std::make_shared<ConsoleSink>();
 	}
 
-	std::shared_ptr<ILogBackend> make_file_backend(const char* path) override
+	std::shared_ptr<ILogBackend> makeFileBackend(const char* path) override
 	{
 		if (!path)
 			return nullptr;
@@ -217,7 +217,7 @@ struct LoggingServiceImpl : ILoggingService
 		return sink->m_file ? std::shared_ptr<ILogBackend>(std::move(sink)) : nullptr;
 	}
 
-	std::shared_ptr<ILogBackend> make_rotating_file_backend(
+	std::shared_ptr<ILogBackend> makeRotatingFileBackend(
 		const char* path, int max_size_bytes, int max_files) override
 	{
 		if (!path || max_size_bytes <= 0 || max_files <= 0)

@@ -78,7 +78,7 @@ namespace thx
 // given type in onLoad and unregisters it in onUnload.
 //
 // Place this macro once in a .cpp file. ServiceType must inherit from
-// thx::Service<ServiceType>, define static_version(), and be default-constructible.
+// thx::Service<ServiceType>, define staticVersion(), and be default-constructible.
 #define THX_DEFINE_SERVICE_PLUGIN(ServiceType)                               \
 	THX_PLUGIN_API thx::IPlugin* thx_create_plugin()                          \
 	{                                                                         \

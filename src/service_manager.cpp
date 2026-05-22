@@ -19,28 +19,28 @@ ServiceManager& ServiceManager::instance()
 	return inst;
 }
 
-bool ServiceManager::register_service(ServiceID id, Version version, ServiceFactory factory)
+bool ServiceManager::registerService(ServiceID id, Version version, ServiceFactory factory)
 {
 	if (!factory)
 	{
 		// No reservation taken yet — nothing to release here.
 		thx::log(LogLevel::Error,
-		    std::string("register_service: null factory for '") + id.name() + "'");
+		    std::string("registerService: null factory for '") + id.name() + "'");
 		return false;
 	}
 
 	// Phase 1: reserve the ID. If anyone else already owns it (registered or
 	// in-flight reservation) we bail before doing real work.
 	{
-		std::unique_lock lock(mutex_);
-		if (services_.find(id) != services_.end() || reserved_.count(id))
+		std::unique_lock lock(m_mutex);
+		if (m_services.find(id) != m_services.end() || m_reserved.count(id))
 		{
 			thx::log(LogLevel::Warn,
-			    std::string("register_service: '") + id.name()
+			    std::string("registerService: '") + id.name()
 			    + "' is already registered (single-owner registry)");
 			return false;
 		}
-		reserved_.insert(id);
+		m_reserved.insert(id);
 	}
 
 	// Phase 2: build the service. The lock is NOT held here, so the factory
@@ -51,10 +51,10 @@ bool ServiceManager::register_service(ServiceID id, Version version, ServiceFact
 	// uncaught-exception path, since user-supplied factories and onConstruct
 	// callbacks can throw. The try/catch below catches any exception, releases
 	// the reservation, and rethrows so the caller still sees the failure.
-	auto release_reservation = [&]
+	auto releaseReservation = [&]
 	{
-		std::unique_lock lock(mutex_);
-		reserved_.erase(id);
+		std::unique_lock lock(m_mutex);
+		m_reserved.erase(id);
 	};
 
 	std::shared_ptr<IService> service;
@@ -63,9 +63,9 @@ bool ServiceManager::register_service(ServiceID id, Version version, ServiceFact
 		service = factory();
 		if (!service)
 		{
-			release_reservation();
+			releaseReservation();
 			thx::log(LogLevel::Error,
-			    std::string("register_service: factory returned null for '") + id.name() + "'");
+			    std::string("registerService: factory returned null for '") + id.name() + "'");
 			return false;
 		}
 
@@ -74,56 +74,56 @@ bool ServiceManager::register_service(ServiceID id, Version version, ServiceFact
 		// the same way Debug builds do.
 		if (service->version() != version)
 		{
-			release_reservation();
+			releaseReservation();
 			thx::log(LogLevel::Error,
-			    std::string("register_service: declared version ")
-			    + to_string(version)
+			    std::string("registerService: declared version ")
+			    + toString(version)
 			    + " does not match service-reported "
-			    + to_string(service->version())
+			    + toString(service->version())
 			    + " for '" + id.name() + "'");
 			return false;
 		}
 
 		if (!service->onConstruct())
 		{
-			release_reservation();
+			releaseReservation();
 			thx::log(LogLevel::Error,
-			    std::string("register_service: onConstruct failed for '") + id.name() + "'");
+			    std::string("registerService: onConstruct failed for '") + id.name() + "'");
 			return false;
 		}
 	}
 	catch (...)
 	{
-		release_reservation();
+		releaseReservation();
 		throw;
 	}
 
 	// Phase 3: commit. Replace the reservation with the real entry atomically.
 	{
-		std::unique_lock lock(mutex_);
-		reserved_.erase(id);
-		services_.emplace(id, std::move(service));
+		std::unique_lock lock(m_mutex);
+		m_reserved.erase(id);
+		m_services.emplace(id, std::move(service));
 	}
 	return true;
 }
 
-bool ServiceManager::unregister_service(ServiceID id)
+bool ServiceManager::unregisterService(ServiceID id)
 {
 	std::shared_ptr<IService> to_destroy;
 
 	{
-		std::unique_lock lock(mutex_);
+		std::unique_lock lock(m_mutex);
 
-		auto it = services_.find(id);
-		if (it == services_.end())
+		auto it = m_services.find(id);
+		if (it == m_services.end())
 		{
 			thx::log(LogLevel::Warn,
-			    std::string("unregister_service: '") + id.name() + "' is not registered");
+			    std::string("unregisterService: '") + id.name() + "' is not registered");
 			return false;
 		}
 
 		to_destroy = std::move(it->second);
-		services_.erase(it);
+		m_services.erase(it);
 	}
 
 	// onDestroy runs without the registry lock so the service may safely call
@@ -133,12 +133,12 @@ bool ServiceManager::unregister_service(ServiceID id)
 	return true;
 }
 
-std::vector<ServiceInfo> ServiceManager::list_services() const
+std::vector<ServiceInfo> ServiceManager::listServices() const
 {
-	std::shared_lock lock(mutex_);
+	std::shared_lock lock(m_mutex);
 	std::vector<ServiceInfo> result;
-	result.reserve(services_.size());
-	for (auto const& [id, svc] : services_)
+	result.reserve(m_services.size());
+	for (auto const& [id, svc] : m_services)
 		result.push_back({id, svc->version()});
 	return result;
 }

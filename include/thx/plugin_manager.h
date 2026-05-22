@@ -23,11 +23,11 @@
 
 namespace thx
 {
-	// Snapshot entry returned by PluginManager::list_plugins().
+	// Snapshot entry returned by PluginManager::listPlugins().
 	struct LoadedPluginInfo
 	{
 		std::string              path;
-		std::string              plugin_name; // from IPlugin::name()
+		std::string              pluginName; // from IPlugin::name()
 		std::vector<ServiceID>   services;    // all service IDs registered by this plugin
 	};
 
@@ -43,7 +43,7 @@ namespace thx
 	// Lifetime: while alive, the DSO is mapped and the IPlugin instance exists.
 	// Dropping the value without passing it to load() destroys the IPlugin and
 	// queues the DSO into the deferred-close graveyard (drained at the next
-	// PluginManager::open() or thx::collect_plugin_garbage()).
+	// PluginManager::open() or thx::collectPluginGarbage()).
 	class OpenedPlugin
 	{
 	public:
@@ -56,10 +56,10 @@ namespace thx
 		OpenedPlugin(OpenedPlugin const&)            = delete;
 		OpenedPlugin& operator=(OpenedPlugin const&) = delete;
 
-		explicit operator bool() const noexcept { return static_cast<bool>(plugin_); }
+		explicit operator bool() const noexcept { return static_cast<bool>(m_plugin); }
 
 		// Canonical filesystem path of the DSO.
-		std::string const& path() const noexcept { return canonical_; }
+		std::string const& path() const noexcept { return m_canonical; }
 
 		// Plugin-reported metadata. Valid once open() has succeeded.
 		StringView                     name() const noexcept;
@@ -72,11 +72,11 @@ namespace thx
 		             std::shared_ptr<IPlugin> plugin,
 		             std::string canonical);
 
-		// Destruction order matters: plugin_ (whose destructor lives in plugin
-		// code) is reset before handle_ is destroyed.
-		PluginHandle             handle_;
-		std::shared_ptr<IPlugin> plugin_;
-		std::string              canonical_;
+		// Destruction order matters: m_plugin (whose destructor lives in plugin
+		// code) is reset before m_handle is destroyed.
+		PluginHandle             m_handle;
+		std::shared_ptr<IPlugin> m_plugin;
+		std::string              m_canonical;
 	};
 
 	// Loads, unloads, and discovers plugin shared libraries.
@@ -91,7 +91,7 @@ namespace thx
 	//
 	// Destruction: any plugins still loaded when the PluginManager is destroyed
 	// are unloaded automatically (services unregistered, DSO handles deferred).
-	// The destructor does NOT call collect_plugin_garbage(); call it explicitly
+	// The destructor does NOT call collectPluginGarbage(); call it explicitly
 	// when no service references into those DSOs remain.
 	class PluginManager
 	{
@@ -139,7 +139,7 @@ namespace thx
 		// Returns ok if every requirement is satisfied by a service currently
 		// registered in sm at a compatible version, or the first failure.
 		// Does not mutate sm.
-		static Result<void, Error> check_requirements(ServiceManager const&            sm,
+		static Result<void, Error> checkRequirements(ServiceManager const&            sm,
 		                                              Span<const ServiceRequirement>   reqs);
 
 		// Unregisters the plugin's services and releases the DSO from this loader.
@@ -147,22 +147,22 @@ namespace thx
 		//
 		// Lifetime: the DSO is NOT immediately unmapped. Its native handle is
 		// pushed onto a process-wide deferred-close queue, drained at the next
-		// call to load() or thx::collect_plugin_garbage(). This means callers
+		// call to load() or thx::collectPluginGarbage(). This means callers
 		// MAY hold shared_ptr<IService> handles across unload — the DSO stays
 		// mapped (and the service's destructor / shared_ptr control block stay
-		// reachable) until the next drain. Once collect_plugin_garbage() runs,
+		// reachable) until the next drain. Once collectPluginGarbage() runs,
 		// every still-held service reference into the unmapped DSO becomes
 		// undefined behaviour, so drain only when no such references remain.
 		Result<void, Error> unload(std::string const& path);
 
 		// Returns true if the canonical path is currently loaded.
-		bool is_loaded(std::string const& path) const;
+		bool isLoaded(std::string const& path) const;
 
 		// Scans directory for files whose extension matches the platform plugin
 		// extension (.dylib / .so / .dll). Does not load them.
 		std::vector<std::string> discover(std::string const& directory) const;
 
-		// Outcome of a discover_and_load call: which paths loaded successfully
+		// Outcome of a discoverAndLoad call: which paths loaded successfully
 		// and which failed (with their associated Error). Either list may be
 		// empty. Callers can choose how to react to partial failure.
 		struct LoadSummary
@@ -175,11 +175,11 @@ namespace thx
 		// Always returns a summary; callers inspect loaded/failed to decide
 		// what counts as success. Individual failures are also logged via
 		// thx::log().
-		LoadSummary discover_and_load(std::string const& directory);
+		LoadSummary discoverAndLoad(std::string const& directory);
 
 		// Returns a snapshot of currently loaded plugins and the service ID each
 		// registered. Useful for diagnostics and test assertions.
-		std::vector<LoadedPluginInfo> list_plugins() const;
+		std::vector<LoadedPluginInfo> listPlugins() const;
 
 	private:
 		struct Entry
@@ -188,14 +188,14 @@ namespace thx
 			// so the IPlugin's destructor (which lives in plugin code) runs
 			// before the DSO is dlclose()d.
 			PluginHandle             handle;
-			std::vector<ServiceID>   service_ids;
+			std::vector<ServiceID>   serviceIds;
 			std::shared_ptr<IPlugin> plugin;
 		};
 
-		ServiceManager& sm_;
-		std::unordered_map<std::string, Entry> plugins_; // canonical_path → entry
+		ServiceManager& m_sm;
+		std::unordered_map<std::string, Entry> m_plugins; // canonical_path → entry
 
-		static std::string resolve_canonical(std::string const& path);
+		static std::string resolveCanonical(std::string const& path);
 	};
 
 } // namespace thx

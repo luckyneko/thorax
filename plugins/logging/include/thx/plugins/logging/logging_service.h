@@ -31,15 +31,15 @@ public:
 // to emit log messages or contribute a new backend.
 //
 // Usage:
-//   auto log = sm.get_service<ILoggingService>();
-//   auto con = log->make_console_backend();
-//   log->add_backend(con);
+//   auto log = sm.getService<ILoggingService>();
+//   auto con = log->makeConsoleBackend();
+//   log->addBackend(con);
 //   log->log(LogLevel::Info, "hello");
-//   log->remove_backend(con.get());   // or just let con go out of scope
+//   log->removeBackend(con.get());   // or just let con go out of scope
 class ILoggingService : public thx::Service<ILoggingService>
 {
 public:
-	static constexpr thx::Version static_version()
+	static constexpr thx::Version staticVersion()
 	{
 		return thx::Version{1, 0, 0};
 	}
@@ -49,16 +49,16 @@ public:
 
 	// Register an external backend.  The service stores a weak_ptr; when the
 	// caller drops its shared_ptr the backend is evicted automatically.
-	virtual void add_backend(std::shared_ptr<ILogBackend> backend) = 0;
+	virtual void addBackend(std::shared_ptr<ILogBackend> backend) = 0;
 
 	// Eagerly remove a backend by raw-pointer identity before it expires.
-	virtual void remove_backend(ILogBackend* backend) = 0;
+	virtual void removeBackend(ILogBackend* backend) = 0;
 
 	// Built-in backend factories.  All allocations happen inside the plugin so
 	// the paired deleter always frees from the correct heap.
-	virtual std::shared_ptr<ILogBackend> make_console_backend() = 0;
-	virtual std::shared_ptr<ILogBackend> make_file_backend(const char* path) = 0;
-	virtual std::shared_ptr<ILogBackend> make_rotating_file_backend(
+	virtual std::shared_ptr<ILogBackend> makeConsoleBackend() = 0;
+	virtual std::shared_ptr<ILogBackend> makeFileBackend(const char* path) = 0;
+	virtual std::shared_ptr<ILogBackend> makeRotatingFileBackend(
 		const char* path, int max_size_bytes, int max_files) = 0;
 };
 

@@ -60,7 +60,7 @@ struct Fixture
 
 	std::shared_ptr<ILoggingService> service()
 	{
-		return sm.get_service<ILoggingService>();
+		return sm.getService<ILoggingService>();
 	}
 };
 
@@ -77,17 +77,17 @@ TEST_CASE("LoggingPlugin - loads and registers ILoggingService", "[logging_plugi
 }
 
 // ---------------------------------------------------------------------------
-// add_backend / log / remove_backend
+// addBackend / log / removeBackend
 // ---------------------------------------------------------------------------
 
-TEST_CASE("LoggingPlugin - add_backend routes log() to backend", "[logging_plugin]")
+TEST_CASE("LoggingPlugin - addBackend routes log() to backend", "[logging_plugin]")
 {
 	Fixture f;
 	auto svc = f.service();
 	REQUIRE(svc);
 
 	auto cap = std::make_shared<CaptureBackend>();
-	svc->add_backend(cap);
+	svc->addBackend(cap);
 
 	svc->log(LogLevel::Info,  "hello");
 	svc->log(LogLevel::Error, "world");
@@ -99,17 +99,17 @@ TEST_CASE("LoggingPlugin - add_backend routes log() to backend", "[logging_plugi
 	REQUIRE(cap->entries[1].message == "world");
 }
 
-TEST_CASE("LoggingPlugin - remove_backend stops delivery", "[logging_plugin]")
+TEST_CASE("LoggingPlugin - removeBackend stops delivery", "[logging_plugin]")
 {
 	Fixture f;
 	auto svc = f.service();
 	REQUIRE(svc);
 
 	auto cap = std::make_shared<CaptureBackend>();
-	svc->add_backend(cap);
+	svc->addBackend(cap);
 	svc->log(LogLevel::Info, "before");
 
-	svc->remove_backend(cap.get());
+	svc->removeBackend(cap.get());
 	svc->log(LogLevel::Info, "after");
 
 	REQUIRE(cap->entries.size() == 1);
@@ -124,7 +124,7 @@ TEST_CASE("LoggingPlugin - expired backend is culled automatically", "[logging_p
 
 	{
 		auto cap = std::make_shared<CaptureBackend>();
-		svc->add_backend(cap);
+		svc->addBackend(cap);
 		svc->log(LogLevel::Debug, "alive");
 		REQUIRE(cap->entries.size() == 1);
 	} // cap shared_ptr released — weak_ptr in service becomes expired
@@ -139,29 +139,29 @@ TEST_CASE("LoggingPlugin - null backend is ignored", "[logging_plugin]")
 	auto svc = f.service();
 	REQUIRE(svc);
 
-	REQUIRE_NOTHROW(svc->add_backend(nullptr));
+	REQUIRE_NOTHROW(svc->addBackend(nullptr));
 	REQUIRE_NOTHROW(svc->log(LogLevel::Info, "should not crash"));
 }
 
 // ---------------------------------------------------------------------------
-// make_console_backend
+// makeConsoleBackend
 // ---------------------------------------------------------------------------
 
-TEST_CASE("LoggingPlugin - make_console_backend returns non-null", "[logging_plugin]")
+TEST_CASE("LoggingPlugin - makeConsoleBackend returns non-null", "[logging_plugin]")
 {
 	Fixture f;
 	auto svc = f.service();
 	REQUIRE(svc);
 
-	auto con = svc->make_console_backend();
+	auto con = svc->makeConsoleBackend();
 	REQUIRE(con != nullptr);
 }
 
 // ---------------------------------------------------------------------------
-// make_file_backend
+// makeFileBackend
 // ---------------------------------------------------------------------------
 
-TEST_CASE("LoggingPlugin - make_file_backend writes messages to file", "[logging_plugin]")
+TEST_CASE("LoggingPlugin - makeFileBackend writes messages to file", "[logging_plugin]")
 {
 	namespace fs = std::filesystem;
 
@@ -172,10 +172,10 @@ TEST_CASE("LoggingPlugin - make_file_backend writes messages to file", "[logging
 	auto svc = f.service();
 	REQUIRE(svc);
 
-	auto fb = svc->make_file_backend(tmp.c_str());
+	auto fb = svc->makeFileBackend(tmp.c_str());
 	REQUIRE(fb != nullptr);
 
-	svc->add_backend(fb);
+	svc->addBackend(fb);
 	svc->log(LogLevel::Info, "file-message");
 	fb.reset(); // release before closing to exercise weak_ptr eviction path
 
@@ -192,18 +192,18 @@ TEST_CASE("LoggingPlugin - make_file_backend writes messages to file", "[logging
 	REQUIRE(contents.find("file-message") != std::string::npos);
 }
 
-TEST_CASE("LoggingPlugin - make_file_backend with null path returns null",
+TEST_CASE("LoggingPlugin - makeFileBackend with null path returns null",
           "[logging_plugin]")
 {
 	Fixture f;
 	auto svc = f.service();
 	REQUIRE(svc);
 
-	REQUIRE(svc->make_file_backend(nullptr) == nullptr);
+	REQUIRE(svc->makeFileBackend(nullptr) == nullptr);
 }
 
 // ---------------------------------------------------------------------------
-// make_rotating_file_backend
+// makeRotatingFileBackend
 // ---------------------------------------------------------------------------
 
 TEST_CASE("LoggingPlugin - rotating backend rotates when size is exceeded",
@@ -222,9 +222,9 @@ TEST_CASE("LoggingPlugin - rotating backend rotates when size is exceeded",
 	REQUIRE(svc);
 
 	// max 64 bytes so a handful of writes forces a rotation.
-	auto rb = svc->make_rotating_file_backend(base.c_str(), 64, 3);
+	auto rb = svc->makeRotatingFileBackend(base.c_str(), 64, 3);
 	REQUIRE(rb != nullptr);
-	svc->add_backend(rb);
+	svc->addBackend(rb);
 
 	// Each write is ~20 bytes; four writes push us past 64.
 	for (int i = 0; i < 8; ++i)
@@ -251,7 +251,7 @@ TEST_CASE("LoggingPlugin - rotating backend with invalid args returns null",
 	auto svc = f.service();
 	REQUIRE(svc);
 
-	REQUIRE(svc->make_rotating_file_backend(nullptr,   64, 3) == nullptr);
-	REQUIRE(svc->make_rotating_file_backend("x.log",    0, 3) == nullptr);
-	REQUIRE(svc->make_rotating_file_backend("x.log",   64, 0) == nullptr);
+	REQUIRE(svc->makeRotatingFileBackend(nullptr,   64, 3) == nullptr);
+	REQUIRE(svc->makeRotatingFileBackend("x.log",    0, 3) == nullptr);
+	REQUIRE(svc->makeRotatingFileBackend("x.log",   64, 0) == nullptr);
 }

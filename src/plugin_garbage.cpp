@@ -20,7 +20,7 @@ namespace thx
 
 namespace
 {
-	void native_close(void* handle) noexcept
+	void nativeClose(void* handle) noexcept
 	{
 		if (!handle)
 			return;
@@ -42,8 +42,8 @@ void PluginGarbage::schedule(void* handle) noexcept
 {
 	if (!handle)
 		return;
-	std::lock_guard<std::mutex> lock(mutex_);
-	handles_.push_back(handle);
+	std::lock_guard<std::mutex> lock(m_mutex);
+	m_handles.push_back(handle);
 }
 
 std::size_t PluginGarbage::collect() noexcept
@@ -53,26 +53,26 @@ std::size_t PluginGarbage::collect() noexcept
 	// libraries — keeping the lock would be a deadlock waiting to happen.
 	std::vector<void*> pending;
 	{
-		std::lock_guard<std::mutex> lock(mutex_);
-		pending.swap(handles_);
+		std::lock_guard<std::mutex> lock(m_mutex);
+		pending.swap(m_handles);
 	}
 	for (auto h : pending)
-		native_close(h);
+		nativeClose(h);
 	return pending.size();
 }
 
 std::size_t PluginGarbage::pending() const noexcept
 {
-	std::lock_guard<std::mutex> lock(mutex_);
-	return handles_.size();
+	std::lock_guard<std::mutex> lock(m_mutex);
+	return m_handles.size();
 }
 
-std::size_t collect_plugin_garbage() noexcept
+std::size_t collectPluginGarbage() noexcept
 {
 	return PluginGarbage::instance().collect();
 }
 
-std::size_t pending_plugin_garbage() noexcept
+std::size_t pendingPluginGarbage() noexcept
 {
 	return PluginGarbage::instance().pending();
 }

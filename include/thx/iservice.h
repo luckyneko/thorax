@@ -27,7 +27,7 @@ namespace thx
 		// and before it becomes visible to callers. Return false to abort
 		// registration (the service will be discarded without being inserted).
 		// The registry lock is NOT held here, so calling back into the
-		// ServiceManager is safe — except that a recursive register_service for
+		// ServiceManager is safe — except that a recursive registerService for
 		// the same ID will see the in-flight reservation and bail out.
 		virtual bool onConstruct() { return true; }
 

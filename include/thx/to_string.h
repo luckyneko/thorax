@@ -18,7 +18,7 @@ namespace thx
 	// Centralised here so the core type headers don't have to pull <string>.
 	// Add new overloads as new printable types are introduced.
 
-	inline std::string to_string(Version const& v)
+	inline std::string toString(Version const& v)
 	{
 		return std::to_string(v.major) + '.'
 		     + std::to_string(v.minor) + '.'

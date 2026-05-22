@@ -58,20 +58,20 @@ namespace thx
 			return Result{std::in_place_index<1>, std::move(error)};
 		}
 
-		bool is_ok()  const noexcept { return data_.index() == 0; }
-		bool is_err() const noexcept { return data_.index() == 1; }
+		bool isOk()  const noexcept { return m_data.index() == 0; }
+		bool isErr() const noexcept { return m_data.index() == 1; }
 
-		explicit operator bool() const noexcept { return is_ok(); }
+		explicit operator bool() const noexcept { return isOk(); }
 
-		T&       value()       { return std::get<0>(data_); }
-		T const& value() const { return std::get<0>(data_); }
-		E&       error()       { return std::get<1>(data_); }
-		E const& error() const { return std::get<1>(data_); }
+		T&       value()       { return std::get<0>(m_data); }
+		T const& value() const { return std::get<0>(m_data); }
+		E&       error()       { return std::get<1>(m_data); }
+		E const& error() const { return std::get<1>(m_data); }
 
 		// Returns value() if ok, otherwise the supplied fallback.
-		T value_or(T fallback) const&
+		T valueOr(T fallback) const&
 		{
-			return is_ok() ? value() : std::move(fallback);
+			return isOk() ? value() : std::move(fallback);
 		}
 
 		// Applies f to the contained value if ok, returning a new Result with
@@ -83,7 +83,7 @@ namespace thx
 		auto map(F&& f) const& -> Result<std::decay_t<std::invoke_result_t<F, T const&>>, E>
 		{
 			using U = std::decay_t<std::invoke_result_t<F, T const&>>;
-			if (is_err())
+			if (isErr())
 				return Result<U, E>::err(error());
 			return Result<U, E>::ok(std::forward<F>(f)(value()));
 		}
@@ -91,11 +91,11 @@ namespace thx
 	private:
 		template <std::size_t I, typename... Args>
 		explicit Result(std::in_place_index_t<I> tag, Args&&... args)
-			: data_(tag, std::forward<Args>(args)...)
+			: m_data(tag, std::forward<Args>(args)...)
 		{
 		}
 
-		std::variant<T, E> data_;
+		std::variant<T, E> m_data;
 	};
 
 	// Specialisation for operations that succeed with no value.
@@ -105,18 +105,18 @@ namespace thx
 	{
 	public:
 		static Result ok()         { return Result{};                          }
-		static Result err(E error) { Result r; r.error_ = std::move(error); return r; }
+		static Result err(E error) { Result r; r.m_error = std::move(error); return r; }
 
-		bool is_ok()  const noexcept { return !error_.has_value(); }
-		bool is_err() const noexcept { return  error_.has_value(); }
+		bool isOk()  const noexcept { return !m_error.has_value(); }
+		bool isErr() const noexcept { return  m_error.has_value(); }
 
-		explicit operator bool() const noexcept { return is_ok(); }
+		explicit operator bool() const noexcept { return isOk(); }
 
-		E&       error()       { return *error_; }
-		E const& error() const { return *error_; }
+		E&       error()       { return *m_error; }
+		E const& error() const { return *m_error; }
 
 	private:
-		std::optional<E> error_;
+		std::optional<E> m_error;
 	};
 
 } // namespace thx

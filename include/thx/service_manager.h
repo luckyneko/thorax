@@ -21,10 +21,10 @@
 namespace thx
 {
 
-	// Factory callable type used by register_service.
+	// Factory callable type used by registerService.
 	using ServiceFactory = std::function<std::shared_ptr<IService>()>;
 
-	// Snapshot entry returned by ServiceManager::list_services().
+	// Snapshot entry returned by ServiceManager::listServices().
 	struct ServiceInfo
 	{
 		ServiceID id;
@@ -33,11 +33,11 @@ namespace thx
 
 	// Central registry that owns the lifetime of all registered services.
 	//
-	// Thread safety: concurrent get_service() calls do not block each other
+	// Thread safety: concurrent getService() calls do not block each other
 	// (shared lock). register/unregister take an exclusive lock.
 	//
 	// Single-owner semantics: a given ServiceID may be registered exactly once.
-	// A second register_service call for the same ID returns false with a
+	// A second registerService call for the same ID returns false with a
 	// diagnostic — the registry rejects duplicate ownership rather than
 	// silently sharing it. Plugins that want to *contribute* to an existing
 	// service (rather than replace it) should use the provider pattern
@@ -65,22 +65,22 @@ namespace thx
 		//   - factory is null or returns null
 		//   - onConstruct() returns false
 		//   - the ID is already registered (regardless of version)
-		bool register_service(ServiceID id, Version version, ServiceFactory factory);
+		bool registerService(ServiceID id, Version version, ServiceFactory factory);
 
-		// Type-deducing registration. Requires T to provide T::static_id() and
-		// T::static_version(). The factory must return a std::shared_ptr<T> (or
+		// Type-deducing registration. Requires T to provide T::staticId() and
+		// T::staticVersion(). The factory must return a std::shared_ptr<T> (or
 		// any type implicitly convertible to std::shared_ptr<IService>).
 		template <typename T>
-		bool register_service(ServiceFactory factory);
+		bool registerService(ServiceFactory factory);
 
 		// Looks up a service by ID and casts it to T.
 		// Returns nullptr if the service is not registered or the cast fails.
 		template <typename T>
-		std::shared_ptr<T> get_service(ServiceID id) const;
+		std::shared_ptr<T> getService(ServiceID id) const;
 
-		// Type-deducing overload. Requires T to provide T::static_id().
+		// Type-deducing overload. Requires T to provide T::staticId().
 		template <typename T>
-		std::shared_ptr<T> get_service() const;
+		std::shared_ptr<T> getService() const;
 
 		// Removes the service entry. IService::onDestroy() is called outside
 		// the registry lock so the service may safely call ServiceManager
@@ -88,23 +88,23 @@ namespace thx
 		//
 		// Returns true if the entry was removed.
 		// Returns false (and logs a diagnostic) if the ID is not registered.
-		bool unregister_service(ServiceID id);
+		bool unregisterService(ServiceID id);
 
-		// Type-deducing unregister. Requires T to provide T::static_id().
+		// Type-deducing unregister. Requires T to provide T::staticId().
 		template <typename T>
-		bool unregister_service();
+		bool unregisterService();
 
 		// Returns a point-in-time snapshot of all registered service IDs.
 		// Useful for diagnostics and test assertions.
-		std::vector<ServiceInfo> list_services() const;
+		std::vector<ServiceInfo> listServices() const;
 
 	private:
-		mutable std::shared_mutex mutex_;
-		std::unordered_map<ServiceID, std::shared_ptr<IService>> services_;
-		// IDs reserved by an in-flight register_service. The factory and
+		mutable std::shared_mutex m_mutex;
+		std::unordered_map<ServiceID, std::shared_ptr<IService>> m_services;
+		// IDs reserved by an in-flight registerService. The factory and
 		// onConstruct callback run without the registry lock held; the ID is
 		// kept here so concurrent registers see it as taken and bail out.
-		std::unordered_set<ServiceID> reserved_;
+		std::unordered_set<ServiceID> m_reserved;
 	};
 } // namespace thx
 

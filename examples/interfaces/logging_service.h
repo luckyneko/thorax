@@ -16,7 +16,7 @@ namespace examples
 // Shared interface header â€” included by both the logging plugin and the host.
 struct ILoggingService : thx::Service<ILoggingService>
 {
-	static constexpr thx::Version static_version()
+	static constexpr thx::Version staticVersion()
 	{
 		return thx::Version{1, 0, 0};
 	}

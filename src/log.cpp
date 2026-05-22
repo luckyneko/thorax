@@ -41,13 +41,13 @@ std::shared_ptr<ILogSink> g_sink = std::make_shared<StderrSink>();
 
 } // namespace
 
-void set_log_sink(std::shared_ptr<ILogSink> sink)
+void setLogSink(std::shared_ptr<ILogSink> sink)
 {
 	std::unique_lock lock(g_sink_mutex);
 	g_sink = std::move(sink); // nullptr → silence
 }
 
-void restore_default_log_sink()
+void restoreDefaultLogSink()
 {
 	std::unique_lock lock(g_sink_mutex);
 	g_sink = std::make_shared<StderrSink>();

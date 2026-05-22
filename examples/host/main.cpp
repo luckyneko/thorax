@@ -33,23 +33,23 @@ int main(int argc, char* argv[])
 	auto& sm = thx::ServiceManager::instance();
 	thx::PluginManager loader(sm);
 
-	auto summary = loader.discover_and_load(argv[1]);
+	auto summary = loader.discoverAndLoad(argv[1]);
 	if (summary.loaded.empty())
 	{
-		std::fprintf(stderr, "discover_and_load: no plugins loaded from %s\n", argv[1]);
+		std::fprintf(stderr, "discoverAndLoad: no plugins loaded from %s\n", argv[1]);
 		for (auto const& [path, err] : summary.failed)
 			std::fprintf(stderr, "  %s: %s\n", path.c_str(), err.message.c_str());
 		return 1;
 	}
 
-	auto log_svc = sm.get_service<examples::ILoggingService>();
+	auto log_svc = sm.getService<examples::ILoggingService>();
 	if (!log_svc)
 	{
 		std::fprintf(stderr, "ILoggingService not found\n");
 		return 1;
 	}
 
-	auto file_svc = sm.get_service<examples::IFileService>();
+	auto file_svc = sm.getService<examples::IFileService>();
 	if (!file_svc)
 	{
 		std::fprintf(stderr, "IFileService not found\n");

@@ -28,7 +28,7 @@ public:
 
 	bool onLoad(thx::ServiceManager& sm) override
 	{
-		return sm.register_service<thx_mock::ServiceA>(
+		return sm.registerService<thx_mock::ServiceA>(
 			[]() -> std::shared_ptr<thx::IService>
 			{
 				return std::make_shared<thx_mock::ServiceA>();

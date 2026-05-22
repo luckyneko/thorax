@@ -32,12 +32,12 @@ namespace thx
 		PluginHandle& operator=(PluginHandle const&) = delete;
 
 		// True if the handle holds an open DSO.
-		explicit operator bool() const noexcept { return handle_ != nullptr; }
+		explicit operator bool() const noexcept { return m_handle != nullptr; }
 
-		std::string const& path()       const noexcept { return path_;       }
+		std::string const& path()       const noexcept { return m_path;       }
 
-		PluginCreateFn     create_fn()  const noexcept { return create_fn_;  }
-		PluginDestroyFn    destroy_fn() const noexcept { return destroy_fn_; }
+		PluginCreateFn     createFn()  const noexcept { return m_createFn;  }
+		PluginDestroyFn    destroyFn() const noexcept { return m_destroyFn; }
 
 		// Opens the DSO at path and resolves thx_create_plugin / thx_destroy_plugin.
 		// Returns Err if the file is missing, the ABI version is incompatible, or
@@ -47,10 +47,10 @@ namespace thx
 	private:
 		void close() noexcept;
 
-		void*           handle_     = nullptr;
-		std::string     path_;
-		PluginCreateFn  create_fn_  = nullptr;
-		PluginDestroyFn destroy_fn_ = nullptr;
+		void*           m_handle     = nullptr;
+		std::string     m_path;
+		PluginCreateFn  m_createFn  = nullptr;
+		PluginDestroyFn m_destroyFn = nullptr;
 	};
 
 } // namespace thx

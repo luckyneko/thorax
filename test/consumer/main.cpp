@@ -15,7 +15,7 @@ int main()
 	            thx::THORAX_VERSION.patch);
 
 	thx::ServiceManager sm;
-	auto services = sm.list_services();
+	auto services = sm.listServices();
 	std::printf("Services registered: %zu\n", services.size());
 	return 0;
 }

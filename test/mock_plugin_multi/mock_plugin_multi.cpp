@@ -30,12 +30,12 @@ public:
 
 	bool onLoad(thx::ServiceManager& sm) override
 	{
-		bool a = sm.register_service<thx_mock::ServiceA>(
+		bool a = sm.registerService<thx_mock::ServiceA>(
 			[]() -> std::shared_ptr<thx::IService>
 			{
 				return std::make_shared<thx_mock::ServiceA>();
 			});
-		bool b = sm.register_service<thx_mock::ServiceB>(
+		bool b = sm.registerService<thx_mock::ServiceB>(
 			[]() -> std::shared_ptr<thx::IService>
 			{
 				return std::make_shared<thx_mock::ServiceB>();
@@ -45,14 +45,14 @@ public:
 
 	void onUnload(thx::ServiceManager& sm) override
 	{
-		sm.unregister_service<thx_mock::ServiceB>();
-		sm.unregister_service<thx_mock::ServiceA>();
+		sm.unregisterService<thx_mock::ServiceB>();
+		sm.unregisterService<thx_mock::ServiceA>();
 	}
 
 	thx::Span<const thx::ServiceRequirement> required() const override
 	{
 		static const thx::ServiceRequirement kReqs[] = {
-			{ thx_mock::MockService::static_id(), thx_mock::MockService::static_version() }
+			{ thx_mock::MockService::staticId(), thx_mock::MockService::staticVersion() }
 		};
 		return thx::Span<const thx::ServiceRequirement>(kReqs, 1);
 	}

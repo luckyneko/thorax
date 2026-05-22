@@ -48,7 +48,7 @@ remain useful as a reference for *why* things are shaped the way they are.
 - **`thx::Service<Derived>`** — CRTP base that auto-derives `id()` from the C++
   qualified type name. The convention plugins should use.
 - **`thx::ServiceManager`** — singleton registry; `std::shared_mutex` for
-  reader-parallel `get_service`; ref-counted entries, structured diagnostics on
+  reader-parallel `getService`; ref-counted entries, structured diagnostics on
   every state change.
 
 ### Milestone 3 — Memory Safety Across Shared Libraries
@@ -65,16 +65,16 @@ remain useful as a reference for *why* things are shaped the way they are.
 - **`thx::PluginHandle`** — RAII DSO wrapper (`dlopen`/`LoadLibraryEx`),
   resolves the C exports, ABI-version checks before any service is registered.
 - **`thx::PluginManager`** — `load`, `unload`, separated `discover` and
-  `discover_and_load`, canonical-path keyed so double-loads are no-ops.
+  `discoverAndLoad`, canonical-path keyed so double-loads are no-ops.
 
 ### Milestone 5 — Diagnostics & Debuggability
 
 - **`thx::ILogSink`** + structured `LogRecord` (level, source location, message),
-  pluggable via `set_log_sink`. Default sink writes to stderr.
+  pluggable via `setLogSink`. Default sink writes to stderr.
 - **`thx::Result<T, Error>`** — exception-free fallible return type used
   throughout the loader.
 - **`THX_LOG` / `THX_ASSERT`** — portable call-site capture macros.
-- **Introspection** — `ServiceManager::list_services`, `PluginManager::list_plugins`.
+- **Introspection** — `ServiceManager::listServices`, `PluginManager::listPlugins`.
 
 ### Milestone 6 — Composable Services
 
@@ -226,8 +226,8 @@ pushes its native handle onto a process-wide deferred-close queue. The queue
 is drained:
 - automatically at the start of `PluginManager::load()` (keeps long-running
   programs from accumulating mappings), and
-- on demand via the public `thx::collect_plugin_garbage()` (returns the
-  number of DSOs unmapped). `thx::pending_plugin_garbage()` exposes the
+- on demand via the public `thx::collectPluginGarbage()` (returns the
+  number of DSOs unmapped). `thx::pendingPluginGarbage()` exposes the
   current queue depth for diagnostics and tests.
 
 The queue itself is `std::vector<NativeHandle>` guarded by a `std::mutex`
@@ -237,7 +237,7 @@ other libraries).
 
 **Trade-offs (and how the contract handles them):**
 - A DSO stays mapped past the last apparent service reference, until the
-  next `load()` or explicit `collect_plugin_garbage()`. Memory footprint
+  next `load()` or explicit `collectPluginGarbage()`. Memory footprint
   grows in programs that unload many plugins without subsequent `load()`s.
   Mitigation: callers can drain explicitly.
 - A reload at the same path between `unload()` and the drain at the next
@@ -248,12 +248,12 @@ other libraries).
   because `load()` drains first. The header doc spells this out.
 
 **Tests:**
-- "service survives unload until collect_plugin_garbage" — load, take a
+- "service survives unload until collectPluginGarbage" — load, take a
   service, unload (then destroy the loader), call `ping()` afterwards,
   drop the service, then drain.
 - "load drains the deferred-close queue" — verifies the auto-drain
   contract.
-- The pre-existing `discover_and_load - loads real plugin from directory`
+- The pre-existing `discoverAndLoad - loads real plugin from directory`
   test now drains explicitly before `fs::remove_all` so the Windows file
   lock is released.
 
@@ -276,7 +276,7 @@ Once 9.1 lands, the macros become wrappers that produce a different result
 from the default-argument path (the macro stuffs `__FILE__`/`__LINE__`,
 the function-default uses `__builtin_FILE`/`__builtin_LINE`). Pick one — the
 default-arg path — and delete the macros. Call sites become `thx::log(level, msg)`
-and `thx::assert_that(cond, msg)`. Resolves N2 + P5.
+and `thx::assertThat(cond, msg)`. Resolves N2 + P5.
 
 #### 9.3 Plugin export macro consolidation
 
@@ -338,29 +338,29 @@ consistently.
   `ServiceID` with a minimum `Version`. `PluginManager` runs
   `Version::compatible(req.version, registered.version)` before allowing the
   load and emits a diagnostic that names both versions on rejection.
-  `ServiceInfo` (returned by `ServiceManager::list_services`) gained a
+  `ServiceInfo` (returned by `ServiceManager::listServices`) gained a
   `version` field so the loader can read the registered version without
   type-erasing through `IService`.
-- **`Result::map`, `value_or`** — non-void `Result` now exposes `map(f)` (which
+- **`Result::map`, `valueOr`** — non-void `Result` now exposes `map(f)` (which
   applies `f` to the contained value, propagating the error otherwise) and
-  `value_or(fallback)`. `THX_TRY` was deferred — call sites in the loader
+  `valueOr(fallback)`. `THX_TRY` was deferred — call sites in the loader
   remain a few `if (!r) return r;` lines, which is acceptable now that
-  `discover_and_load` no longer returns `Result`.
-- **`onConstruct` outside the lock** — `register_service` now uses a
+  `discoverAndLoad` no longer returns `Result`.
+- **`onConstruct` outside the lock** — `registerService` now uses a
   reservation pattern: phase 1 (under lock) inserts the ID into a
-  `reserved_` set; phase 2 (no lock) calls the factory and `onConstruct`;
+  `m_reserved` set; phase 2 (no lock) calls the factory and `onConstruct`;
   phase 3 (under lock) commits the entry or rolls back the reservation.
   The lock is held only across hash-map updates; concurrent registrations
   of the same ID still fail cleanly because they see the reservation.
 - **`discover()` sorts by filename** — `std::sort` on the result vector,
   so load order is reproducible across runs and platforms.
-- **`set_log_sink(nullptr)` silences logging** — passing `nullptr` now drops
-  records. The new `restore_default_log_sink()` brings back the built-in
+- **`setLogSink(nullptr)` silences logging** — passing `nullptr` now drops
+  records. The new `restoreDefaultLogSink()` brings back the built-in
   stderr sink. Callers that previously relied on `nullptr → reset` (mostly
-  the test fixture) updated to call `restore_default_log_sink()` directly.
+  the test fixture) updated to call `restoreDefaultLogSink()` directly.
 - **`StringView::cstrlen` → `char_traits::length`** — the hand-written
   `constexpr` loop is gone; `std::char_traits<char>::length` is used.
-- **`discover_and_load` returns `LoadSummary`** — `{ vector<string> loaded,
+- **`discoverAndLoad` returns `LoadSummary`** — `{ vector<string> loaded,
   vector<pair<string,Error>> failed }`. The function no longer returns
   `Result<void, Error>`; callers inspect the two vectors. Updated
   `examples/host/main.cpp` and the integration test.
@@ -369,7 +369,7 @@ consistently.
 - `mock_plugin_requires_newer` — DSO declaring `MockService >= 2.0.0`,
   exercising the version-aware required() rejection path with both version
   numbers in the diagnostic.
-- `restore_default_log_sink` — verifies switching from a captured sink back
+- `restoreDefaultLogSink` — verifies switching from a captured sink back
   to the default doesn't keep routing to the captured sink.
 
 ---
@@ -380,7 +380,7 @@ consistently.
   Milestone 8; once Plugin and Service are separated, "Plugin" describes the
   thing accurately. Renaming first would mean churning the public API twice.
 - **Templates-only `ServiceManager`.** The non-template
-  `register_service(ServiceID, Version, factory)` overload is the only path the
+  `registerService(ServiceID, Version, factory)` overload is the only path the
   plugin loader can call (it learns the ID at runtime from `IPlugin::onLoad`).
   Removing it would force the loader to bypass its own public API.
 
@@ -429,7 +429,7 @@ thorax/
 | Concern | Approach |
 |---|---|
 | Simple plugin interface | One C-linkage triple per DSO; `IPlugin` registers any number of services |
-| Memory safety | Allocate and free on the same side; deferred-dlclose keeps DSOs mapped past unload, drained on next load() or explicit collect_plugin_garbage() |
+| Memory safety | Allocate and free on the same side; deferred-dlclose keeps DSOs mapped past unload, drained on next load() or explicit collectPluginGarbage() |
 | Debuggability | Structured logging with source location; introspection API; assert-not-swallow |
 | Cross-platform ABI | C-linkage exports; ABI-stable parameter types; no STL types in virtual signatures |
 | User control | Discovery separated from loading; explicit load/unload; lifetime is automatic |

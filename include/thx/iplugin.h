@@ -32,7 +32,7 @@ namespace thx
 	//
 	// Lifetime: callers may hold shared_ptr<IService> handles past unload —
 	// PluginManager::unload defers the dlclose into a graveyard that's drained
-	// at the next load() or via thx::collect_plugin_garbage(). Don't drain
+	// at the next load() or via thx::collectPluginGarbage(). Don't drain
 	// while service references are still alive: their destructors live in
 	// plugin code and need the DSO mapped to run.
 	class IPlugin
@@ -67,19 +67,19 @@ namespace thx
 	// one service of type T in onLoad and unregisters it in onUnload.
 	//
 	// T must satisfy:
-	//   - inherits from thx::Service<T> (provides static_id() and id()/version())
-	//   - provides static constexpr Version static_version()
+	//   - inherits from thx::Service<T> (provides staticId() and id()/version())
+	//   - provides static constexpr Version staticVersion()
 	//   - is default-constructible
 	template <typename T>
 	class ServicePluginShim : public IPlugin
 	{
 	public:
-		StringView name() const override { return T::static_id().name(); }
-		Version    version() const override { return T::static_version(); }
+		StringView name() const override { return T::staticId().name(); }
+		Version    version() const override { return T::staticVersion(); }
 
 		bool onLoad(ServiceManager& sm) override
 		{
-			return sm.template register_service<T>([]() -> std::shared_ptr<IService>
+			return sm.template registerService<T>([]() -> std::shared_ptr<IService>
 			{
 				return std::make_shared<T>();
 			});
@@ -87,7 +87,7 @@ namespace thx
 
 		void onUnload(ServiceManager& sm) override
 		{
-			sm.template unregister_service<T>();
+			sm.template unregisterService<T>();
 		}
 	};
 

@@ -25,7 +25,7 @@ namespace
 
 struct TextReader : IFileReader
 {
-	bool can_read(const char* /*path*/) override { return true; }
+	bool canRead(const char* /*path*/) override { return true; }
 
 	int read(const char* path, char* buffer, int buffer_size) override
 	{
@@ -74,7 +74,7 @@ struct IOServiceImpl : IIOService
 
 		for (auto& r : live)
 		{
-			if (r->can_read(path))
+			if (r->canRead(path))
 			{
 				int result = r->read(path, buffer, buffer_size);
 				return (result < 0) ? -2 : result;
@@ -83,7 +83,7 @@ struct IOServiceImpl : IIOService
 		return -1; // no reader accepted
 	}
 
-	void add_reader(std::shared_ptr<IFileReader> reader) override
+	void addReader(std::shared_ptr<IFileReader> reader) override
 	{
 		if (!reader)
 			return;
@@ -91,7 +91,7 @@ struct IOServiceImpl : IIOService
 		m_readers.push_back(std::move(reader));
 	}
 
-	void remove_reader(IFileReader* key) override
+	void removeReader(IFileReader* key) override
 	{
 		std::lock_guard lock(m_mutex);
 		m_readers.erase(
@@ -104,7 +104,7 @@ struct IOServiceImpl : IIOService
 			m_readers.end());
 	}
 
-	std::shared_ptr<IFileReader> make_text_reader() override
+	std::shared_ptr<IFileReader> makeTextReader() override
 	{
 		return std::make_shared<TextReader>();
 	}

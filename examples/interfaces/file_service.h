@@ -16,7 +16,7 @@ namespace examples
 // Shared interface header â€” included by both the file plugin and the host.
 struct IFileService : thx::Service<IFileService>
 {
-	static constexpr thx::Version static_version()
+	static constexpr thx::Version staticVersion()
 	{
 		return thx::Version{1, 0, 0};
 	}

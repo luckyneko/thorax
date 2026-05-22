@@ -21,27 +21,27 @@ namespace thx
 	class Span
 	{
 	public:
-		constexpr Span() noexcept : data_(nullptr), size_(0) {}
+		constexpr Span() noexcept : m_data(nullptr), m_size(0) {}
 
-		constexpr Span(T* data, std::size_t size) noexcept : data_(data), size_(size) {}
+		constexpr Span(T* data, std::size_t size) noexcept : m_data(data), m_size(size) {}
 
 		template <std::size_t N>
-		constexpr Span(T (&arr)[N]) noexcept : data_(arr), size_(N)  // NOLINT(google-explicit-constructor)
+		constexpr Span(T (&arr)[N]) noexcept : m_data(arr), m_size(N)  // NOLINT(google-explicit-constructor)
 		{
 		}
 
-		constexpr T*          data() const noexcept { return data_; }
-		constexpr std::size_t size() const noexcept { return size_; }
-		constexpr bool        empty() const noexcept { return size_ == 0; }
+		constexpr T*          data() const noexcept { return m_data; }
+		constexpr std::size_t size() const noexcept { return m_size; }
+		constexpr bool        empty() const noexcept { return m_size == 0; }
 
-		constexpr T& operator[](std::size_t i) const noexcept { return data_[i]; }
+		constexpr T& operator[](std::size_t i) const noexcept { return m_data[i]; }
 
-		constexpr T* begin() const noexcept { return data_; }
-		constexpr T* end() const noexcept { return data_ + size_; }
+		constexpr T* begin() const noexcept { return m_data; }
+		constexpr T* end() const noexcept { return m_data + m_size; }
 
 	private:
-		T*           data_;
-		std::size_t  size_;
+		T*           m_data;
+		std::size_t  m_size;
 	};
 
 } // namespace thx

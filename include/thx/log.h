@@ -64,7 +64,7 @@ namespace thx
 		std::string    message;
 	};
 
-	// Implement this interface and call set_log_sink() to intercept all library
+	// Implement this interface and call setLogSink() to intercept all library
 	// diagnostics — including ServiceManager and PluginManager messages.
 	class ILogSink
 	{
@@ -76,12 +76,12 @@ namespace thx
 	// Replaces the process-wide log sink. Passing nullptr SILENCES logging:
 	// records are dropped on the floor. Thread-safe; the new sink takes effect
 	// for all subsequent log calls. To go back to the built-in stderr sink,
-	// call restore_default_log_sink().
-	void set_log_sink(std::shared_ptr<ILogSink> sink);
+	// call restoreDefaultLogSink().
+	void setLogSink(std::shared_ptr<ILogSink> sink);
 
 	// Restores the built-in stderr log sink. Equivalent to constructing a fresh
-	// instance of the default sink and passing it to set_log_sink(). Thread-safe.
-	void restore_default_log_sink();
+	// instance of the default sink and passing it to setLogSink(). Thread-safe.
+	void restoreDefaultLogSink();
 
 	// Emits a log record to the active sink.
 	// The source location is captured automatically at the call site on supported
@@ -93,7 +93,7 @@ namespace thx
 	// Logs message at Error level if condition is false.
 	// Debug builds also call std::abort(); Release builds only log.
 	// The condition is always evaluated — never silently swallowed.
-	inline void assert_that(bool               condition,
+	inline void assertThat(bool               condition,
 	                         std::string const& message,
 	                         SourceLocation     location = SourceLocation::current())
 	{

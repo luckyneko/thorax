@@ -11,8 +11,8 @@
 int main()
 {
     // Verify the service IDs are reachable as constexpr values.
-    constexpr auto logging_id = thx::plugins::logging::ILoggingService::static_id();
-    constexpr auto io_id      = thx::plugins::io::IIOService::static_id();
+    constexpr auto logging_id = thx::plugins::logging::ILoggingService::staticId();
+    constexpr auto io_id      = thx::plugins::io::IIOService::staticId();
 
     std::printf("logging service id: %s\n", logging_id.name());
     std::printf("io service id:      %s\n", io_id.name());

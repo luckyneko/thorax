@@ -22,8 +22,8 @@ namespace thx
 	{
 	public:
 		constexpr explicit ServiceID(const char* name) noexcept
-			: hash_(detail::fnv1a_hash(name))
-			, name_(name)
+			: m_hash(detail::fnv1a_hash(name))
+			, m_name(name)
 		{
 		}
 
@@ -35,8 +35,8 @@ namespace thx
 
 		constexpr bool operator==(ServiceID const& other) const noexcept
 		{
-			return hash_ == other.hash_ &&
-				   std::string_view(name_) == std::string_view(other.name_);
+			return m_hash == other.m_hash &&
+				   std::string_view(m_name) == std::string_view(other.m_name);
 		}
 
 		constexpr bool operator!=(ServiceID const& other) const noexcept
@@ -44,12 +44,12 @@ namespace thx
 			return !(*this == other);
 		}
 
-		constexpr uint64_t hash() const noexcept { return hash_; }
-		constexpr const char* name() const noexcept { return name_; }
+		constexpr uint64_t hash() const noexcept { return m_hash; }
+		constexpr const char* name() const noexcept { return m_name; }
 
 	private:
-		uint64_t hash_;
-		const char* name_;
+		uint64_t m_hash;
+		const char* m_name;
 	};
 
 } // namespace thx

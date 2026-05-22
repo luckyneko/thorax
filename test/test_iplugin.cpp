@@ -18,7 +18,7 @@ namespace
 
 	struct ShimTestService : thx::Service<ShimTestService>
 	{
-		static constexpr thx::Version static_version() { return thx::Version{1, 0, 0}; }
+		static constexpr thx::Version staticVersion() { return thx::Version{1, 0, 0}; }
 
 		bool m_constructed{false};
 		bool onConstruct() override
@@ -43,11 +43,11 @@ namespace
 	// in onUnload. Demonstrates the multi-service capability.
 	struct ServiceA : thx::Service<ServiceA>
 	{
-		static constexpr thx::Version static_version() { return thx::Version{1, 0, 0}; }
+		static constexpr thx::Version staticVersion() { return thx::Version{1, 0, 0}; }
 	};
 	struct ServiceB : thx::Service<ServiceB>
 	{
-		static constexpr thx::Version static_version() { return thx::Version{1, 0, 0}; }
+		static constexpr thx::Version staticVersion() { return thx::Version{1, 0, 0}; }
 	};
 
 	struct MultiServicePlugin : thx::IPlugin
@@ -57,15 +57,15 @@ namespace
 
 		bool onLoad(thx::ServiceManager& sm) override
 		{
-			bool ok_a = sm.register_service<ServiceA>([] { return std::make_shared<ServiceA>(); });
-			bool ok_b = sm.register_service<ServiceB>([] { return std::make_shared<ServiceB>(); });
+			bool ok_a = sm.registerService<ServiceA>([] { return std::make_shared<ServiceA>(); });
+			bool ok_b = sm.registerService<ServiceB>([] { return std::make_shared<ServiceB>(); });
 			return ok_a && ok_b;
 		}
 
 		void onUnload(thx::ServiceManager& sm) override
 		{
-			sm.unregister_service<ServiceB>();
-			sm.unregister_service<ServiceA>();
+			sm.unregisterService<ServiceB>();
+			sm.unregisterService<ServiceA>();
 		}
 	};
 
@@ -77,15 +77,15 @@ TEST_CASE("ServicePluginShim - registers and unregisters one service",
 	thx::ServiceManager sm;
 	thx::ServicePluginShim<ShimTestService> shim;
 
-	REQUIRE(sm.get_service<ShimTestService>() == nullptr);
+	REQUIRE(sm.getService<ShimTestService>() == nullptr);
 	REQUIRE(shim.onLoad(sm));
 
-	auto svc = sm.get_service<ShimTestService>();
+	auto svc = sm.getService<ShimTestService>();
 	REQUIRE(svc != nullptr);
 	REQUIRE(svc->m_constructed);
 
 	shim.onUnload(sm);
-	REQUIRE(sm.get_service<ShimTestService>() == nullptr);
+	REQUIRE(sm.getService<ShimTestService>() == nullptr);
 }
 
 TEST_CASE("ServicePluginShim - reports name and version from the service type",
@@ -95,7 +95,7 @@ TEST_CASE("ServicePluginShim - reports name and version from the service type",
 
 	// Compare via the underlying string content; the shim returns the name
 	// derived from the C++ qualified type name.
-	REQUIRE(thx::StringView(ShimTestService::static_id().name()) == shim.name());
+	REQUIRE(thx::StringView(ShimTestService::staticId().name()) == shim.name());
 	REQUIRE(shim.version() == thx::Version{1, 0, 0});
 }
 
@@ -114,12 +114,12 @@ TEST_CASE("IPlugin - custom plugin can register multiple services",
 	MultiServicePlugin plugin;
 
 	REQUIRE(plugin.onLoad(sm));
-	REQUIRE(sm.get_service<ServiceA>() != nullptr);
-	REQUIRE(sm.get_service<ServiceB>() != nullptr);
+	REQUIRE(sm.getService<ServiceA>() != nullptr);
+	REQUIRE(sm.getService<ServiceB>() != nullptr);
 
 	plugin.onUnload(sm);
-	REQUIRE(sm.get_service<ServiceA>() == nullptr);
-	REQUIRE(sm.get_service<ServiceB>() == nullptr);
+	REQUIRE(sm.getService<ServiceA>() == nullptr);
+	REQUIRE(sm.getService<ServiceB>() == nullptr);
 }
 
 TEST_CASE("IPlugin - onLoad returning false does not register anything",
@@ -138,5 +138,5 @@ TEST_CASE("IPlugin - onLoad returning false does not register anything",
 	BailingPlugin p;
 
 	REQUIRE_FALSE(p.onLoad(sm));
-	REQUIRE(sm.list_services().empty());
+	REQUIRE(sm.listServices().empty());
 }

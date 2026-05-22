@@ -30,7 +30,7 @@ public:
 	{
 		// Require MockService at 2.0.0; the registered MockService is only 1.0.0.
 		static const thx::ServiceRequirement kReqs[] = {
-			{ thx_mock::MockService::static_id(), thx::Version{2, 0, 0} }
+			{ thx_mock::MockService::staticId(), thx::Version{2, 0, 0} }
 		};
 		return thx::Span<const thx::ServiceRequirement>(kReqs, 1);
 	}

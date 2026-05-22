@@ -39,12 +39,12 @@ struct Fixture
 
 	std::shared_ptr<IIOService> service()
 	{
-		return sm.get_service<IIOService>();
+		return sm.getService<IIOService>();
 	}
 };
 
 // Write content to a temp file; return the path.
-std::string make_temp_file(const char* name, const char* content)
+std::string makeTempFile(const char* name, const char* content)
 {
 	namespace fs = std::filesystem;
 	auto path = (fs::temp_directory_path() / name).string();
@@ -57,11 +57,11 @@ std::string make_temp_file(const char* name, const char* content)
 struct SuffixReader : IFileReader
 {
 	std::string m_suffix;
-	int         m_read_count{0};
+	int         m_readCount{0};
 
 	explicit SuffixReader(std::string suffix) : m_suffix(std::move(suffix)) {}
 
-	bool can_read(const char* path) override
+	bool canRead(const char* path) override
 	{
 		if (!path)
 			return false;
@@ -74,7 +74,7 @@ struct SuffixReader : IFileReader
 	{
 		if (!path || !buffer || buffer_size <= 0)
 			return -1;
-		++m_read_count;
+		++m_readCount;
 		// Prepend a marker so tests can verify this reader was called.
 		const char* marker = "[suffix]";
 		int mlen = static_cast<int>(std::strlen(marker));
@@ -112,34 +112,34 @@ TEST_CASE("IOPlugin - read with no readers returns -1", "[io_plugin]")
 	auto svc = f.service();
 	REQUIRE(svc);
 
-	auto path = make_temp_file("thx_io_nordr.txt", "hello");
+	auto path = makeTempFile("thx_io_nordr.txt", "hello");
 	char buf[64]{};
 	REQUIRE(svc->read(path.c_str(), buf, static_cast<int>(sizeof(buf))) == -1);
 	std::filesystem::remove(path);
 }
 
 // ---------------------------------------------------------------------------
-// make_text_reader
+// makeTextReader
 // ---------------------------------------------------------------------------
 
-TEST_CASE("IOPlugin - make_text_reader returns non-null", "[io_plugin]")
+TEST_CASE("IOPlugin - makeTextReader returns non-null", "[io_plugin]")
 {
 	Fixture f;
 	auto svc = f.service();
 	REQUIRE(svc);
-	REQUIRE(svc->make_text_reader() != nullptr);
+	REQUIRE(svc->makeTextReader() != nullptr);
 }
 
 TEST_CASE("IOPlugin - text reader reads file content", "[io_plugin]")
 {
-	auto path = make_temp_file("thx_io_txt.txt", "hello world");
+	auto path = makeTempFile("thx_io_txt.txt", "hello world");
 
 	Fixture f;
 	auto svc = f.service();
 	REQUIRE(svc);
 
-	auto txt = svc->make_text_reader();
-	svc->add_reader(txt);
+	auto txt = svc->makeTextReader();
+	svc->addReader(txt);
 
 	char buf[64]{};
 	int  n = svc->read(path.c_str(), buf, static_cast<int>(sizeof(buf)));
@@ -151,22 +151,22 @@ TEST_CASE("IOPlugin - text reader reads file content", "[io_plugin]")
 }
 
 // ---------------------------------------------------------------------------
-// add_reader / remove_reader
+// addReader / removeReader
 // ---------------------------------------------------------------------------
 
-TEST_CASE("IOPlugin - remove_reader stops delivery", "[io_plugin]")
+TEST_CASE("IOPlugin - removeReader stops delivery", "[io_plugin]")
 {
-	auto path = make_temp_file("thx_io_rm.txt", "data");
+	auto path = makeTempFile("thx_io_rm.txt", "data");
 
 	Fixture f;
 	auto svc = f.service();
 	REQUIRE(svc);
 
-	auto txt = svc->make_text_reader();
-	svc->add_reader(txt);
+	auto txt = svc->makeTextReader();
+	svc->addReader(txt);
 	REQUIRE(svc->read(path.c_str(), nullptr, 0) == -2); // reader accepted but read failed
 
-	svc->remove_reader(txt.get());
+	svc->removeReader(txt.get());
 
 	char buf[64]{};
 	REQUIRE(svc->read(path.c_str(), buf, static_cast<int>(sizeof(buf))) == -1);
@@ -176,15 +176,15 @@ TEST_CASE("IOPlugin - remove_reader stops delivery", "[io_plugin]")
 
 TEST_CASE("IOPlugin - expired reader is culled automatically", "[io_plugin]")
 {
-	auto path = make_temp_file("thx_io_exp.txt", "data");
+	auto path = makeTempFile("thx_io_exp.txt", "data");
 
 	Fixture f;
 	auto svc = f.service();
 	REQUIRE(svc);
 
 	{
-		auto txt = svc->make_text_reader();
-		svc->add_reader(txt);
+		auto txt = svc->makeTextReader();
+		svc->addReader(txt);
 	} // txt released — weak_ptr expires
 
 	char buf[64]{};
@@ -200,7 +200,7 @@ TEST_CASE("IOPlugin - null reader is ignored", "[io_plugin]")
 	auto svc = f.service();
 	REQUIRE(svc);
 
-	REQUIRE_NOTHROW(svc->add_reader(nullptr));
+	REQUIRE_NOTHROW(svc->addReader(nullptr));
 
 	char buf[64]{};
 	REQUIRE(svc->read("any.txt", buf, static_cast<int>(sizeof(buf))) == -1);
@@ -217,8 +217,8 @@ TEST_CASE("IOPlugin - specific reader takes priority over text reader", "[io_plu
 {
 	namespace fs = std::filesystem;
 
-	auto json_path = make_temp_file("thx_io_dispatch.json", "{}");
-	auto txt_path  = make_temp_file("thx_io_dispatch.txt",  "plain");
+	auto json_path = makeTempFile("thx_io_dispatch.json", "{}");
+	auto txt_path  = makeTempFile("thx_io_dispatch.txt",  "plain");
 
 	Fixture f;
 	auto svc = f.service();
@@ -227,9 +227,9 @@ TEST_CASE("IOPlugin - specific reader takes priority over text reader", "[io_plu
 	// Register specific reader first, then the generic fallback.
 	// Both shared_ptrs must be kept alive; the service only holds weak_ptrs.
 	auto json_reader = std::make_shared<SuffixReader>(".json");
-	auto txt_reader  = svc->make_text_reader();
-	svc->add_reader(json_reader);
-	svc->add_reader(txt_reader);
+	auto txt_reader  = svc->makeTextReader();
+	svc->addReader(json_reader);
+	svc->addReader(txt_reader);
 
 	char buf[128]{};
 
@@ -237,14 +237,14 @@ TEST_CASE("IOPlugin - specific reader takes priority over text reader", "[io_plu
 	int n_json = svc->read(json_path.c_str(), buf, static_cast<int>(sizeof(buf)));
 	REQUIRE(n_json > 0);
 	REQUIRE(std::string(buf, 8) == "[suffix]"); // marker written by SuffixReader
-	REQUIRE(json_reader->m_read_count == 1);
+	REQUIRE(json_reader->m_readCount == 1);
 
 	// .txt file → TextReader (no marker)
 	std::memset(buf, 0, sizeof(buf));
 	int n_txt = svc->read(txt_path.c_str(), buf, static_cast<int>(sizeof(buf)));
 	REQUIRE(n_txt > 0);
 	REQUIRE(std::string(buf, static_cast<std::size_t>(n_txt)) == "plain");
-	REQUIRE(json_reader->m_read_count == 1); // json reader not called for .txt
+	REQUIRE(json_reader->m_readCount == 1); // json reader not called for .txt
 
 	fs::remove(json_path);
 	fs::remove(txt_path);
@@ -253,7 +253,7 @@ TEST_CASE("IOPlugin - specific reader takes priority over text reader", "[io_plu
 TEST_CASE("IOPlugin - unregistered extension falls through to text reader",
           "[io_plugin]")
 {
-	auto path = make_temp_file("thx_io_fallthru.bin", "binary");
+	auto path = makeTempFile("thx_io_fallthru.bin", "binary");
 
 	Fixture f;
 	auto svc = f.service();
@@ -262,9 +262,9 @@ TEST_CASE("IOPlugin - unregistered extension falls through to text reader",
 	// Only add a .json-specific reader + generic fallback.
 	// Both shared_ptrs must be kept alive; the service only holds weak_ptrs.
 	auto json_reader = std::make_shared<SuffixReader>(".json");
-	auto txt_reader  = svc->make_text_reader();
-	svc->add_reader(json_reader);
-	svc->add_reader(txt_reader);
+	auto txt_reader  = svc->makeTextReader();
+	svc->addReader(json_reader);
+	svc->addReader(txt_reader);
 
 	char buf[64]{};
 	int n = svc->read(path.c_str(), buf, static_cast<int>(sizeof(buf)));
@@ -277,7 +277,7 @@ TEST_CASE("IOPlugin - unregistered extension falls through to text reader",
 TEST_CASE("IOPlugin - -1 means no reader, -2 means reader accepted but failed",
           "[io_plugin]")
 {
-	auto path = make_temp_file("thx_io_errcode.txt", "data");
+	auto path = makeTempFile("thx_io_errcode.txt", "data");
 
 	Fixture f;
 	auto svc = f.service();
@@ -288,8 +288,8 @@ TEST_CASE("IOPlugin - -1 means no reader, -2 means reader accepted but failed",
 	// No reader registered → -1
 	REQUIRE(svc->read(path.c_str(), buf, static_cast<int>(sizeof(buf))) == -1);
 
-	auto txt = svc->make_text_reader();
-	svc->add_reader(txt);
+	auto txt = svc->makeTextReader();
+	svc->addReader(txt);
 
 	// Reader registered, null buffer forces the reader's internal check to fail → -2
 	REQUIRE(svc->read(path.c_str(), nullptr, 0) == -2);
@@ -303,7 +303,7 @@ TEST_CASE("IOPlugin - -1 means no reader, -2 means reader accepted but failed",
 TEST_CASE("IOPlugin - reader removed at plugin scope still evicted correctly",
           "[io_plugin]")
 {
-	auto path = make_temp_file("thx_io_scope.txt", "data");
+	auto path = makeTempFile("thx_io_scope.txt", "data");
 
 	Fixture f;
 	auto svc = f.service();
@@ -312,7 +312,7 @@ TEST_CASE("IOPlugin - reader removed at plugin scope still evicted correctly",
 	// Simulate a plugin registering, then being unloaded (shared_ptr dropped).
 	{
 		auto reader = std::make_shared<SuffixReader>(".txt");
-		svc->add_reader(reader);
+		svc->addReader(reader);
 		char buf[64]{};
 		int n = svc->read(path.c_str(), buf, static_cast<int>(sizeof(buf)));
 		REQUIRE(n > 0);

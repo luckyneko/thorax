@@ -26,11 +26,11 @@ namespace
 
 #if defined(_WIN32)
 	using NativeHandle = HMODULE;
-	NativeHandle native_open(const char* path)  { return LoadLibraryExA(path, nullptr, 0); }
-	void         native_close(NativeHandle h)   { FreeLibrary(h); }
-	void*        native_sym(NativeHandle h, const char* n)
+	NativeHandle nativeOpen(const char* path)  { return LoadLibraryExA(path, nullptr, 0); }
+	void         nativeClose(NativeHandle h)   { FreeLibrary(h); }
+	void*        nativeSym(NativeHandle h, const char* n)
 	                                            { return reinterpret_cast<void*>(GetProcAddress(h, n)); }
-	std::string  native_error(NativeHandle)
+	std::string  nativeError(NativeHandle)
 	{
 		char buf[256] = {};
 		FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
@@ -39,11 +39,11 @@ namespace
 	}
 #else
 	using NativeHandle = void*;
-	NativeHandle native_open(const char* path)  { return dlopen(path, RTLD_LAZY | RTLD_LOCAL); }
-	void         native_close(NativeHandle h)   { dlclose(h); }
-	void*        native_sym(NativeHandle h, const char* n)
+	NativeHandle nativeOpen(const char* path)  { return dlopen(path, RTLD_LAZY | RTLD_LOCAL); }
+	void         nativeClose(NativeHandle h)   { dlclose(h); }
+	void*        nativeSym(NativeHandle h, const char* n)
 	                                            { return dlsym(h, n); }
-	std::string  native_error(NativeHandle)
+	std::string  nativeError(NativeHandle)
 	{
 		const char* msg = dlerror();
 		return msg ? std::string(msg) : std::string{};
@@ -54,14 +54,14 @@ namespace
 
 void PluginHandle::close() noexcept
 {
-	if (!handle_)
+	if (!m_handle)
 		return;
 	// Hand the native handle to PluginGarbage rather than unmapping immediately;
 	// see plugin_garbage.h for the lifetime contract.
-	PluginGarbage::instance().schedule(handle_);
-	handle_      = nullptr;
-	create_fn_   = nullptr;
-	destroy_fn_  = nullptr;
+	PluginGarbage::instance().schedule(m_handle);
+	m_handle      = nullptr;
+	m_createFn   = nullptr;
+	m_destroyFn  = nullptr;
 }
 
 PluginHandle::~PluginHandle()
@@ -70,14 +70,14 @@ PluginHandle::~PluginHandle()
 }
 
 PluginHandle::PluginHandle(PluginHandle&& other) noexcept
-	: handle_(other.handle_)
-	, path_(std::move(other.path_))
-	, create_fn_(other.create_fn_)
-	, destroy_fn_(other.destroy_fn_)
+	: m_handle(other.m_handle)
+	, m_path(std::move(other.m_path))
+	, m_createFn(other.m_createFn)
+	, m_destroyFn(other.m_destroyFn)
 {
-	other.handle_     = nullptr;
-	other.create_fn_  = nullptr;
-	other.destroy_fn_ = nullptr;
+	other.m_handle     = nullptr;
+	other.m_createFn  = nullptr;
+	other.m_destroyFn = nullptr;
 }
 
 PluginHandle& PluginHandle::operator=(PluginHandle&& other) noexcept
@@ -85,59 +85,59 @@ PluginHandle& PluginHandle::operator=(PluginHandle&& other) noexcept
 	if (this != &other)
 	{
 		close();
-		handle_      = other.handle_;
-		path_        = std::move(other.path_);
-		create_fn_   = other.create_fn_;
-		destroy_fn_  = other.destroy_fn_;
-		other.handle_     = nullptr;
-		other.create_fn_  = nullptr;
-		other.destroy_fn_ = nullptr;
+		m_handle      = other.m_handle;
+		m_path        = std::move(other.m_path);
+		m_createFn   = other.m_createFn;
+		m_destroyFn  = other.m_destroyFn;
+		other.m_handle     = nullptr;
+		other.m_createFn  = nullptr;
+		other.m_destroyFn = nullptr;
 	}
 	return *this;
 }
 
 Result<PluginHandle, Error> PluginHandle::open(std::string const& path)
 {
-	NativeHandle h = native_open(path.c_str());
+	NativeHandle h = nativeOpen(path.c_str());
 	if (!h)
 	{
-		auto msg = native_error(h);
+		auto msg = nativeError(h);
 		return Result<PluginHandle, Error>::err({ErrorCode::FileNotFound,
 			msg.empty() ? path : msg});
 	}
 
 	// Casting void* to function pointer is implementation-defined but universally
 	// supported and the only portable way to use dlsym in C++.
-	auto create_v   = reinterpret_cast<PluginCreateFn> (native_sym(h, "thx_create_plugin"));
-	auto destroy_v  = reinterpret_cast<PluginDestroyFn>(native_sym(h, "thx_destroy_plugin"));
-	auto abi_ver_fn = reinterpret_cast<AbiVersionFn>   (native_sym(h, "thx_abi_version"));
+	auto createV   = reinterpret_cast<PluginCreateFn> (nativeSym(h, "thx_create_plugin"));
+	auto destroyV  = reinterpret_cast<PluginDestroyFn>(nativeSym(h, "thx_destroy_plugin"));
+	auto abiVerFn = reinterpret_cast<AbiVersionFn>   (nativeSym(h, "thx_abi_version"));
 
-	if (!create_v || !destroy_v || !abi_ver_fn)
+	if (!createV || !destroyV || !abiVerFn)
 	{
-		native_close(h);
+		nativeClose(h);
 		return Result<PluginHandle, Error>::err({ErrorCode::SymbolNotFound,
 			"thx_create_plugin, thx_destroy_plugin, or thx_abi_version not found in: " + path});
 	}
 
 	{
-		Version plugin_v(abi_ver_fn());
-		if (!Version::compatible(plugin_v, THORAX_VERSION))
+		Version pluginV(abiVerFn());
+		if (!Version::compatible(pluginV, THORAX_VERSION))
 		{
 			std::string msg = "Plugin built against thorax "
-			    + to_string(plugin_v)
+			    + toString(pluginV)
 			    + " is not compatible with host "
-			    + to_string(THORAX_VERSION)
+			    + toString(THORAX_VERSION)
 			    + ": " + path;
-			native_close(h);
+			nativeClose(h);
 			return Result<PluginHandle, Error>::err({ErrorCode::VersionMismatch, std::move(msg)});
 		}
 	}
 
 	PluginHandle handle;
-	handle.handle_     = h;
-	handle.path_       = path;
-	handle.create_fn_  = create_v;
-	handle.destroy_fn_ = destroy_v;
+	handle.m_handle     = h;
+	handle.m_path       = path;
+	handle.m_createFn  = createV;
+	handle.m_destroyFn = destroyV;
 	return Result<PluginHandle, Error>::ok(std::move(handle));
 }
 

@@ -30,14 +30,14 @@ struct CapturingSink : thx::ILogSink
 
 	void write(thx::LogRecord const& r) override { records.push_back(r); }
 
-	bool has_level(thx::LogLevel lvl) const
+	bool hasLevel(thx::LogLevel lvl) const
 	{
 		for (auto const& r : records)
 			if (r.level == lvl) return true;
 		return false;
 	}
 
-	bool has_message_containing(std::string const& substr) const
+	bool hasMessageContaining(std::string const& substr) const
 	{
 		for (auto const& r : records)
 			if (r.message.find(substr) != std::string::npos) return true;
@@ -50,13 +50,13 @@ struct SinkGuard
 {
 	std::shared_ptr<CapturingSink> sink = std::make_shared<CapturingSink>();
 
-	SinkGuard()  { thx::set_log_sink(sink); }
-	~SinkGuard() { thx::restore_default_log_sink(); }
+	SinkGuard()  { thx::setLogSink(sink); }
+	~SinkGuard() { thx::restoreDefaultLogSink(); }
 
 	std::vector<thx::LogRecord> const& records() const { return sink->records; }
 
-	bool has_level(thx::LogLevel lvl) const { return sink->has_level(lvl); }
-	bool has_message_containing(std::string const& s) const { return sink->has_message_containing(s); }
+	bool hasLevel(thx::LogLevel lvl) const { return sink->hasLevel(lvl); }
+	bool hasMessageContaining(std::string const& s) const { return sink->hasMessageContaining(s); }
 };
 
 // Minimal concrete IService for unit tests that don't need a real plugin.
@@ -113,39 +113,39 @@ TEST_CASE("log - captures call-site source location", "[log]")
 	REQUIRE(std::string(loc.function).size() > 0);
 }
 
-TEST_CASE("set_log_sink - nullptr silences logging", "[log]")
+TEST_CASE("setLogSink - nullptr silences logging", "[log]")
 {
-	thx::set_log_sink(nullptr);
+	thx::setLogSink(nullptr);
 	// No crash, no output anywhere â€” the call simply drops.
 	thx::log(thx::LogLevel::Info, "this goes nowhere");
-	thx::restore_default_log_sink();
+	thx::restoreDefaultLogSink();
 }
 
-TEST_CASE("restore_default_log_sink - resumes stderr sink without crashing", "[log]")
+TEST_CASE("restoreDefaultLogSink - resumes stderr sink without crashing", "[log]")
 {
 	auto sink = std::make_shared<CapturingSink>();
-	thx::set_log_sink(sink);
+	thx::setLogSink(sink);
 	thx::log(thx::LogLevel::Info, "captured");
 	REQUIRE(sink->records.size() == 1);
 
-	thx::restore_default_log_sink();
+	thx::restoreDefaultLogSink();
 	// Subsequent log goes to stderr (the default), not the captured sink.
 	thx::log(thx::LogLevel::Info, "default again");
 	REQUIRE(sink->records.size() == 1);
 }
 
-TEST_CASE("set_log_sink - replacing sink mid-stream", "[log]")
+TEST_CASE("setLogSink - replacing sink mid-stream", "[log]")
 {
 	auto sink1 = std::make_shared<CapturingSink>();
 	auto sink2 = std::make_shared<CapturingSink>();
 
-	thx::set_log_sink(sink1);
+	thx::setLogSink(sink1);
 	thx::log(thx::LogLevel::Info, "to sink1");
 
-	thx::set_log_sink(sink2);
+	thx::setLogSink(sink2);
 	thx::log(thx::LogLevel::Info, "to sink2");
 
-	thx::restore_default_log_sink();
+	thx::restoreDefaultLogSink();
 
 	REQUIRE(sink1->records.size() == 1);
 	REQUIRE(sink2->records.size() == 1);
@@ -154,32 +154,32 @@ TEST_CASE("set_log_sink - replacing sink mid-stream", "[log]")
 }
 
 // ---------------------------------------------------------------------------
-// assert_that
+// assertThat
 // ---------------------------------------------------------------------------
 
-TEST_CASE("assert_that - true condition does not log", "[assert]")
+TEST_CASE("assertThat - true condition does not log", "[assert]")
 {
 	SinkGuard g;
-	thx::assert_that(true, "should not appear");
+	thx::assertThat(true, "should not appear");
 	REQUIRE(g.records().empty());
 }
 
 #if defined(NDEBUG)
-TEST_CASE("assert_that - false condition logs Error in release build", "[assert]")
+TEST_CASE("assertThat - false condition logs Error in release build", "[assert]")
 {
 	SinkGuard g;
-	thx::assert_that(false, "intentional failure");
+	thx::assertThat(false, "intentional failure");
 
 	REQUIRE(g.records().size() == 1);
 	REQUIRE(g.records()[0].level   == thx::LogLevel::Error);
 	REQUIRE(g.records()[0].message == "intentional failure");
 }
 
-TEST_CASE("assert_that - captures source location on failure", "[assert]")
+TEST_CASE("assertThat - captures source location on failure", "[assert]")
 {
 	SinkGuard g;
 	int expected_line = __LINE__ + 1;
-	thx::assert_that(false, "location check");
+	thx::assertThat(false, "location check");
 
 	REQUIRE(!g.records().empty());
 	REQUIRE(g.records()[0].location.line == expected_line);
@@ -195,9 +195,9 @@ TEST_CASE("ServiceManager - null factory logs Error", "[log][service_manager]")
 	SinkGuard g;
 	thx::ServiceManager sm;
 
-	sm.register_service(thx::ServiceID("test.Null"), thx::Version{1, 0, 0}, nullptr);
+	sm.registerService(thx::ServiceID("test.Null"), thx::Version{1, 0, 0}, nullptr);
 
-	REQUIRE(g.has_level(thx::LogLevel::Error));
+	REQUIRE(g.hasLevel(thx::LogLevel::Error));
 }
 
 TEST_CASE("ServiceManager - incompatible major version logs Warn", "[log][service_manager]")
@@ -205,11 +205,11 @@ TEST_CASE("ServiceManager - incompatible major version logs Warn", "[log][servic
 	SinkGuard g;
 	thx::ServiceManager sm;
 
-	sm.register_service(thx::ServiceID("test.Minimal"), thx::Version{1, 0, 0}, make_minimal);
+	sm.registerService(thx::ServiceID("test.Minimal"), thx::Version{1, 0, 0}, make_minimal);
 	// Attempt to register same ID at major version 2 â€” incompatible.
-	sm.register_service(thx::ServiceID("test.Minimal"), thx::Version{2, 0, 0}, make_minimal);
+	sm.registerService(thx::ServiceID("test.Minimal"), thx::Version{2, 0, 0}, make_minimal);
 
-	REQUIRE(g.has_level(thx::LogLevel::Warn));
+	REQUIRE(g.hasLevel(thx::LogLevel::Warn));
 }
 
 TEST_CASE("ServiceManager - unregister unknown ID logs Warn", "[log][service_manager]")
@@ -217,40 +217,40 @@ TEST_CASE("ServiceManager - unregister unknown ID logs Warn", "[log][service_man
 	SinkGuard g;
 	thx::ServiceManager sm;
 
-	sm.unregister_service(thx::ServiceID("test.Unknown"));
+	sm.unregisterService(thx::ServiceID("test.Unknown"));
 
-	REQUIRE(g.has_level(thx::LogLevel::Warn));
+	REQUIRE(g.hasLevel(thx::LogLevel::Warn));
 }
 
 TEST_CASE("ServiceManager - errors route to installed sink", "[log][service_manager]")
 {
 	auto sink = std::make_shared<CapturingSink>();
-	thx::set_log_sink(sink);
+	thx::setLogSink(sink);
 
 	thx::ServiceManager sm;
-	sm.register_service(thx::ServiceID("test.Static"), thx::Version{1, 0, 0}, nullptr);
+	sm.registerService(thx::ServiceID("test.Static"), thx::Version{1, 0, 0}, nullptr);
 
-	thx::restore_default_log_sink();
+	thx::restoreDefaultLogSink();
 
-	REQUIRE(sink->has_level(thx::LogLevel::Error));
+	REQUIRE(sink->hasLevel(thx::LogLevel::Error));
 }
 
 // ---------------------------------------------------------------------------
-// ServiceManager::list_services
+// ServiceManager::listServices
 // ---------------------------------------------------------------------------
 
-TEST_CASE("ServiceManager::list_services - empty initially", "[introspection]")
+TEST_CASE("ServiceManager::listServices - empty initially", "[introspection]")
 {
 	thx::ServiceManager sm;
-	REQUIRE(sm.list_services().empty());
+	REQUIRE(sm.listServices().empty());
 }
 
-TEST_CASE("ServiceManager::list_services - returns registered entry", "[introspection]")
+TEST_CASE("ServiceManager::listServices - returns registered entry", "[introspection]")
 {
 	thx::ServiceManager sm;
-	sm.register_service(thx::ServiceID("test.Minimal"), thx::Version{1, 0, 0}, make_minimal);
+	sm.registerService(thx::ServiceID("test.Minimal"), thx::Version{1, 0, 0}, make_minimal);
 
-	auto svcs = sm.list_services();
+	auto svcs = sm.listServices();
 	REQUIRE(svcs.size() == 1);
 	REQUIRE(svcs[0].id == thx::ServiceID("test.Minimal"));
 }
@@ -259,64 +259,64 @@ TEST_CASE("ServiceManager - duplicate registration is rejected",
           "[introspection]")
 {
 	thx::ServiceManager sm;
-	REQUIRE(sm.register_service(thx::ServiceID("test.Minimal"),
+	REQUIRE(sm.registerService(thx::ServiceID("test.Minimal"),
 	                            thx::Version{1, 0, 0}, make_minimal));
-	REQUIRE_FALSE(sm.register_service(thx::ServiceID("test.Minimal"),
+	REQUIRE_FALSE(sm.registerService(thx::ServiceID("test.Minimal"),
 	                                  thx::Version{1, 0, 0}, make_minimal));
-	REQUIRE(sm.list_services().size() == 1);
+	REQUIRE(sm.listServices().size() == 1);
 }
 
-TEST_CASE("ServiceManager::list_services - entry removed after unregister",
+TEST_CASE("ServiceManager::listServices - entry removed after unregister",
           "[introspection]")
 {
 	thx::ServiceManager sm;
-	sm.register_service(thx::ServiceID("test.Minimal"), thx::Version{1, 0, 0}, make_minimal);
-	sm.unregister_service(thx::ServiceID("test.Minimal"));
+	sm.registerService(thx::ServiceID("test.Minimal"), thx::Version{1, 0, 0}, make_minimal);
+	sm.unregisterService(thx::ServiceID("test.Minimal"));
 
-	REQUIRE(sm.list_services().empty());
+	REQUIRE(sm.listServices().empty());
 }
 
-TEST_CASE("ServiceManager::list_services - multiple independent services",
+TEST_CASE("ServiceManager::listServices - multiple independent services",
           "[introspection]")
 {
 	thx::ServiceManager sm;
-	sm.register_service(thx::ServiceID("test.A"), thx::Version{1, 0, 0}, make_minimal);
-	sm.register_service(thx::ServiceID("test.B"), thx::Version{1, 0, 0}, make_minimal);
+	sm.registerService(thx::ServiceID("test.A"), thx::Version{1, 0, 0}, make_minimal);
+	sm.registerService(thx::ServiceID("test.B"), thx::Version{1, 0, 0}, make_minimal);
 
-	REQUIRE(sm.list_services().size() == 2);
+	REQUIRE(sm.listServices().size() == 2);
 }
 
 // ---------------------------------------------------------------------------
-// PluginManager::list_plugins
+// PluginManager::listPlugins
 // ---------------------------------------------------------------------------
 
-TEST_CASE("PluginManager::list_plugins - empty before load", "[introspection]")
+TEST_CASE("PluginManager::listPlugins - empty before load", "[introspection]")
 {
 	thx::ServiceManager sm;
 	thx::PluginManager   loader(sm);
 
-	REQUIRE(loader.list_plugins().empty());
+	REQUIRE(loader.listPlugins().empty());
 }
 
-TEST_CASE("PluginManager::list_plugins - entry present after load", "[introspection]")
+TEST_CASE("PluginManager::listPlugins - entry present after load", "[introspection]")
 {
 	thx::ServiceManager sm;
 	thx::PluginManager   loader(sm);
 	loader.load(THX_MOCK_PLUGIN_PATH);
 
-	auto plugins = loader.list_plugins();
+	auto plugins = loader.listPlugins();
 	REQUIRE(plugins.size() == 1);
-	REQUIRE(!plugins[0].plugin_name.empty());
+	REQUIRE(!plugins[0].pluginName.empty());
 	REQUIRE(plugins[0].services.size() == 1);
-	REQUIRE(plugins[0].services[0] == thx_mock::MockService::static_id());
+	REQUIRE(plugins[0].services[0] == thx_mock::MockService::staticId());
 }
 
-TEST_CASE("PluginManager::list_plugins - empty after unload", "[introspection]")
+TEST_CASE("PluginManager::listPlugins - empty after unload", "[introspection]")
 {
 	thx::ServiceManager sm;
 	thx::PluginManager   loader(sm);
 	loader.load(THX_MOCK_PLUGIN_PATH);
 	loader.unload(THX_MOCK_PLUGIN_PATH);
 
-	REQUIRE(loader.list_plugins().empty());
+	REQUIRE(loader.listPlugins().empty());
 }

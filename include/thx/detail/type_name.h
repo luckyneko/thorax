@@ -23,18 +23,18 @@ namespace thx
 		// has static storage duration.
 		//
 		// Examples (after extraction):
-		//   extract_type_name<thx::io::FileService>() -> "thx::io::FileService"
-		//   extract_type_name<int>()                   -> "int"
+		//   extractTypeName<thx::io::FileService>() -> "thx::io::FileService"
+		//   extractTypeName<int>()                   -> "int"
 		template <typename T>
-		constexpr std::string_view extract_type_name() noexcept
+		constexpr std::string_view extractTypeName() noexcept
 		{
 #if defined(_MSC_VER) && !defined(__clang__)
 			// __FUNCSIG__ example:
-			//   "... __cdecl thx::detail::extract_type_name<class thx::io::FileService>(void)"
-			// Strategy: find "extract_type_name<" then match angle brackets to
+			//   "... __cdecl thx::detail::extractTypeName<class thx::io::FileService>(void)"
+			// Strategy: find "extractTypeName<" then match angle brackets to
 			// locate the closing '>'.
 			std::string_view fn{__FUNCSIG__};
-			constexpr std::string_view marker = "extract_type_name<";
+			constexpr std::string_view marker = "extractTypeName<";
 			auto mpos = fn.find(marker);
 			// Defensive: if a future MSVC ever stops emitting the marker, return
 			// an empty string_view rather than walking off the end. Empty names
@@ -91,7 +91,7 @@ namespace thx
 
 		// Returns the number of characters in `name` after replacing each "::"
 		// with a single '.'.
-		constexpr std::size_t dotted_length(std::string_view name) noexcept
+		constexpr std::size_t dottedLength(std::string_view name) noexcept
 		{
 			std::size_t len = 0, i = 0;
 			while (i < name.size())
@@ -111,9 +111,9 @@ namespace thx
 		}
 
 		// Returns a null-terminated char array containing `name` with every "::"
-		// replaced by '.'. Template parameter N must equal dotted_length(name).
+		// replaced by '.'. Template parameter N must equal dottedLength(name).
 		template <std::size_t N>
-		constexpr std::array<char, N + 1> make_dotted(std::string_view name) noexcept
+		constexpr std::array<char, N + 1> makeDotted(std::string_view name) noexcept
 		{
 			std::array<char, N + 1> result{};
 			std::size_t j = 0, i = 0;
@@ -141,9 +141,9 @@ namespace thx
 		template <typename T>
 		struct TypeName
 		{
-			static constexpr std::string_view raw = extract_type_name<T>();
-			static constexpr std::size_t len = dotted_length(raw);
-			static constexpr auto value = make_dotted<len>(raw);
+			static constexpr std::string_view raw = extractTypeName<T>();
+			static constexpr std::size_t len = dottedLength(raw);
+			static constexpr auto value = makeDotted<len>(raw);
 		};
 
 	} // namespace detail
