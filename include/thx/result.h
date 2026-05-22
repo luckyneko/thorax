@@ -16,7 +16,7 @@
 
 namespace thx
 {
-	// Error codes used by PluginLoader and other library operations.
+	// Error codes used by PluginManager and other library operations.
 	enum class ErrorCode
 	{
 		Unknown = 0,

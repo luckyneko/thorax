@@ -6,7 +6,8 @@
  *  (See accompanying file LICENSE.md)
  */
 
-#include "thx/plugin_loader.h"
+#include "thx/plugin_manager.h"
+#include "thx/plugin_garbage.h"
 #include "thx/to_string.h"
 #include "thx/platform.h"
 
@@ -17,25 +18,7 @@
 namespace thx
 {
 
-namespace detail
-{
-	// Defined in plugin_handle.cpp alongside the graveyard storage.
-	std::size_t drain_dso_graveyard() noexcept;
-	std::size_t pending_dso_graveyard() noexcept;
-} // namespace detail
-
-std::size_t collect_plugin_garbage() noexcept
-{
-	return detail::drain_dso_graveyard();
-}
-
-std::size_t pending_plugin_garbage() noexcept
-{
-	return detail::pending_dso_graveyard();
-}
-
-
-PluginLoader::PluginLoader(ServiceManager& sm) : sm_(sm) {}
+PluginManager::PluginManager(ServiceManager& sm) : sm_(sm) {}
 
 // --- OpenedPlugin ----------------------------------------------------------
 
@@ -88,7 +71,7 @@ namespace
 			if (sm.get_service<IService>(id))
 			{
 				thx::log(LogLevel::Warn,
-				    std::string("PluginLoader: plugin '") + plugin_name
+				    std::string("PluginManager: plugin '") + plugin_name
 				    + "' left service '" + id.name()
 				    + "' registered after onUnload; force-unregistering");
 				sm.unregister_service(id);
@@ -97,7 +80,7 @@ namespace
 	}
 } // namespace
 
-PluginLoader::~PluginLoader()
+PluginManager::~PluginManager()
 {
 	for (auto& [path, entry] : plugins_)
 	{
@@ -111,14 +94,14 @@ PluginLoader::~PluginLoader()
 	plugins_.clear();
 }
 
-std::string PluginLoader::resolve_canonical(std::string const& path)
+std::string PluginManager::resolve_canonical(std::string const& path)
 {
 	std::error_code ec;
 	auto c = std::filesystem::canonical(path, ec);
 	return ec ? std::string{} : c.string();
 }
 
-Result<void, Error> PluginLoader::check_requirements(ServiceManager const&          sm,
+Result<void, Error> PluginManager::check_requirements(ServiceManager const&          sm,
                                                      Span<const ServiceRequirement> reqs)
 {
 	for (std::size_t i = 0; i < reqs.size(); ++i)
@@ -142,7 +125,7 @@ Result<void, Error> PluginLoader::check_requirements(ServiceManager const&      
 	return Result<void, Error>::ok();
 }
 
-Result<OpenedPlugin, Error> PluginLoader::open(std::string const& path)
+Result<OpenedPlugin, Error> PluginManager::open(std::string const& path)
 {
 	// Drain the deferred-close queue before any new dlopen so we don't
 	// accumulate a long tail of mapped-but-released DSOs in long-running
@@ -150,7 +133,7 @@ Result<OpenedPlugin, Error> PluginLoader::open(std::string const& path)
 	// unload have either been released by now (the user's responsibility) or
 	// the user is intentionally keeping them alive — in which case they should
 	// not be calling open() yet.
-	detail::drain_dso_graveyard();
+	PluginGarbage::instance().collect();
 
 	auto canonical = resolve_canonical(path);
 	if (canonical.empty())
@@ -187,11 +170,11 @@ Result<OpenedPlugin, Error> PluginLoader::open(std::string const& path)
 	    OpenedPlugin(std::move(handle), std::move(plugin), std::move(canonical)));
 }
 
-Result<void, Error> PluginLoader::load(OpenedPlugin opened)
+Result<void, Error> PluginManager::load(OpenedPlugin opened)
 {
 	if (!opened)
 		return Result<void, Error>::err({ErrorCode::Unknown,
-			"PluginLoader::load called with empty OpenedPlugin"});
+			"PluginManager::load called with empty OpenedPlugin"});
 
 	// Guard against a race / programming error: another entry with the same
 	// canonical path appearing between open() and load().
@@ -241,7 +224,7 @@ Result<void, Error> PluginLoader::load(OpenedPlugin opened)
 	return Result<void, Error>::ok();
 }
 
-Result<void, Error> PluginLoader::load(std::string const& path)
+Result<void, Error> PluginManager::load(std::string const& path)
 {
 	// Preserve the historical "loading the same path twice is a no-op"
 	// behaviour. open() reports AlreadyLoaded as an error; here we swallow it.
@@ -256,7 +239,7 @@ Result<void, Error> PluginLoader::load(std::string const& path)
 	return load(std::move(opened.value()));
 }
 
-Result<void, Error> PluginLoader::unload(std::string const& path)
+Result<void, Error> PluginManager::unload(std::string const& path)
 {
 	// Map keys are always canonical paths from a successful load(); if the
 	// caller's path can't be canonicalized now (file deleted, or never existed)
@@ -284,7 +267,7 @@ Result<void, Error> PluginLoader::unload(std::string const& path)
 	return Result<void, Error>::ok();
 }
 
-bool PluginLoader::is_loaded(std::string const& path) const
+bool PluginManager::is_loaded(std::string const& path) const
 {
 	// Map keys are canonical paths; if canonicalization fails the file isn't
 	// reachable on disk and therefore can't match any loaded entry.
@@ -294,7 +277,7 @@ bool PluginLoader::is_loaded(std::string const& path) const
 	return plugins_.count(canonical) > 0;
 }
 
-std::vector<std::string> PluginLoader::discover(std::string const& directory) const
+std::vector<std::string> PluginManager::discover(std::string const& directory) const
 {
 	std::vector<std::string> results;
 	std::error_code ec;
@@ -309,7 +292,7 @@ std::vector<std::string> PluginLoader::discover(std::string const& directory) co
 	return results;
 }
 
-PluginLoader::LoadSummary PluginLoader::discover_and_load(std::string const& directory)
+PluginManager::LoadSummary PluginManager::discover_and_load(std::string const& directory)
 {
 	LoadSummary summary;
 	for (auto const& p : discover(directory))
@@ -329,7 +312,7 @@ PluginLoader::LoadSummary PluginLoader::discover_and_load(std::string const& dir
 	return summary;
 }
 
-std::vector<LoadedPluginInfo> PluginLoader::list_plugins() const
+std::vector<LoadedPluginInfo> PluginManager::list_plugins() const
 {
 	std::vector<LoadedPluginInfo> result;
 	result.reserve(plugins_.size());

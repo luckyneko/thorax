@@ -9,6 +9,7 @@
 #pragma once
 
 #include "thx/iplugin.h"
+#include "thx/plugin_garbage.h"
 #include "thx/plugin_handle.h"
 #include "thx/result.h"
 #include "thx/service_id.h"
@@ -22,7 +23,7 @@
 
 namespace thx
 {
-	// Snapshot entry returned by PluginLoader::list_plugins().
+	// Snapshot entry returned by PluginManager::list_plugins().
 	struct LoadedPluginInfo
 	{
 		std::string              path;
@@ -33,7 +34,7 @@ namespace thx
 	// A plugin DSO that has been opened and its IPlugin instantiated, but whose
 	// onLoad has NOT yet been called and whose required() services have NOT yet
 	// been checked. The caller queries name()/version()/required() to plan load
-	// order, then passes the value to PluginLoader::load(OpenedPlugin) to
+	// order, then passes the value to PluginManager::load(OpenedPlugin) to
 	// commit. Three-step flow: discover -> open -> load.
 	//
 	// Move-only. A default-constructed or moved-from OpenedPlugin is empty and
@@ -42,7 +43,7 @@ namespace thx
 	// Lifetime: while alive, the DSO is mapped and the IPlugin instance exists.
 	// Dropping the value without passing it to load() destroys the IPlugin and
 	// queues the DSO into the deferred-close graveyard (drained at the next
-	// PluginLoader::open() or thx::collect_plugin_garbage()).
+	// PluginManager::open() or thx::collect_plugin_garbage()).
 	class OpenedPlugin
 	{
 	public:
@@ -66,7 +67,7 @@ namespace thx
 		Span<const ServiceRequirement> required() const noexcept;
 
 	private:
-		friend class PluginLoader;
+		friend class PluginManager;
 		OpenedPlugin(PluginHandle handle,
 		             std::shared_ptr<IPlugin> plugin,
 		             std::string canonical);
@@ -88,18 +89,18 @@ namespace thx
 	// Thread safety: not thread-safe. Protect concurrent calls externally if needed.
 	// (The deferred-dlclose graveyard used internally is thread-safe.)
 	//
-	// Destruction: any plugins still loaded when the PluginLoader is destroyed
+	// Destruction: any plugins still loaded when the PluginManager is destroyed
 	// are unloaded automatically (services unregistered, DSO handles deferred).
 	// The destructor does NOT call collect_plugin_garbage(); call it explicitly
 	// when no service references into those DSOs remain.
-	class PluginLoader
+	class PluginManager
 	{
 	public:
-		explicit PluginLoader(ServiceManager& sm);
-		~PluginLoader();
+		explicit PluginManager(ServiceManager& sm);
+		~PluginManager();
 
-		PluginLoader(PluginLoader const&)            = delete;
-		PluginLoader& operator=(PluginLoader const&) = delete;
+		PluginManager(PluginManager const&)            = delete;
+		PluginManager& operator=(PluginManager const&) = delete;
 
 		// Opens the DSO at path, ABI-checks it, and instantiates its IPlugin —
 		// but does NOT call onLoad and does NOT check required(). Use this to
@@ -112,7 +113,7 @@ namespace thx
 		// before calling open() — otherwise the drain unmaps the DSO out from
 		// under them.
 		//
-		// Returns Err(AlreadyLoaded) if this PluginLoader already has the
+		// Returns Err(AlreadyLoaded) if this PluginManager already has the
 		// canonical path loaded.
 		Result<OpenedPlugin, Error> open(std::string const& path);
 
@@ -196,18 +197,5 @@ namespace thx
 
 		static std::string resolve_canonical(std::string const& path);
 	};
-
-	// Unmaps every DSO that has been released via PluginLoader::unload (or
-	// PluginLoader destruction) since the last drain. Returns the number of
-	// DSOs actually unmapped.
-	//
-	// Safety: any shared_ptr<IService> that was registered by one of those
-	// plugins MUST be released before calling this. After collection, code
-	// belonging to the unmapped DSO (including the shared_ptr control block
-	// destructors for any leftover service refs) is no longer reachable.
-	std::size_t collect_plugin_garbage() noexcept;
-
-	// Number of DSOs awaiting unmap. Useful for diagnostics and tests.
-	std::size_t pending_plugin_garbage() noexcept;
 
 } // namespace thx

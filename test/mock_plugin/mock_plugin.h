@@ -10,7 +10,7 @@
 
 #include <thx/service.h>
 
-// Minimal service interface used by PluginLoader integration tests.
+// Minimal service interface used by PluginManager integration tests.
 // Both the mock_plugin shared library and the test binary include this header.
 namespace thx_mock
 {

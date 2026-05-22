@@ -13,7 +13,7 @@
 // Loads all plugins found in <plugin-dir>, then exercises the LoggingService
 // and FileService interfaces contributed by the two example plugins.
 
-#include <thx/plugin_loader.h>
+#include <thx/plugin_manager.h>
 #include <thx/service_manager.h>
 
 #include "interfaces/file_service.h"
@@ -31,7 +31,7 @@ int main(int argc, char* argv[])
 	}
 
 	auto& sm = thx::ServiceManager::instance();
-	thx::PluginLoader loader(sm);
+	thx::PluginManager loader(sm);
 
 	auto summary = loader.discover_and_load(argv[1]);
 	if (summary.loaded.empty())

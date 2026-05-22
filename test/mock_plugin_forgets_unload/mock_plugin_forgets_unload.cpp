@@ -7,7 +7,7 @@
  */
 
 // IPlugin-based mock that registers ServiceA in onLoad but forgets to
-// unregister it in onUnload. PluginLoader's safety-net sweep must catch
+// unregister it in onUnload. PluginManager's safety-net sweep must catch
 // the survivor and unregister it on the user's behalf, emitting a Warn
 // diagnostic.
 

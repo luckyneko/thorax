@@ -7,7 +7,7 @@
  */
 
 #include <catch2/catch_all.hpp>
-#include <thx/plugin_loader.h>
+#include <thx/plugin_manager.h>
 #include <thx/service_manager.h>
 #include <thx/plugins/io/io_service.h>
 
@@ -33,7 +33,7 @@ namespace
 struct Fixture
 {
 	thx::ServiceManager sm;
-	thx::PluginLoader   loader{sm};
+	thx::PluginManager   loader{sm};
 
 	explicit Fixture() { REQUIRE(loader.load(THX_IO_PLUGIN_PATH)); }
 

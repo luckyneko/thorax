@@ -8,7 +8,7 @@
 
 // IPlugin-based mock plugin used to verify:
 //  - a single DSO can register multiple services in onLoad
-//  - required() service IDs are honoured by PluginLoader
+//  - required() service IDs are honoured by PluginManager
 //
 // Declares a required() dependency on thx_mock::MockService and registers
 // thx_mock::ServiceA and thx_mock::ServiceB in onLoad.

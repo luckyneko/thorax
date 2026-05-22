@@ -7,7 +7,7 @@
  */
 
 // IPlugin-based mock plugin whose onLoad always returns false.
-// Used to verify that PluginLoader::load propagates the failure.
+// Used to verify that PluginManager::load propagates the failure.
 
 #include <thx/iplugin.h>
 #include <thx/platform.h>

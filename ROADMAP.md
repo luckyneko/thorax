@@ -2,7 +2,7 @@
 
 Thorax is a C++17 cross-platform plugin framework. The core is a static library;
 plugins are shared libraries (`.dylib` / `.so` / `.dll`) loaded at runtime through
-`thx::PluginLoader` and registered with the `thx::ServiceManager` singleton.
+`thx::PluginManager` and registered with the `thx::ServiceManager` singleton.
 macOS, Windows, and Linux are first-class targets.
 
 ---
@@ -64,7 +64,7 @@ remain useful as a reference for *why* things are shaped the way they are.
 
 - **`thx::PluginHandle`** — RAII DSO wrapper (`dlopen`/`LoadLibraryEx`),
   resolves the C exports, ABI-version checks before any service is registered.
-- **`thx::PluginLoader`** — `load`, `unload`, separated `discover` and
+- **`thx::PluginManager`** — `load`, `unload`, separated `discover` and
   `discover_and_load`, canonical-path keyed so double-loads are no-ops.
 
 ### Milestone 5 — Diagnostics & Debuggability
@@ -74,7 +74,7 @@ remain useful as a reference for *why* things are shaped the way they are.
 - **`thx::Result<T, Error>`** — exception-free fallible return type used
   throughout the loader.
 - **`THX_LOG` / `THX_ASSERT`** — portable call-site capture macros.
-- **Introspection** — `ServiceManager::list_services`, `PluginLoader::list_plugins`.
+- **Introspection** — `ServiceManager::list_services`, `PluginManager::list_plugins`.
 
 ### Milestone 6 — Composable Services
 
@@ -121,7 +121,7 @@ public:
     virtual StringView name()    const = 0;
     virtual Version    version() const = 0;
 
-    // Called by PluginLoader after the DSO is loaded. Plugin registers any
+    // Called by PluginManager after the DSO is loaded. Plugin registers any
     // number of services here. Return false to abort the load.
     virtual bool onLoad(ServiceManager&) = 0;
 
@@ -129,7 +129,7 @@ public:
     virtual void onUnload(ServiceManager&) = 0;
 
     // Optional: services this plugin needs already registered before onLoad.
-    // PluginLoader rejects the load if any are missing.
+    // PluginManager rejects the load if any are missing.
     virtual Span<const ServiceID> required() const { return {}; }
 };
 ```
@@ -183,7 +183,7 @@ provider pattern (logging backends, io readers).
 
 #### 8.4 Eliminate double-construction
 
-The current loader probes the service ([src/plugin_loader.cpp:52-59](src/plugin_loader.cpp#L52-L59))
+The current loader probes the service ([src/plugin_manager.cpp:52-59](src/plugin_manager.cpp#L52-L59))
 just to read `id()` / `version()`, then constructs again via the factory. With
 8.1, the IPlugin reports its own metadata and registers services itself —
 construction happens exactly once. Resolves P1.
@@ -194,7 +194,7 @@ Order matters; the tree must build at every commit:
 
 1. Add `IPlugin`, the new C exports, and `THX_DEFINE_SERVICE_PLUGIN`. Don't
    wire the loader yet. Unit-test the IPlugin shim in isolation.
-2. Teach `PluginLoader` the new ABI behind a code path; port `mock_plugin` and
+2. Teach `PluginManager` the new ABI behind a code path; port `mock_plugin` and
    `mock_plugin_bad_abi` first. Old ABI still works in parallel.
 3. Port in-tree plugins (`logging`, `io`) and the examples to
    `THX_DEFINE_SERVICE_PLUGIN`. Verify ctest is green.
@@ -224,7 +224,7 @@ unload (or destroy the loader without first dropping every service).
 **Design:** `PluginHandle::close()` no longer calls `dlclose` directly; it
 pushes its native handle onto a process-wide deferred-close queue. The queue
 is drained:
-- automatically at the start of `PluginLoader::load()` (keeps long-running
+- automatically at the start of `PluginManager::load()` (keeps long-running
   programs from accumulating mappings), and
 - on demand via the public `thx::collect_plugin_garbage()` (returns the
   number of DSOs unmapped). `thx::pending_plugin_garbage()` exposes the
@@ -335,7 +335,7 @@ consistently.
 
 - **Version-aware `IPlugin::required()`** — `required()` now returns
   `Span<const ServiceRequirement>`, where `ServiceRequirement` pairs a
-  `ServiceID` with a minimum `Version`. `PluginLoader` runs
+  `ServiceID` with a minimum `Version`. `PluginManager` runs
   `Version::compatible(req.version, registered.version)` before allowing the
   load and emits a diagnostic that names both versions on rejection.
   `ServiceInfo` (returned by `ServiceManager::list_services`) gained a
@@ -400,7 +400,7 @@ thorax/
 │   ├── service_manager.h
 │   ├── iplugin.h           # NEW (Milestone 8)
 │   ├── plugin_handle.h
-│   ├── plugin_loader.h
+│   ├── plugin_manager.h
 │   ├── platform.h          # THX_PLUGIN_API, THX_DEFINE_PLUGIN, _SERVICE_PLUGIN
 │   ├── result.h
 │   ├── log.h
@@ -410,7 +410,7 @@ thorax/
 ├── src/
 │   ├── service_manager.cpp
 │   ├── plugin_handle.cpp
-│   ├── plugin_loader.cpp
+│   ├── plugin_manager.cpp
 │   └── log.cpp
 ├── plugins/{logging,io}/   # ported to IPlugin (Milestone 8.5 step 3)
 ├── examples/               # ported to IPlugin

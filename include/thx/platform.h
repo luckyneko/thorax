@@ -22,7 +22,7 @@ namespace thx
 	using PluginDestroyFn  = void        (*)(IPlugin*);
 	using AbiVersionFn     = uint32_t    (*)();
 
-	// Platform plugin file extension, used by PluginLoader::discover().
+	// Platform plugin file extension, used by PluginManager::discover().
 #if defined(_WIN32)
 	inline constexpr const char* kPluginExtension = ".dll";
 #elif defined(__APPLE__)
@@ -70,7 +70,7 @@ namespace thx
 // but older minor/patch is accepted.
 //
 // The create function uses placement-new with std::nothrow so allocation
-// failure returns nullptr rather than throwing; PluginLoader already rejects
+// failure returns nullptr rather than throwing; PluginManager already rejects
 // a null result.
 
 // THX_DEFINE_SERVICE_PLUGIN(ServiceType) — the common one-service-per-DSO

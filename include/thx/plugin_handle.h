@@ -18,7 +18,7 @@ namespace thx
 	// RAII wrapper around a platform DSO (dynamic shared object) handle.
 	//
 	// Move-only. The destructor closes the DSO via dlclose / FreeLibrary.
-	// Obtain via PluginHandle::open(); PluginLoader manages the lifecycle.
+	// Obtain via PluginHandle::open(); PluginManager manages the lifecycle.
 	class PluginHandle
 	{
 	public:

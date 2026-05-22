@@ -31,7 +31,7 @@ namespace thx
 	// and may register any number of services (or none) in onLoad.
 	//
 	// Lifetime: callers may hold shared_ptr<IService> handles past unload —
-	// PluginLoader::unload defers the dlclose into a graveyard that's drained
+	// PluginManager::unload defers the dlclose into a graveyard that's drained
 	// at the next load() or via thx::collect_plugin_garbage(). Don't drain
 	// while service references are still alive: their destructors live in
 	// plugin code and need the DSO mapped to run.
@@ -46,18 +46,18 @@ namespace thx
 		// The plugin's own version (independent of any service it registers).
 		virtual Version version() const = 0;
 
-		// Called by PluginLoader after the DSO is loaded but before the plugin
+		// Called by PluginManager after the DSO is loaded but before the plugin
 		// becomes visible to callers. Register any services here. Return false
 		// to abort the load; the plugin will be destroyed and the DSO closed
 		// without becoming visible.
 		virtual bool onLoad(ServiceManager& sm) = 0;
 
-		// Called by PluginLoader before the DSO is closed. Unregister any
+		// Called by PluginManager before the DSO is closed. Unregister any
 		// services registered in onLoad.
 		virtual void onUnload(ServiceManager& sm) = 0;
 
 		// Optional: services that must already be registered (at a sufficient
-		// version) before onLoad runs. PluginLoader rejects the load if any
+		// version) before onLoad runs. PluginManager rejects the load if any
 		// requirement is missing or the registered version is too old.
 		// Default: no requirements.
 		virtual Span<const ServiceRequirement> required() const { return {}; }

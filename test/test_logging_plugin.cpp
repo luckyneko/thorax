@@ -7,7 +7,7 @@
  */
 
 #include <catch2/catch_all.hpp>
-#include <thx/plugin_loader.h>
+#include <thx/plugin_manager.h>
 #include <thx/service_manager.h>
 #include <thx/plugins/logging/logging_service.h>
 
@@ -51,7 +51,7 @@ struct CaptureBackend : ILogBackend
 struct Fixture
 {
 	thx::ServiceManager sm;
-	thx::PluginLoader   loader{sm};
+	thx::PluginManager   loader{sm};
 
 	explicit Fixture()
 	{

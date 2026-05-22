@@ -20,5 +20,6 @@
 #include "thx/platform.h"
 #include "thx/result.h"
 #include "thx/plugin_handle.h"
-#include "thx/plugin_loader.h"
+#include "thx/plugin_garbage.h"
+#include "thx/plugin_manager.h"
 #include "thx/log.h"

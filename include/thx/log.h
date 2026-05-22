@@ -65,7 +65,7 @@ namespace thx
 	};
 
 	// Implement this interface and call set_log_sink() to intercept all library
-	// diagnostics — including ServiceManager and PluginLoader messages.
+	// diagnostics — including ServiceManager and PluginManager messages.
 	class ILogSink
 	{
 	public:

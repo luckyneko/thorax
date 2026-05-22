@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Thorax is a C++17 cross-platform plugin framework. The core is a static library (`libthorax.a` / `thorax.lib`) plus optional in-tree plugins. Plugins are shared libraries (`.dylib`/`.so`/`.dll`) loaded at runtime through `thx::PluginLoader` and registered with the `thx::ServiceManager` singleton.
+Thorax is a C++17 cross-platform plugin framework. The core is a static library (`libthorax.a` / `thorax.lib`) plus optional in-tree plugins. Plugins are shared libraries (`.dylib`/`.so`/`.dll`) loaded at runtime through `thx::PluginManager` and registered with the `thx::ServiceManager` singleton.
 
 `ROADMAP.md` describes the design intent, the shipped milestones, and the ABI/memory-safety contracts. Read it before making non-trivial changes — many decisions in the codebase are anchored there (e.g. why allocate/destroy round-trip through `thx_create_plugin`/`thx_destroy_plugin`, why `StringView`/`Span` exist instead of `std::string_view`/`std::span` on virtual signatures, why `unload` defers `dlclose` into a graveyard instead of unmapping synchronously).
 
@@ -27,7 +27,7 @@ ctest --test-dir build --output-on-failure
 
 # Run a single test case (Catch2 tag/name match)
 build/test-thorax "ServiceManager registers and retrieves a service"
-build/test-thorax "[plugin_loader]"          # by tag
+build/test-thorax "[plugin_manager]"          # by tag
 build/test-thorax --list-tests
 ```
 
@@ -89,30 +89,32 @@ Anything that crosses a virtual boundary on an `IService` API must use ABI-stabl
 
 [thx::PluginHandle](include/thx/plugin_handle.h) is the RAII DSO wrapper (`dlopen`/`dlclose` on POSIX, `LoadLibraryEx`/`FreeLibrary` on Windows). It resolves the three exports on `open()` and rejects an incompatible `thx_abi_version()` before any service is registered.
 
-[thx::PluginLoader](include/thx/plugin_loader.h) sits on top. The full lifecycle is **discover → open → load**:
+[thx::PluginManager](include/thx/plugin_manager.h) sits on top. The full lifecycle is **discover → open → load**:
 - `discover(dir)` returns the sorted list of files matching `kPluginExtension`. Pure filesystem scan; nothing is mapped.
 - `open(path)` opens the DSO, ABI-checks it, and instantiates its `IPlugin`, returning a move-only `OpenedPlugin` value. **`required()` is NOT yet checked and `onLoad` is NOT yet called.** The caller queries `name()`/`version()`/`required()`/`path()` to plan load order across many plugins, then commits with `load(OpenedPlugin)`. Dropping the value without loading destroys the `IPlugin` and queues the DSO to the graveyard. `open()` is the entry point that drains the graveyard (see "DSO keep-alive" below).
-- `load(OpenedPlugin)` checks `required()` against the registry, calls `onLoad`, and takes ownership of the DSO + `IPlugin` on success. The `OpenedPlugin` is consumed either way; on failure its DSO is released to the graveyard at the next drain. `PluginLoader::check_requirements(sm, reqs)` is exposed as a static dry-run helper so callers can pre-check a requirement set without consuming an `OpenedPlugin`.
+- `load(OpenedPlugin)` checks `required()` against the registry, calls `onLoad`, and takes ownership of the DSO + `IPlugin` on success. The `OpenedPlugin` is consumed either way; on failure its DSO is released to the graveyard at the next drain. `PluginManager::check_requirements(sm, reqs)` is exposed as a static dry-run helper so callers can pre-check a requirement set without consuming an `OpenedPlugin`.
 - `load(path)` is a convenience wrapper that does `open(path)` + `load(OpenedPlugin)` in one step. Unlike `open()` (which returns `AlreadyLoaded` on duplicate paths), `load(path)` preserves the historical "loading the same file twice is a no-op" behavior by checking `is_loaded()` first.
-- `unload(path)` calls `IPlugin::onUnload` and removes the loader's entry. **It does not call `dlclose` directly** — instead the native handle goes onto a process-wide deferred-close graveyard.
+- `unload(path)` calls `IPlugin::onUnload` and removes the manager's entry. **It does not call `dlclose` directly** — instead the native handle goes onto a process-wide deferred-close queue managed by `thx::PluginGarbage` (see "DSO keep-alive" below).
 - `discover_and_load(dir)` calls `load(path)` on each discovered file and returns a `LoadSummary { loaded, failed }` rather than a single `Result`, so callers can decide what counts as success. It does not surface `required()` or do any ordering — use the explicit `discover → open* → sort → load*` flow when you need that.
 
-The loader keys entries by canonical path so loading the same file twice via `load(path)` is a no-op (and via `open()` reports `AlreadyLoaded`). It is **not** thread-safe; serialise externally if needed. The graveyard itself is thread-safe.
+The manager keys entries by canonical path so loading the same file twice via `load(path)` is a no-op (and via `open()` reports `AlreadyLoaded`). It is **not** thread-safe; serialise externally if needed. The garbage queue itself is thread-safe.
 
-**DSO keep-alive (Milestone 8b).** The deferred-close graveyard is what makes it safe for callers to hold `shared_ptr<IService>` handles across `unload()`: the service's destructor and its `shared_ptr` control block both live in plugin code, so the DSO must stay mapped until every reference into it has been released. The graveyard drains on two occasions:
+**DSO keep-alive (Milestone 8b).** The deferred-close queue lives in [thx::PluginGarbage](include/thx/plugin_garbage.h) — a process-wide singleton (`PluginGarbage::instance()`) wrapping a mutex + handle list, with `schedule(void*)`, `collect()`, and `pending()` members. `PluginHandle::close()` calls `schedule()` instead of `dlclose`/`FreeLibrary`. This indirection is what makes it safe for callers to hold `shared_ptr<IService>` handles across `unload()`: the service's destructor and its `shared_ptr` control block both live in plugin code, so the DSO must stay mapped until every reference into it has been released. The queue drains on two occasions:
 
-1. Automatically at the start of `PluginLoader::open()` (and therefore also the convenience `load(path)` overload, which calls `open()` internally), so long-running programs don't accumulate mapped-but-unused DSOs. `load(OpenedPlugin)` itself does *not* drain — meaning a `discover → open* → load*` batch drains exactly once, at the start of the open phase, and never yanks a DSO while another plugin is still being inspected;
-2. On demand via `thx::collect_plugin_garbage()` (returns the number of DSOs actually unmapped). `thx::pending_plugin_garbage()` exposes the current queue depth.
+1. Automatically at the start of `PluginManager::open()` (and therefore also the convenience `load(path)` overload, which calls `open()` internally), so long-running programs don't accumulate mapped-but-unused DSOs. `load(OpenedPlugin)` itself does *not* drain — meaning a `discover → open* → load*` batch drains exactly once, at the start of the open phase, and never yanks a DSO while another plugin is still being inspected;
+2. On demand via `PluginGarbage::instance().collect()` (or the equivalent free-function shim `thx::collect_plugin_garbage()`). `PluginGarbage::pending()` / `thx::pending_plugin_garbage()` expose the current queue depth.
 
-**Hard rule:** every `shared_ptr<IService>` into a DSO must be released before the next drain. Because `open()` drains first, this means: if you have unloaded a plugin and are still holding service references, do **not** call `open()` (or `load(path)`) until those references have been dropped. Tests that exercise this contract live in [test/test_plugin_loader.cpp](test/test_plugin_loader.cpp) under the `[lifetime]` tag.
+The class lives separately from `PluginManager` because the queue has to outlive any individual manager: a caller may destroy the `PluginManager` and still hold a service reference, which the queue keeps the DSO mapped for. The `PluginGarbage::instance()` singleton is also what the eventual top-level `Registry` is expected to own directly — moving from "static singleton" to "Registry-owned member" is a swap of accessor without changing the class shape.
 
-`PluginLoader::~PluginLoader` calls `onUnload` for every still-loaded plugin and clears its entries, but does **not** drain the graveyard. Drain explicitly when no service references into those DSOs remain.
+**Hard rule:** every `shared_ptr<IService>` into a DSO must be released before the next drain. Because `open()` drains first, this means: if you have unloaded a plugin and are still holding service references, do **not** call `open()` (or `load(path)`) until those references have been dropped. Tests that exercise this contract live in [test/test_plugin_manager.cpp](test/test_plugin_manager.cpp) under the `[lifetime]` tag.
+
+`PluginManager::~PluginManager` calls `onUnload` for every still-loaded plugin and clears its entries, but does **not** drain `PluginGarbage`. Drain explicitly when no service references into those DSOs remain.
 
 ### Errors & logging
 
 Failures return `thx::Result<T, thx::Error>` ([include/thx/result.h](include/thx/result.h)) — no exceptions in library code. `thx::Result<void, Error>` is the void specialisation. `Result<T>` exposes `value_or(fallback)` and `map(f)`; `discover_and_load` is the one operation that breaks the pattern (it returns a `LoadSummary` so callers can react to partial failure).
 
-Diagnostics flow through a pluggable `thx::ILogSink` ([include/thx/log.h](include/thx/log.h)). The default sink writes structured lines to `stderr`. Replace per-process with `thx::set_log_sink(sink)`; passing `nullptr` silences logging entirely. `thx::restore_default_log_sink()` brings the built-in stderr sink back. `ServiceManager` and `PluginLoader` emit structured records with source locations for every state change and failure.
+Diagnostics flow through a pluggable `thx::ILogSink` ([include/thx/log.h](include/thx/log.h)). The default sink writes structured lines to `stderr`. Replace per-process with `thx::set_log_sink(sink)`; passing `nullptr` silences logging entirely. `thx::restore_default_log_sink()` brings the built-in stderr sink back. `ServiceManager` and `PluginManager` emit structured records with source locations for every state change and failure.
 
 There are no `THX_LOG` / `THX_ASSERT` macros. Source location is captured automatically via `__builtin_FILE`/`__builtin_LINE`/`__builtin_FUNCTION` defaults on GCC, Clang, and MSVC ≥ VS 2019 16.6 (`_MSC_VER 1926`). Call sites use the free functions directly:
 
@@ -125,7 +127,7 @@ thx::assert_that(condition, "message");   // logs at Error if false; std::abort(
 
 ### Versioning
 
-[thx::Version](include/thx/version_type.h) is a three-component numeric version (`major.minor.patch`) with `constexpr` comparison. It is intentionally *not* full semver — there are no pre-release or build-metadata fields. The framework may grow them back if a real consumer needs them; for now the simpler shape keeps the type trivially layout-compatible across compilers, which matters because it crosses the DSO boundary by value. `thx::THORAX_VERSION` is generated from the CMake project version into [include/thx/version.h.in](include/thx/version.h.in). `Version::pack()` packs major/minor/patch into a `uint32_t` (8/8/16 bits) for crossing the C plugin ABI; the `Version(uint32_t)` constructor is the inverse. The packed form is a deliberate wire encoding, not a property of `Version`'s in-memory layout. `Version::compatible(required, provided)` is the static method used both by `PluginHandle::open()` to gate `thx_abi_version()` and by `PluginLoader` to check each `ServiceRequirement` reported by `IPlugin::required()`.
+[thx::Version](include/thx/version_type.h) is a three-component numeric version (`major.minor.patch`) with `constexpr` comparison. It is intentionally *not* full semver — there are no pre-release or build-metadata fields. The framework may grow them back if a real consumer needs them; for now the simpler shape keeps the type trivially layout-compatible across compilers, which matters because it crosses the DSO boundary by value. `thx::THORAX_VERSION` is generated from the CMake project version into [include/thx/version.h.in](include/thx/version.h.in). `Version::pack()` packs major/minor/patch into a `uint32_t` (8/8/16 bits) for crossing the C plugin ABI; the `Version(uint32_t)` constructor is the inverse. The packed form is a deliberate wire encoding, not a property of `Version`'s in-memory layout. `Version::compatible(required, provided)` is the static method used both by `PluginHandle::open()` to gate `thx_abi_version()` and by `PluginManager` to check each `ServiceRequirement` reported by `IPlugin::required()`.
 
 ## Layout & conventions
 

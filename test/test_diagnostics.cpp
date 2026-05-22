@@ -8,7 +8,7 @@
 
 #include <catch2/catch_all.hpp>
 #include <thx/log.h>
-#include <thx/plugin_loader.h>
+#include <thx/plugin_manager.h>
 #include <thx/service_manager.h>
 
 #include "mock_plugin.h"
@@ -287,21 +287,21 @@ TEST_CASE("ServiceManager::list_services - multiple independent services",
 }
 
 // ---------------------------------------------------------------------------
-// PluginLoader::list_plugins
+// PluginManager::list_plugins
 // ---------------------------------------------------------------------------
 
-TEST_CASE("PluginLoader::list_plugins - empty before load", "[introspection]")
+TEST_CASE("PluginManager::list_plugins - empty before load", "[introspection]")
 {
 	thx::ServiceManager sm;
-	thx::PluginLoader   loader(sm);
+	thx::PluginManager   loader(sm);
 
 	REQUIRE(loader.list_plugins().empty());
 }
 
-TEST_CASE("PluginLoader::list_plugins - entry present after load", "[introspection]")
+TEST_CASE("PluginManager::list_plugins - entry present after load", "[introspection]")
 {
 	thx::ServiceManager sm;
-	thx::PluginLoader   loader(sm);
+	thx::PluginManager   loader(sm);
 	loader.load(THX_MOCK_PLUGIN_PATH);
 
 	auto plugins = loader.list_plugins();
@@ -311,10 +311,10 @@ TEST_CASE("PluginLoader::list_plugins - entry present after load", "[introspecti
 	REQUIRE(plugins[0].services[0] == thx_mock::MockService::static_id());
 }
 
-TEST_CASE("PluginLoader::list_plugins - empty after unload", "[introspection]")
+TEST_CASE("PluginManager::list_plugins - empty after unload", "[introspection]")
 {
 	thx::ServiceManager sm;
-	thx::PluginLoader   loader(sm);
+	thx::PluginManager   loader(sm);
 	loader.load(THX_MOCK_PLUGIN_PATH);
 	loader.unload(THX_MOCK_PLUGIN_PATH);
 

@@ -51,6 +51,7 @@ find_package(Threads REQUIRED)
 add_library(${PROJECT_NAME} STATIC
     # Headers
     include/thx/detail/hash.h
+    include/thx/detail/service_manager.inl
     include/thx/detail/type_name.h
     include/thx/thorax.h
     include/thx/string_view.h
@@ -66,7 +67,8 @@ add_library(${PROJECT_NAME} STATIC
     include/thx/platform.h
     include/thx/result.h
     include/thx/plugin_handle.h
-    include/thx/plugin_loader.h
+    include/thx/plugin_garbage.h
+    include/thx/plugin_manager.h
     include/thx/log.h
 
     # Source
@@ -74,7 +76,8 @@ add_library(${PROJECT_NAME} STATIC
     src/log.cpp
     src/service_manager.cpp
     src/plugin_handle.cpp
-    src/plugin_loader.cpp
+    src/plugin_garbage.cpp
+    src/plugin_manager.cpp
 )
 target_include_directories(${PROJECT_NAME} PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -119,7 +122,7 @@ endif()
 if(THORAX_BUILD_TESTING)
     enable_testing()
 
-    # Mock plugin shared library for PluginLoader integration tests.
+    # Mock plugin shared library for PluginManager integration tests.
     add_library(mock_plugin SHARED
         test/mock_plugin/mock_plugin.cpp
     )
@@ -164,7 +167,7 @@ if(THORAX_BUILD_TESTING)
     target_compile_options(mock_plugin_requires_newer PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fvisibility=hidden>)
 
     # IPlugin-based mock that registers ServiceA in onLoad and then returns false.
-    # Used to verify PluginLoader rolls back partial registrations on failure.
+    # Used to verify PluginManager rolls back partial registrations on failure.
     add_library(mock_plugin_bails_after_register SHARED
         test/mock_plugin_bails_after_register/mock_plugin_bails_after_register.cpp
     )
@@ -174,7 +177,7 @@ if(THORAX_BUILD_TESTING)
     target_compile_options(mock_plugin_bails_after_register PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fvisibility=hidden>)
 
     # IPlugin-based mock that registers ServiceA in onLoad but does NOT unregister
-    # it in onUnload. Used to verify PluginLoader's safety-net sweep catches
+    # it in onUnload. Used to verify PluginManager's safety-net sweep catches
     # survivors left behind by misbehaved plugins.
     add_library(mock_plugin_forgets_unload SHARED
         test/mock_plugin_forgets_unload/mock_plugin_forgets_unload.cpp
@@ -190,7 +193,7 @@ if(THORAX_BUILD_TESTING)
         test/test_version.cpp
         test/test_service_manager.cpp
         test/test_abi_types.cpp
-        test/test_plugin_loader.cpp
+        test/test_plugin_manager.cpp
         test/test_diagnostics.cpp
         test/test_iplugin.cpp
     )

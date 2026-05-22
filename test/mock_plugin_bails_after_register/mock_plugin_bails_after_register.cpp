@@ -7,7 +7,7 @@
  */
 
 // IPlugin-based mock that registers ServiceA in onLoad and then returns false.
-// PluginLoader must reverse the partial registration so the registry is left
+// PluginManager must reverse the partial registration so the registry is left
 // in the same state as before the failed load.
 
 #include "mock_plugin.h"
@@ -32,7 +32,7 @@ public:
 			{
 				return std::make_shared<thx_mock::ServiceA>();
 			});
-		return false; // PluginLoader must roll back the ServiceA registration.
+		return false; // PluginManager must roll back the ServiceA registration.
 	}
 
 	void onUnload(thx::ServiceManager&) override {}

@@ -8,7 +8,7 @@
 
 // IPlugin-based mock that declares a versioned dependency on MockService 2.0.0,
 // which is higher than the version mock_plugin actually registers (1.0.0).
-// PluginLoader should reject the load with VersionMismatch.
+// PluginManager should reject the load with VersionMismatch.
 
 #include "mock_plugin.h"
 #include <thx/iplugin.h>
