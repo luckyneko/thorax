@@ -7,6 +7,7 @@
  */
 
 #include "thx/plugin_manager.h"
+#include "thx/library.h"
 #include "thx/registry.h"
 #include "thx/to_string.h"
 #include "thx/platform.h"
@@ -283,7 +284,7 @@ std::vector<std::string> PluginManager::discover(std::string const& directory) c
 	std::error_code ec;
 	for (auto const& entry : std::filesystem::directory_iterator(directory, ec))
 	{
-		if (entry.path().extension().string() == kPluginExtension)
+		if (entry.path().extension().string() == LIBRARY_EXTENSION)
 			results.push_back(entry.path().string());
 	}
 	// Filesystem iteration order is unspecified; sort so load order is

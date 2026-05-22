@@ -66,6 +66,7 @@ add_library(${PROJECT_NAME} STATIC
     include/thx/iplugin.h
     include/thx/platform.h
     include/thx/result.h
+    include/thx/library.h
     include/thx/plugin_handle.h
     include/thx/plugin_garbage.h
     include/thx/plugin_manager.h
@@ -76,6 +77,7 @@ add_library(${PROJECT_NAME} STATIC
     src/thorax.cpp
     src/log.cpp
     src/service_manager.cpp
+    src/library.cpp
     src/plugin_handle.cpp
     src/plugin_garbage.cpp
     src/plugin_manager.cpp
@@ -195,6 +197,7 @@ if(THORAX_BUILD_TESTING)
         test/test_version.cpp
         test/test_service_manager.cpp
         test/test_abi_types.cpp
+        test/test_library.cpp
         test/test_plugin_manager.cpp
         test/test_diagnostics.cpp
         test/test_iplugin.cpp

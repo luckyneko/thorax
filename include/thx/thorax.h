@@ -19,6 +19,7 @@
 #include "thx/iplugin.h"
 #include "thx/platform.h"
 #include "thx/result.h"
+#include "thx/library.h"
 #include "thx/plugin_handle.h"
 #include "thx/plugin_garbage.h"
 #include "thx/plugin_manager.h"

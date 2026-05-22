@@ -22,14 +22,7 @@ namespace thx
 	using PluginDestroyFn  = void        (*)(IPlugin*);
 	using AbiVersionFn     = uint32_t    (*)();
 
-	// Platform plugin file extension, used by PluginManager::discover().
-#if defined(_WIN32)
-	inline constexpr const char* kPluginExtension = ".dll";
-#elif defined(__APPLE__)
-	inline constexpr const char* kPluginExtension = ".dylib";
-#else
-	inline constexpr const char* kPluginExtension = ".so";
-#endif
+	// LIBRARY_EXTENSION moved to thx/library.h.
 
 } // namespace thx
 

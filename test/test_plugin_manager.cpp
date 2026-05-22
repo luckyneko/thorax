@@ -7,6 +7,7 @@
  */
 
 #include <catch2/catch_all.hpp>
+#include <thx/library.h>
 #include <thx/plugin_manager.h>
 #include <thx/result.h>
 #include "mock_plugin.h"
@@ -291,8 +292,8 @@ TEST_CASE("PluginManager::discover - finds platform-extension files only",
 	fs::create_directories(tmp);
 
 	// Create one file for each supported extension and one unrelated file.
-	std::ofstream{(tmp / ("plugin_a" + std::string(thx::kPluginExtension))).string()};
-	std::ofstream{(tmp / ("plugin_b" + std::string(thx::kPluginExtension))).string()};
+	std::ofstream{(tmp / ("plugin_a" + std::string(thx::LIBRARY_EXTENSION))).string()};
+	std::ofstream{(tmp / ("plugin_b" + std::string(thx::LIBRARY_EXTENSION))).string()};
 	std::ofstream{(tmp / "readme.txt").string()};
 	std::ofstream{(tmp / "data.bin").string()};
 

@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "thx/library.h"
+
 #include <cstddef>
 #include <mutex>
 #include <vector>
@@ -16,10 +18,10 @@ namespace thx
 {
 	// Process-wide deferred-dlclose queue for plugin DSOs.
 	//
-	// PluginHandle::close() pushes its native handle here instead of calling
-	// dlclose/FreeLibrary immediately. The actual unmap is delayed until
-	// collect() runs (PluginManager::open invokes it implicitly; callers may
-	// also drive it via thx::collectPluginGarbage()).
+	// PluginHandle::close() moves its Library here instead of letting the
+	// destructor run dlclose/FreeLibrary immediately. The actual unmap is
+	// delayed until collect() runs (PluginManager::open invokes it
+	// implicitly; callers may also drive it via thx::collectPluginGarbage()).
 	//
 	// This indirection is what makes "hold a service across unload" safe: the
 	// service's destructor and shared_ptr control block both live in plugin
@@ -37,14 +39,13 @@ namespace thx
 		PluginGarbage(PluginGarbage const&)            = delete;
 		PluginGarbage& operator=(PluginGarbage const&) = delete;
 
-		// Queues a native DSO handle for deferred unmap. Null is a safe no-op.
-		// The handle is opaque to this class — it's whatever PluginHandle stores
-		// (void* / HMODULE), and the platform-specific unmap call happens inside
-		// collect().
-		void schedule(void* handle) noexcept;
+		// Queues a Library for deferred close. An empty Library is a safe
+		// no-op. The Library is moved into the queue; on collect(), its
+		// destructor runs dlclose / FreeLibrary.
+		void schedule(Library lib) noexcept;
 
-		// Unmaps every queued DSO and clears the queue. Returns the number of
-		// DSOs actually unmapped. Safe to call when the queue is empty.
+		// Closes every queued DSO and clears the queue. Returns the number
+		// of DSOs unmapped. Safe to call when the queue is empty.
 		//
 		// Safety: any shared_ptr<IService> registered by one of those plugins
 		// MUST be released before calling. After collection, code belonging to
@@ -56,8 +57,8 @@ namespace thx
 		std::size_t pending() const noexcept;
 
 	private:
-		mutable std::mutex  m_mutex;
-		std::vector<void*>  m_handles;
+		mutable std::mutex   m_mutex;
+		std::vector<Library> m_libraries;
 	};
 
 	// Free-function shims that operate on the Registry-owned PluginGarbage.
