@@ -301,14 +301,15 @@ TEST_CASE("PluginManager::discover - finds platform-extension files only",
 	thx::service::ServiceManager sm;
 	thx::plugin::PluginManager   loader(sm);
 
-	auto found = loader.discover(tmp.string());
+	REQUIRE(loader.discover(tmp.string()));
+	auto discovered = loader.plugins(thx::plugin::State::Discovered);
 
 	fs::remove_all(tmp); // cleanup before assertions so temp files don't linger
 
-	REQUIRE(found.size() == 2);
+	REQUIRE(discovered.size() == 2);
 }
 
-TEST_CASE("PluginManager::discover - empty directory returns empty list",
+TEST_CASE("PluginManager::discover - empty directory yields no entries",
           "[plugin_manager][discover]")
 {
 	namespace fs = std::filesystem;
@@ -320,11 +321,126 @@ TEST_CASE("PluginManager::discover - empty directory returns empty list",
 	thx::service::ServiceManager sm;
 	thx::plugin::PluginManager   loader(sm);
 
-	auto found = loader.discover(tmp.string());
+	REQUIRE(loader.discover(tmp.string()));
+	auto discovered = loader.plugins(thx::plugin::State::Discovered);
 
 	fs::remove_all(tmp);
 
-	REQUIRE(found.empty());
+	REQUIRE(discovered.empty());
+}
+
+TEST_CASE("PluginManager::discover - missing directory returns FileNotFound",
+          "[plugin_manager][discover]")
+{
+	thx::service::ServiceManager sm;
+	thx::plugin::PluginManager   loader(sm);
+
+	auto r = loader.discover("/nonexistent/path/that/does/not/exist");
+	REQUIRE_FALSE(r);
+	REQUIRE(r.error().code == thx::ErrorCode::FileNotFound);
+}
+
+TEST_CASE("PluginManager::discover - real plugin populates a Discovered entry",
+          "[plugin_manager][discover][integration]")
+{
+	namespace fs = std::filesystem;
+
+	auto tmp = fs::temp_directory_path() / "thx_test_discover_real";
+	auto src = fs::path(THX_MOCK_PLUGIN_PATH);
+	auto dst = tmp / src.filename();
+
+	fs::remove_all(tmp);
+	fs::create_directories(tmp);
+	fs::copy_file(src, dst);
+
+	thx::service::ServiceManager sm;
+	thx::plugin::PluginManager   loader(sm);
+
+	REQUIRE(loader.discover(tmp.string()));
+	REQUIRE(loader.is(thx::plugin::State::Discovered, dst.string()));
+
+	auto info = loader.pluginInfo(dst.string());
+	REQUIRE(info.has_value());
+	REQUIRE(info->state == thx::plugin::State::Discovered);
+	// Discovered entries carry no metadata yet (Phase 5 manifests will fix this).
+	REQUIRE(info->name.empty());
+	REQUIRE(info->services.empty());
+
+	fs::remove_all(tmp);
+}
+
+TEST_CASE("PluginManager::forget - removes a Discovered entry",
+          "[plugin_manager][discover][integration]")
+{
+	namespace fs = std::filesystem;
+
+	auto tmp = fs::temp_directory_path() / "thx_test_forget";
+	auto src = fs::path(THX_MOCK_PLUGIN_PATH);
+	auto dst = tmp / src.filename();
+
+	fs::remove_all(tmp);
+	fs::create_directories(tmp);
+	fs::copy_file(src, dst);
+
+	thx::service::ServiceManager sm;
+	thx::plugin::PluginManager   loader(sm);
+
+	REQUIRE(loader.discover(tmp.string()));
+	REQUIRE(loader.is(thx::plugin::State::Discovered, dst.string()));
+
+	REQUIRE(loader.forget(dst.string()));
+	REQUIRE_FALSE(loader.is(thx::plugin::State::Discovered, dst.string()));
+
+	// Idempotent — forgetting an unknown path is ok.
+	REQUIRE(loader.forget(dst.string()));
+
+	fs::remove_all(tmp);
+}
+
+TEST_CASE("PluginManager::forget - returns InUse for a loaded plugin",
+          "[plugin_manager][discover][integration]")
+{
+	thx::service::ServiceManager sm;
+	thx::plugin::PluginManager   loader(sm);
+
+	REQUIRE(loader.load(THX_MOCK_PLUGIN_PATH));
+
+	auto r = loader.forget(THX_MOCK_PLUGIN_PATH);
+	REQUIRE_FALSE(r);
+	REQUIRE(r.error().code == thx::ErrorCode::InUse);
+
+	REQUIRE(loader.unload(THX_MOCK_PLUGIN_PATH));
+	thx::plugin::collectGarbage();
+}
+
+TEST_CASE("PluginManager::discover - re-scan leaves Loaded entries untouched",
+          "[plugin_manager][discover][integration]")
+{
+	namespace fs = std::filesystem;
+
+	auto tmp = fs::temp_directory_path() / "thx_test_discover_rescan";
+	auto src = fs::path(THX_MOCK_PLUGIN_PATH);
+	auto dst = tmp / src.filename();
+
+	fs::remove_all(tmp);
+	fs::create_directories(tmp);
+	fs::copy_file(src, dst);
+
+	thx::service::ServiceManager sm;
+	thx::plugin::PluginManager   loader(sm);
+
+	REQUIRE(loader.load(dst.string()));
+	REQUIRE(loader.is(thx::plugin::State::Loaded, dst.string()));
+
+	// Re-discover the directory: the already-Loaded entry must not get
+	// shadowed by a Discovered entry.
+	REQUIRE(loader.discover(tmp.string()));
+	REQUIRE(loader.is(thx::plugin::State::Loaded, dst.string()));
+	REQUIRE_FALSE(loader.is(thx::plugin::State::Discovered, dst.string()));
+
+	REQUIRE(loader.unload(dst.string()));
+	thx::plugin::collectGarbage();
+	fs::remove_all(tmp);
 }
 
 // ---------------------------------------------------------------------------

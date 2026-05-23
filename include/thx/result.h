@@ -27,6 +27,7 @@ namespace thx
 		NotLoaded,
 		VersionMismatch,
 		RegistrationFailed,
+		InUse,         // operation rejected because the target is still in active use
 	};
 
 	// Lightweight error descriptor returned (not thrown) by fallible operations.

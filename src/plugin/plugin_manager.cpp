@@ -285,25 +285,71 @@ bool PluginManager::isLoaded(std::string const& path) const
 	return m_plugins.count(canonical) > 0;
 }
 
-std::vector<std::string> PluginManager::discover(std::string const& directory) const
+Result<void, Error> PluginManager::discover(std::string const& directory)
 {
-	std::vector<std::string> results;
 	std::error_code ec;
-	for (auto const& entry : std::filesystem::directory_iterator(directory, ec))
+	auto iter = std::filesystem::directory_iterator(directory, ec);
+	if (ec)
+		return Result<void, Error>::err({ErrorCode::FileNotFound,
+			"Cannot iterate directory '" + directory + "': " + ec.message()});
+
+	for (auto const& entry : iter)
 	{
-		if (entry.path().extension().string() == LIBRARY_EXTENSION)
-			results.push_back(entry.path().string());
+		if (entry.path().extension().string() != LIBRARY_EXTENSION)
+			continue;
+
+		auto canonical = resolveCanonical(entry.path().string());
+		if (canonical.empty())
+			continue; // file vanished between iteration and canonicalize; skip silently
+
+		// Don't disturb an entry that's already Opened or Loaded — those
+		// states supersede Discovered.
+		if (m_plugins.count(canonical))
+			continue;
+
+		// emplace is a no-op if already discovered; that's the intended
+		// idempotent re-scan behaviour.
+		m_discovered.emplace(canonical, DiscoveredEntry{});
 	}
-	// Filesystem iteration order is unspecified; sort so load order is
-	// reproducible across runs and platforms.
-	std::sort(results.begin(), results.end());
-	return results;
+	return Result<void, Error>::ok();
+}
+
+Result<void, Error> PluginManager::forget(std::string const& path)
+{
+	auto canonical = resolveCanonical(path);
+	// If the path can't be canonicalized, fall back to the raw input — the
+	// file may have been deleted but the entry could still be in our map.
+	auto const& key = canonical.empty() ? path : canonical;
+
+	if (m_plugins.count(key))
+		return Result<void, Error>::err({ErrorCode::InUse,
+			"Cannot forget '" + key + "': still loaded (call unload() first)"});
+
+	m_discovered.erase(key);
+	// Either we erased it or it was already gone; both are "ok" — forget is
+	// idempotent on absence.
+	return Result<void, Error>::ok();
 }
 
 PluginManager::LoadSummary PluginManager::discoverAndLoad(std::string const& directory)
 {
 	LoadSummary summary;
-	for (auto const& p : discover(directory))
+	if (auto r = discover(directory); !r)
+	{
+		thx::log(LogLevel::Warn,
+		    "discoverAndLoad: discover failed for '" + directory + "': " + r.error().message);
+		return summary;
+	}
+
+	// Snapshot the paths first — load() may move entries between maps as it
+	// runs, so iterating m_discovered directly would invalidate.
+	std::vector<std::string> paths;
+	paths.reserve(m_discovered.size());
+	for (auto const& [p, _] : m_discovered)
+		paths.push_back(p);
+	std::sort(paths.begin(), paths.end()); // deterministic load order
+
+	for (auto const& p : paths)
 	{
 		auto r = load(p);
 		if (r)
@@ -336,8 +382,8 @@ std::vector<LoadedPluginInfo> PluginManager::listPlugins() const
 
 // --- Phase 6 query API -------------------------------------------------------
 //
-// Only the Loaded state is populated here. Discovered/Opened tracking lands in
-// later commits; until then those states are reported as empty.
+// Discovered and Loaded entries are populated. Opened tracking arrives in
+// Commit 3.
 
 PluginInfo PluginManager::infoFromEntry(std::string const& path, Entry const& entry) const
 {
@@ -356,10 +402,25 @@ PluginInfo PluginManager::infoFromEntry(std::string const& path, Entry const& en
 	return info;
 }
 
+namespace
+{
+	PluginInfo infoFromDiscovered(std::string const& path)
+	{
+		PluginInfo info;
+		info.path  = path;
+		info.state = State::Discovered;
+		// Other fields are empty: until Phase 5 manifests, a Discovered
+		// entry carries no metadata.
+		return info;
+	}
+} // namespace
+
 std::vector<PluginInfo> PluginManager::plugins() const
 {
 	std::vector<PluginInfo> result;
-	result.reserve(m_plugins.size());
+	result.reserve(m_discovered.size() + m_plugins.size());
+	for (auto const& [path, _] : m_discovered)
+		result.push_back(infoFromDiscovered(path));
 	for (auto const& [path, entry] : m_plugins)
 		result.push_back(infoFromEntry(path, entry));
 	return result;
@@ -367,30 +428,53 @@ std::vector<PluginInfo> PluginManager::plugins() const
 
 std::vector<PluginInfo> PluginManager::plugins(State state) const
 {
-	if (state != State::Loaded)
-		return {};
-	return plugins();
+	std::vector<PluginInfo> result;
+	switch (state)
+	{
+		case State::Discovered:
+			result.reserve(m_discovered.size());
+			for (auto const& [path, _] : m_discovered)
+				result.push_back(infoFromDiscovered(path));
+			return result;
+		case State::Opened:
+			// Opened tracking arrives in Commit 3.
+			return result;
+		case State::Loaded:
+			result.reserve(m_plugins.size());
+			for (auto const& [path, entry] : m_plugins)
+				result.push_back(infoFromEntry(path, entry));
+			return result;
+	}
+	return result;
 }
 
 std::optional<PluginInfo> PluginManager::pluginInfo(std::string const& path) const
 {
 	auto canonical = resolveCanonical(path);
-	if (canonical.empty())
-		return std::nullopt;
-	auto it = m_plugins.find(canonical);
-	if (it == m_plugins.end())
-		return std::nullopt;
-	return infoFromEntry(canonical, it->second);
+	auto const& key = canonical.empty() ? path : canonical;
+
+	if (auto it = m_plugins.find(key); it != m_plugins.end())
+		return infoFromEntry(it->first, it->second);
+	if (m_discovered.count(key))
+		return infoFromDiscovered(key);
+	return std::nullopt;
 }
 
 bool PluginManager::is(State state, std::string const& path) const
 {
-	if (state != State::Loaded)
-		return false;
 	auto canonical = resolveCanonical(path);
-	if (canonical.empty())
-		return false;
-	return m_plugins.count(canonical) > 0;
+	auto const& key = canonical.empty() ? path : canonical;
+
+	switch (state)
+	{
+		case State::Discovered:
+			return m_discovered.count(key) > 0;
+		case State::Opened:
+			return false; // Opened tracking arrives in Commit 3.
+		case State::Loaded:
+			return m_plugins.count(key) > 0;
+	}
+	return false;
 }
 
 } // namespace thx::plugin

@@ -204,8 +204,24 @@ namespace thx::plugin
 		bool isLoaded(std::string const& path) const;
 
 		// Scans directory for files whose extension matches the platform plugin
-		// extension (.dylib / .so / .dll). Does not load them.
-		std::vector<std::string> discover(std::string const& directory) const;
+		// extension (.dylib / .so / .dll) and records each as a Discovered
+		// entry. Does not open the DSOs. Returns ok on a successful scan,
+		// even if the directory contained no plugins; returns FileNotFound
+		// if the directory itself can't be iterated.
+		//
+		// Re-scanning a directory that has already been discovered adds any
+		// newly-present files and leaves existing entries (including Opened /
+		// Loaded ones) untouched.
+		//
+		// Query the resulting entries via plugins(State::Discovered) or
+		// pluginInfo(path).
+		Result<void, Error> discover(std::string const& directory);
+
+		// Removes a Discovered entry from the index. Returns InUse if the
+		// path is currently Opened or Loaded (the caller should close() /
+		// unload() first). Returns ok if the path is unknown to the manager
+		// (idempotent — the entry is already in the "not tracked" state).
+		Result<void, Error> forget(std::string const& path);
 
 		// Outcome of a discoverAndLoad call: which paths loaded successfully
 		// and which failed (with their associated Error). Either list may be
@@ -257,8 +273,16 @@ namespace thx::plugin
 			std::shared_ptr<IPlugin>             plugin;
 		};
 
+		// Currently a placeholder. Phase 5 manifests will populate name,
+		// version, requirements, and provides here so Discovered entries
+		// carry metadata without a dlopen.
+		struct DiscoveredEntry
+		{
+		};
+
 		thx::service::ServiceManager& m_sm;
-		std::unordered_map<std::string, Entry> m_plugins; // canonical_path → entry
+		std::unordered_map<std::string, DiscoveredEntry> m_discovered;  // canonical_path → entry
+		std::unordered_map<std::string, Entry>           m_plugins;     // canonical_path → entry
 
 		static std::string resolveCanonical(std::string const& path);
 

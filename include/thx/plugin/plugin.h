@@ -30,9 +30,14 @@
 namespace thx::plugin
 {
 	// discover → open → load (three-step flow).
-	inline std::vector<std::string> discover(std::string const& directory)
+	inline Result<void, Error> discover(std::string const& directory)
 	{
 		return thx::registry().pluginManager().discover(directory);
+	}
+
+	inline Result<void, Error> forget(std::string const& path)
+	{
+		return thx::registry().pluginManager().forget(path);
 	}
 
 	inline Result<OpenedPlugin, Error> open(std::string const& path)
