@@ -14,11 +14,17 @@
 
 #include <string>
 
+// PluginHandle is the host-side *consumer* of the plugin ABI. The matching
+// *producer* lives in thx/plugin/platform.h: the THX_DEFINE_SERVICE_PLUGIN
+// and THX_DEFINE_PLUGIN macros emit the `thx_create_plugin` /
+// `thx_destroy_plugin` / `thx_abi_version` symbols that PluginHandle::open()
+// resolves here via Library::bind. See platform.h for the symbol definitions.
+
 namespace thx::plugin
 {
 	// Plugin-specific layer on top of Library: holds an opened DSO plus the
-	// three thx_* entry points resolved out of it. PluginManager manages
-	// the lifecycle.
+	// three thx_* entry points resolved out of it. PluginManager owns the
+	// lifecycle; framework users never construct a PluginHandle directly.
 	//
 	// Move-only. The destructor releases the underlying Library to the
 	// process-wide PluginGarbage queue so that any IService references

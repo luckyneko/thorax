@@ -15,6 +15,13 @@
 #include <cstdint>
 #include <new>
 
+// This header is the plugin-side *producer* of the plugin ABI: the
+// THX_DEFINE_SERVICE_PLUGIN / THX_DEFINE_PLUGIN macros emit the three
+// `thx_*` C symbols every plugin shared library must export. The host-side
+// *consumer* lives in thx/plugin/plugin_handle.h, where PluginHandle::open()
+// resolves the symbols via Library::bind. See plugin_handle.h for how these
+// exports are consumed.
+
 namespace thx::plugin
 {
 	// Function pointer types for the plugin C exports.

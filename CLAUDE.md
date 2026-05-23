@@ -75,7 +75,7 @@ User-facing free-function shims `thx::plugin::collectGarbage()` / `thx::plugin::
 Two "system-level" headers — `thx/<layer>/<layer>.h` — reduce the verbosity of `thx::registry().xxxManager().method(...)` for typical host code:
 
 - [thx/service/service.h](include/thx/service/service.h) — inline `thx::service::registerService<T>`, `unregisterService<T>`, `getService<T>`, `listServices`. Same names as the matching `ServiceManager` methods.
-- [thx/plugin/plugin.h](include/thx/plugin/plugin.h) — inline `thx::plugin::discover`, `open`, `load`, `discoverAndLoad`, `unload`, `isLoaded`, `listPlugins`, `checkRequirements`. Same names as the matching `PluginManager` methods.
+- [thx/plugin/plugin.h](include/thx/plugin/plugin.h) — inline `thx::plugin::discover`, `forget`, `open`, `close`, `closeAllOpened`, `load`, `unload`, `discoverAndLoad`, `checkRequirements`, `plugins`/`plugins(State)`/`pluginInfo`/`is`/`isDiscovered`/`isOpened`/`isLoaded`, and `collectGarbage`/`pendingGarbage`. Same names as the matching `PluginManager` methods.
 
 Each facade is a one-liner forwarding to the Registry-owned manager. Code that already holds a `ServiceManager&` or `PluginManager&` (e.g. inside `IPlugin::onLoad`, or tests using a local instance) should keep calling the member functions directly — the facades exist for the everywhere-else case where there's no manager reference in scope. The example host (`examples/host/main.cpp`) uses the facades and is the canonical demonstration.
 
@@ -116,19 +116,42 @@ DSO loading is layered: [thx::Library](include/thx/library.h) is the generic RAI
 
 `thx::LIBRARY_EXTENSION` (in `library.h`) is the platform DSO suffix — `.dylib` / `.so` / `.dll` — used by `PluginManager::discover()` and any consumer that scans a directory.
 
-[thx::plugin::PluginManager](include/thx/plugin/plugin_manager.h) sits on top. The full lifecycle is **discover → open → load**:
-- `discover(dir)` returns the sorted list of files matching `LIBRARY_EXTENSION`. Pure filesystem scan; nothing is mapped.
-- `open(path)` opens the DSO, ABI-checks it, and instantiates its `IPlugin`, returning a move-only `OpenedPlugin` value. **`required()` is NOT yet checked and `onLoad` is NOT yet called.** The caller queries `name()`/`version()`/`required()`/`path()` to plan load order across many plugins, then commits with `load(OpenedPlugin)`. Dropping the value without loading destroys the `IPlugin` and queues the DSO to the graveyard. `open()` is the entry point that drains the graveyard (see "DSO keep-alive" below).
-- `load(OpenedPlugin)` checks `required()` against the registry, calls `onLoad`, and takes ownership of the DSO + `IPlugin` on success. The `OpenedPlugin` is consumed either way; on failure its DSO is released to the graveyard at the next drain. `PluginManager::checkRequirements(sm, reqs)` is exposed as a static dry-run helper so callers can pre-check a requirement set without consuming an `OpenedPlugin`.
-- `load(path)` is a convenience wrapper that does `open(path)` + `load(OpenedPlugin)` in one step. Unlike `open()` (which returns `AlreadyLoaded` on duplicate paths), `load(path)` preserves the historical "loading the same file twice is a no-op" behavior by checking `isLoaded()` first.
-- `unload(path)` calls `IPlugin::onUnload` and removes the manager's entry. **It does not call `dlclose` directly** — instead the native handle goes onto a process-wide deferred-close queue managed by `thx::plugin::PluginGarbage` (see "DSO keep-alive" below).
-- `discoverAndLoad(dir)` calls `load(path)` on each discovered file and returns a `LoadSummary { loaded, failed }` rather than a single `Result`, so callers can decide what counts as success. It does not surface `required()` or do any ordering — use the explicit `discover → open* → sort → load*` flow when you need that.
+[thx::plugin::PluginManager](include/thx/plugin/plugin_manager.h) tracks every plugin it knows about by canonical path across three lifecycle states:
 
-The manager keys entries by canonical path so loading the same file twice via `load(path)` is a no-op (and via `open()` reports `AlreadyLoaded`). It is **not** thread-safe; serialise externally if needed. The garbage queue itself is thread-safe.
+- **Discovered** — filesystem entry has been seen (and, when Phase 5 manifests land, its sidecar parsed). No DSO interaction yet.
+- **Opened** — DSO mapped, `IPlugin` instantiated, ready for load. `onLoad` has NOT been called.
+- **Loaded** — `onLoad` succeeded, services registered.
+
+All state lives inside the manager — there are no move-only handle types crossing the API boundary. Callers see only value-typed `PluginInfo` snapshots and `Result<void, Error>` outcomes.
+
+**State mutators** (each returns `Result<void, Error>`):
+
+- `discover(dir)` populates `Discovered` entries from a filesystem scan of `LIBRARY_EXTENSION` files. Idempotent: re-scanning leaves existing `Opened`/`Loaded` entries untouched and silently skips already-known `Discovered` paths. Returns `FileNotFound` if the directory can't be iterated.
+- `open(path)` transitions to `Opened`: opens the DSO, ABI-checks it, instantiates the `IPlugin`. Allowed source states: `(nothing)` (opens directly), `Discovered`, `Opened` (no-op), `Loaded` (no-op — Loaded supersedes Opened). Drains the deferred-close queue as a side effect.
+- `load(path)` transitions to `Loaded`: checks `required()`, calls `onLoad`, registers services. Implicitly opens if the entry isn't already `Opened`. No-op when already `Loaded`.
+- `close(path)` transitions `Opened` → `Discovered`. The IPlugin is destroyed and the DSO queued for deferred close. No-op on any other state.
+- `unload(path)` transitions `Loaded` → `Discovered`. Calls `onUnload`, unregisters services, queues the DSO. Returns `NotLoaded` if the path isn't currently loaded.
+- `forget(path)` transitions `Discovered` → `(nothing)`. Returns `InUse` if the path is `Opened` or `Loaded` (call `close()` / `unload()` first). Idempotent on absence.
+- `closeAllOpened()` is the sweep helper: drops every `Opened`-but-not-`Loaded` entry to `Discovered`. Returns the count.
+
+**Aggregate operations.** `discoverAndLoad(dir)` chains `discover` then `load` for every discovered file and returns a `LoadSummary { loaded, failed }`. `checkRequirements(sm, reqs)` is a static dry-run.
+
+**Queries** (all return value-typed snapshots, none mutate):
+
+- `plugins()` — every entry, any state.
+- `plugins(State)` — filtered to one state.
+- `pluginInfo(path)` — `optional<PluginInfo>` for one path.
+- `is(State, path)` and convenience `isDiscovered`/`isOpened`/`isLoaded`.
+
+`PluginInfo` carries `path`, `state`, `name`, `version`, `requirements`, `provides`, `services`. Fields are populated incrementally as the entry progresses; e.g. `services` is empty until `Loaded`. `requirements` is spelled out instead of `requires` to avoid the C++20 concepts keyword.
+
+**Idempotency rules:** `open` on `Opened`/`Loaded`, `load` on `Loaded`, and `close` on any non-`Opened` state are ok-no-ops. There is no `AlreadyLoaded` error. `unload` on non-`Loaded` returns `NotLoaded`; `forget` on `Opened`/`Loaded` returns `InUse`.
+
+**Thread safety:** not thread-safe — serialise externally if needed. The garbage queue itself is thread-safe.
 
 **DSO keep-alive (Milestone 8b).** The deferred-close queue lives in [thx::plugin::PluginGarbage](include/thx/plugin/plugin_garbage.h) — owned by the process-wide `Registry`, accessible via `thx::registry().pluginGarbage()`. The class wraps a mutex + `vector<Library>` with `schedule(Library)`, `collect()`, and `pending()` members. `PluginHandle::close()` moves its `Library` into the queue instead of letting `~Library` run `dlclose`/`FreeLibrary` synchronously. This indirection is what makes it safe for callers to hold `shared_ptr<IService>` handles across `unload()`: the service's destructor and its `shared_ptr` control block both live in plugin code, so the DSO must stay mapped until every reference into it has been released. The queue drains on two occasions:
 
-1. Automatically at the start of `PluginManager::open()` (and therefore also the convenience `load(path)` overload, which calls `open()` internally), so long-running programs don't accumulate mapped-but-unused DSOs. `load(OpenedPlugin)` itself does *not* drain — meaning a `discover → open* → load*` batch drains exactly once, at the start of the open phase, and never yanks a DSO while another plugin is still being inspected;
+1. Automatically at the start of `PluginManager::open()` (and therefore also `load(path)` when it implicitly opens), so long-running programs don't accumulate mapped-but-unused DSOs. A `discover → open* → load*` batch drains exactly once, at the first `open()`, and never yanks a DSO while another plugin is still being inspected.
 2. On demand via `thx::registry().pluginGarbage().collect()` (or the equivalent free-function shim `thx::plugin::collectGarbage()`). `thx::plugin::pendingGarbage()` exposes the current queue depth.
 
 The class lives separately from `PluginManager` because the queue has to outlive any individual manager: a caller may destroy the `PluginManager` and still hold a service reference, which the queue keeps the DSO mapped for. `Registry` owns the `PluginGarbage` by value, declared *before* the `ServiceManager` so it is destroyed *after* — anything that schedules at teardown still finds a live queue.

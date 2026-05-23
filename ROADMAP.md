@@ -74,7 +74,7 @@ remain useful as a reference for *why* things are shaped the way they are.
 - **`thx::Result<T, Error>`** — exception-free fallible return type used
   throughout the loader.
 - **`THX_LOG` / `THX_ASSERT`** — portable call-site capture macros.
-- **Introspection** — `ServiceManager::listServices`, `PluginManager::listPlugins`.
+- **Introspection** — `ServiceManager::listServices`, `PluginManager::plugins`/`pluginInfo`/`is`.
 
 ### Milestone 6 — Composable Services
 
