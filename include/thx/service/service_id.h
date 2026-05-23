@@ -8,8 +8,11 @@
 
 #pragma once
 
-#include "thx/detail/hash.h"
 #include "thx/rtti/type_name.h"
+
+#include <cstddef>
+#include <cstdint>
+#include <string_view>
 
 namespace thx::service
 {
@@ -22,7 +25,7 @@ namespace thx::service
 	{
 	public:
 		constexpr explicit ServiceID(const char* name) noexcept
-			: m_hash(thx::detail::fnv1a_hash(name))
+			: m_hash(fnv1aHash(name))
 			, m_name(name)
 		{
 		}
@@ -44,11 +47,24 @@ namespace thx::service
 			return !(*this == other);
 		}
 
-		constexpr uint64_t hash() const noexcept { return m_hash; }
-		constexpr const char* name() const noexcept { return m_name; }
+		constexpr uint64_t     hash() const noexcept { return m_hash; }
+		constexpr const char*  name() const noexcept { return m_name; }
 
 	private:
-		uint64_t m_hash;
+		// FNV-1a 64-bit. Internal helper for the constructor — kept private
+		// because ServiceID is its only consumer.
+		static constexpr uint64_t fnv1aHash(std::string_view str) noexcept
+		{
+			uint64_t hash = 14695981039346656037ULL;
+			for (unsigned char c : str)
+			{
+				hash ^= static_cast<uint64_t>(c);
+				hash *= 1099511628211ULL;
+			}
+			return hash;
+		}
+
+		uint64_t    m_hash;
 		const char* m_name;
 	};
 

@@ -61,7 +61,6 @@ add_library(${PROJECT_NAME} STATIC
     include/thx/library.h
     include/thx/registry.h
     include/thx/log.h
-    include/thx/detail/hash.h
 
     # Headers — service/
     include/thx/service/iservice.h

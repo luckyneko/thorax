@@ -226,7 +226,6 @@ include/thx/         cross-cutting public headers (thorax umbrella, Library, Reg
 include/thx/service/ ServiceManager, Service<>, ServiceID, IService (+ .inl)
 include/thx/plugin/  PluginManager, PluginHandle, PluginGarbage, IPlugin, plugin ABI macros (platform.h)
 include/thx/rtti/    public compile-time helpers (TypeName)
-include/thx/detail/  private implementation helpers (hash) — installed alongside the public headers because transitively included, but not part of the user-facing surface
 src/                 cross-cutting .cpp (thorax, log, library, registry)
 src/service/         service-layer .cpp
 src/plugin/          plugin-layer .cpp
@@ -240,6 +239,18 @@ thirdparty/          vendored Catch2 tarball (downloaded on demand by addcatch2.
 ```
 
 Style is enforced by [.clang-format](.clang-format): Allman braces, **tabs for indent (width 4)**, no column limit, namespace contents indented, pointer-left (`int* p`), access modifiers offset −4. Match the existing files when editing.
+
+**Naming policy.** Settled during the Phase 2 / style refactor; new code must conform:
+
+- **Methods / free functions:** camelCase. (`registerService`, `discoverAndLoad`, `collectGarbage`, `assertThat`, `toString`, ...)
+- **Private member variables:** `m_` prefix + camelCase tail. (`m_handle`, `m_plugin`, `m_createFn`, `m_sm`, ...)
+- **Public struct fields:** camelCase, no `m_` prefix. (`PluginInfo::pluginName`, `LoadedEntry::serviceIds`, ...)
+- **Type names:** PascalCase. (`PluginManager`, `OpenedEntry`, ...)
+- **Enum values:** PascalCase. (`ErrorCode::NotLoaded`, `State::Discovered`, ...)
+- **Macros:** SCREAMING_SNAKE_CASE. (`THX_DEFINE_SERVICE_PLUGIN`, `THX_PLUGIN_API`, ...)
+- **File names:** snake_case. (`plugin_manager.h`, `service_manager.inl`, ...)
+- **Plugin ABI exports:** `thx_create_plugin` / `thx_destroy_plugin` / `thx_abi_version` — these are the wire contract, not C++ symbols, and stay snake_case by design.
+- **Implementation-detail separation:** prefer `.inl` files (e.g. `service_manager.inl`) over a `detail/` subfolder. Template definitions and other impl-only code that has to live in headers go into `<name>.inl` alongside the corresponding `<name>.h`. There is no `include/thx/detail/` folder.
 
 **Adding a test file** means appending it to the `add_executable(test-${PROJECT_NAME} …)` source list in [CMakeLists.txt](CMakeLists.txt). Tests for in-tree plugins are guarded by `if(THORAX_BUILD_PLUGINS)` and pass plugin paths via `THX_*_PLUGIN_PATH` compile definitions.
 

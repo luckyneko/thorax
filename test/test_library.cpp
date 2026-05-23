@@ -156,3 +156,40 @@ TEST_CASE("LIBRARY_EXTENSION matches the platform DSO suffix", "[library]")
 	REQUIRE(std::string(thx::LIBRARY_EXTENSION) == ".so");
 #endif
 }
+
+TEST_CASE("Library::tryBind succeeds on an existing symbol", "[library]")
+{
+	thx::Library lib;
+	lib.open(THX_MOCK_PLUGIN_PATH);
+	REQUIRE(lib);
+
+	ThxAbiVersionFn abiFn = nullptr;
+	auto r = lib.tryBind("thx_abi_version", abiFn);
+	REQUIRE(r);
+	REQUIRE(abiFn != nullptr);
+	REQUIRE(abiFn() != 0);
+}
+
+TEST_CASE("Library::tryBind reports SymbolNotFound for a missing symbol", "[library]")
+{
+	thx::Library lib;
+	lib.open(THX_MOCK_PLUGIN_PATH);
+	REQUIRE(lib);
+
+	void* bogus = nullptr;
+	auto r = lib.tryBind("definitely_not_a_real_symbol", bogus);
+	REQUIRE_FALSE(r);
+	REQUIRE(r.error().code == thx::ErrorCode::SymbolNotFound);
+	REQUIRE(bogus == nullptr);
+	// tryBind does NOT poison the Library's validity bit.
+	REQUIRE(lib.valid());
+}
+
+TEST_CASE("Library::tryBind on a closed library returns NotLoaded", "[library]")
+{
+	thx::Library lib;
+	void* bogus = nullptr;
+	auto r = lib.tryBind("any_symbol", bogus);
+	REQUIRE_FALSE(r);
+	REQUIRE(r.error().code == thx::ErrorCode::NotLoaded);
+}

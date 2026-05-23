@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "thx/result.h"
+
 #include <filesystem>
 #include <string>
 #include <type_traits>
@@ -83,6 +85,28 @@ namespace thx
 			}
 			out = reinterpret_cast<FnPtr>(raw);
 			return *this;
+		}
+
+		// Result-returning variant of bind() for callers that want per-symbol
+		// diagnostics rather than the fluent valid()-bit pattern. Does NOT
+		// mutate the Library's validity bit — succeeds or fails per call,
+		// independent of any prior bind() outcome (as long as the library is
+		// open; if it isn't, returns NotLoaded).
+		template <typename FnPtr>
+		Result<void, Error> tryBind(char const* name, FnPtr& out)
+		{
+			static_assert(std::is_pointer_v<FnPtr>,
+			    "Library::tryBind expects a function-pointer out-parameter");
+			if (!m_handle)
+				return Result<void, Error>::err({ErrorCode::NotLoaded,
+					"Library::tryBind: library is not open"});
+			void* raw = sym(name);
+			if (!raw)
+				return Result<void, Error>::err({ErrorCode::SymbolNotFound,
+					std::string("Library::tryBind: symbol '") + (name ? name : "")
+					+ "' not found in '" + m_path + "'"});
+			out = reinterpret_cast<FnPtr>(raw);
+			return Result<void, Error>::ok();
 		}
 
 		// True if the library is open AND every bind() so far has succeeded.
