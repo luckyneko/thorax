@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <thx/service/service.h>
+#include <thx/service/iservice.h>
 
 #include <memory>
 

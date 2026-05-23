@@ -7,7 +7,7 @@
  */
 
 #include <catch2/catch_all.hpp>
-#include <thx/service/service.h>
+#include <thx/service/iservice.h>
 #include <thx/service/service_manager.h>
 
 #include <atomic>

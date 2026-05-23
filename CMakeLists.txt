@@ -75,6 +75,7 @@ add_library(${PROJECT_NAME} STATIC
     include/thx/plugin/plugin_handle.h
     include/thx/plugin/plugin_garbage.h
     include/thx/plugin/plugin_manager.h
+    include/thx/plugin/plugin.h
 
     # Headers — rtti/
     include/thx/rtti/type_name.h
@@ -208,6 +209,7 @@ if(THORAX_BUILD_TESTING)
         test/test_diagnostics.cpp
         test/test_iplugin.cpp
         test/test_registry.cpp
+        test/test_facades.cpp
     )
     target_link_libraries(test-${PROJECT_NAME} ${PROJECT_NAME} Catch2::Catch2WithMain)
     target_include_directories(test-${PROJECT_NAME} PRIVATE test/mock_plugin)

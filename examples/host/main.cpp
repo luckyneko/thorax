@@ -13,9 +13,8 @@
 // Loads all plugins found in <plugin-dir>, then exercises the LoggingService
 // and FileService interfaces contributed by the two example plugins.
 
-#include <thx/plugin/plugin_manager.h>
-#include <thx/registry.h>
-#include <thx/service/service_manager.h>
+#include <thx/plugin/plugin.h>
+#include <thx/service/service.h>
 
 #include "interfaces/file_service.h"
 #include "interfaces/logging_service.h"
@@ -31,11 +30,8 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-	auto& reg = thx::registry();
-	auto& sm  = reg.serviceManager();
-	auto& pm  = reg.pluginManager();
-
-	auto summary = pm.discoverAndLoad(argv[1]);
+	// Free-function facades forward to the Registry-owned managers.
+	auto summary = thx::plugin::discoverAndLoad(argv[1]);
 	if (summary.loaded.empty())
 	{
 		std::fprintf(stderr, "discoverAndLoad: no plugins loaded from %s\n", argv[1]);
@@ -44,14 +40,14 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-	auto log_svc = sm.getService<examples::ILoggingService>();
+	auto log_svc = thx::service::getService<examples::ILoggingService>();
 	if (!log_svc)
 	{
 		std::fprintf(stderr, "ILoggingService not found\n");
 		return 1;
 	}
 
-	auto file_svc = sm.getService<examples::IFileService>();
+	auto file_svc = thx::service::getService<examples::IFileService>();
 	if (!file_svc)
 	{
 		std::fprintf(stderr, "IFileService not found\n");

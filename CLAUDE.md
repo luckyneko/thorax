@@ -70,6 +70,17 @@ Lifecycle hooks (all free functions in the `thx` namespace, declared in `registr
 
 User-facing free-function shims `thx::collectPluginGarbage()` / `thx::pendingPluginGarbage()` operate on the Registry-owned queue and remain the recommended entry points for code that just wants to drain.
 
+### Free-function facades
+
+Two "system-level" headers — `thx/<layer>/<layer>.h` — reduce the verbosity of `thx::registry().xxxManager().method(...)` for typical host code:
+
+- [thx/service/service.h](include/thx/service/service.h) — inline `thx::service::registerService<T>`, `unregisterService<T>`, `getService<T>`, `listServices`. Same names as the matching `ServiceManager` methods.
+- [thx/plugin/plugin.h](include/thx/plugin/plugin.h) — inline `thx::plugin::discover`, `open`, `load`, `discoverAndLoad`, `unload`, `isLoaded`, `listPlugins`, `checkRequirements`. Same names as the matching `PluginManager` methods.
+
+Each facade is a one-liner forwarding to the Registry-owned manager. Code that already holds a `ServiceManager&` or `PluginManager&` (e.g. inside `IPlugin::onLoad`, or tests using a local instance) should keep calling the member functions directly — the facades exist for the everywhere-else case where there's no manager reference in scope. The example host (`examples/host/main.cpp`) uses the facades and is the canonical demonstration.
+
+**`#include` policy.** Service authors writing an interface type `IFooService : thx::service::Service<IFooService>` should `#include "thx/service/iservice.h"` — the CRTP base `Service<>` is paired with `IService` there. Host code calling the facade functions includes `thx/service/service.h` and `thx/plugin/plugin.h`. The umbrella `thx/thorax.h` brings in everything.
+
 ### ServiceManager
 
 [thx::service::ServiceManager](include/thx/service/service_manager.h) is owned by the process-wide [thx::Registry](include/thx/registry.h); reach for it via `thx::registry().serviceManager()`. The class is also default-constructible, and tests routinely use a local instance. Reads use `std::shared_lock` so concurrent `getService<T>()` calls never block each other; `registerService`/`unregisterService` take exclusive locks.
