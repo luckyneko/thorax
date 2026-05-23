@@ -7,7 +7,6 @@
  */
 
 #include "thx/plugin/plugin_garbage.h"
-#include "thx/registry.h"
 
 #include <utility>
 
@@ -45,18 +44,3 @@ std::size_t PluginGarbage::pending() const noexcept
 }
 
 } // namespace thx::plugin
-
-namespace thx
-{
-
-std::size_t collectPluginGarbage() noexcept
-{
-	return Registry::instance().pluginGarbage().collect();
-}
-
-std::size_t pendingPluginGarbage() noexcept
-{
-	return Registry::instance().pluginGarbage().pending();
-}
-
-} // namespace thx

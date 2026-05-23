@@ -43,7 +43,7 @@ namespace thx::plugin
 	// Lifetime: while alive, the DSO is mapped and the IPlugin instance exists.
 	// Dropping the value without passing it to load() destroys the IPlugin and
 	// queues the DSO into the deferred-close graveyard (drained at the next
-	// PluginManager::open() or thx::collectPluginGarbage()).
+	// PluginManager::open() or thx::plugin::collectGarbage()).
 	class OpenedPlugin
 	{
 	public:
@@ -91,7 +91,7 @@ namespace thx::plugin
 	//
 	// Destruction: any plugins still loaded when the PluginManager is destroyed
 	// are unloaded automatically (services unregistered, DSO handles deferred).
-	// The destructor does NOT call collectPluginGarbage(); call it explicitly
+	// The destructor does NOT call collectGarbage(); call it explicitly
 	// when no service references into those DSOs remain.
 	class PluginManager
 	{
@@ -147,10 +147,10 @@ namespace thx::plugin
 		//
 		// Lifetime: the DSO is NOT immediately unmapped. Its native handle is
 		// pushed onto a process-wide deferred-close queue, drained at the next
-		// call to load() or thx::collectPluginGarbage(). This means callers
+		// call to load() or thx::plugin::collectGarbage(). This means callers
 		// MAY hold shared_ptr<IService> handles across unload — the DSO stays
 		// mapped (and the service's destructor / shared_ptr control block stay
-		// reachable) until the next drain. Once collectPluginGarbage() runs,
+		// reachable) until the next drain. Once collectGarbage() runs,
 		// every still-held service reference into the unmapped DSO becomes
 		// undefined behaviour, so drain only when no such references remain.
 		Result<void, Error> unload(std::string const& path);

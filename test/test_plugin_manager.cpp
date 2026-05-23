@@ -8,6 +8,7 @@
 
 #include <catch2/catch_all.hpp>
 #include <thx/library.h>
+#include <thx/plugin/plugin.h>
 #include <thx/plugin/plugin_manager.h>
 #include <thx/result.h>
 #include "mock_plugin.h"
@@ -223,11 +224,11 @@ TEST_CASE("PluginManager - destructor unloads remaining plugins",
 // PluginManager — DSO keep-alive lifetime (Milestone 8b)
 // ---------------------------------------------------------------------------
 
-TEST_CASE("PluginManager - service survives unload until collectPluginGarbage",
+TEST_CASE("PluginManager - service survives unload until collectGarbage",
           "[plugin_manager][lifetime][integration]")
 {
 	// Drain anything queued from previous tests so our count is meaningful.
-	thx::collectPluginGarbage();
+	thx::plugin::collectGarbage();
 
 	thx::service::ServiceManager sm;
 	std::shared_ptr<thx_mock::MockService> svc;
@@ -240,7 +241,7 @@ TEST_CASE("PluginManager - service survives unload until collectPluginGarbage",
 
 		// DSO must still be mapped — a virtual call into plugin code works.
 		REQUIRE(svc->ping() == 42);
-		REQUIRE(thx::pendingPluginGarbage() >= 1);
+		REQUIRE(thx::plugin::pendingGarbage() >= 1);
 	} // loader destroyed; DSO still queued
 
 	// Service still works after the loader is gone.
@@ -250,31 +251,31 @@ TEST_CASE("PluginManager - service survives unload until collectPluginGarbage",
 	svc.reset();
 
 	// Nothing has actually been unmapped yet.
-	REQUIRE(thx::pendingPluginGarbage() >= 1);
+	REQUIRE(thx::plugin::pendingGarbage() >= 1);
 
-	auto closed = thx::collectPluginGarbage();
+	auto closed = thx::plugin::collectGarbage();
 	REQUIRE(closed >= 1);
-	REQUIRE(thx::pendingPluginGarbage() == 0);
+	REQUIRE(thx::plugin::pendingGarbage() == 0);
 }
 
 TEST_CASE("PluginManager - load drains the deferred-close queue",
           "[plugin_manager][lifetime][integration]")
 {
-	thx::collectPluginGarbage();
+	thx::plugin::collectGarbage();
 
 	thx::service::ServiceManager sm;
 	thx::plugin::PluginManager   loader(sm);
 
 	REQUIRE(loader.load(THX_MOCK_PLUGIN_PATH));
 	REQUIRE(loader.unload(THX_MOCK_PLUGIN_PATH));
-	REQUIRE(thx::pendingPluginGarbage() >= 1);
+	REQUIRE(thx::plugin::pendingGarbage() >= 1);
 
 	// Loading any plugin path drains the queue first.
 	REQUIRE(loader.load(THX_MOCK_PLUGIN_PATH));
-	REQUIRE(thx::pendingPluginGarbage() == 0);
+	REQUIRE(thx::plugin::pendingGarbage() == 0);
 
 	REQUIRE(loader.unload(THX_MOCK_PLUGIN_PATH));
-	thx::collectPluginGarbage();
+	thx::plugin::collectGarbage();
 }
 
 // ---------------------------------------------------------------------------
@@ -483,7 +484,7 @@ TEST_CASE("PluginManager::discoverAndLoad - loads real plugin from directory",
 	// graveyard explicitly before the file is unlinked.
 	svc.reset();
 	loader.unload(dst.string());
-	thx::collectPluginGarbage();
+	thx::plugin::collectGarbage();
 
 	fs::remove_all(tmp);
 
@@ -556,7 +557,7 @@ TEST_CASE("PluginManager::open - already-loaded path returns AlreadyLoaded",
 TEST_CASE("PluginManager - dropping OpenedPlugin without loading releases the DSO",
           "[plugin_manager][open][lifetime][integration]")
 {
-	thx::collectPluginGarbage();
+	thx::plugin::collectGarbage();
 
 	thx::service::ServiceManager sm;
 	thx::plugin::PluginManager   loader(sm);
@@ -567,11 +568,11 @@ TEST_CASE("PluginManager - dropping OpenedPlugin without loading releases the DS
 		// Drop without calling load(): destructor releases the DSO to the graveyard.
 	}
 
-	REQUIRE(thx::pendingPluginGarbage() >= 1);
+	REQUIRE(thx::plugin::pendingGarbage() >= 1);
 	REQUIRE_FALSE(loader.isLoaded(THX_MOCK_PLUGIN_PATH));
 	REQUIRE(sm.getService<thx_mock::MockService>() == nullptr);
 
-	REQUIRE(thx::collectPluginGarbage() >= 1);
+	REQUIRE(thx::plugin::collectGarbage() >= 1);
 }
 
 TEST_CASE("PluginManager::load(OpenedPlugin) - still checks required() at load time",

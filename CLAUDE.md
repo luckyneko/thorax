@@ -68,7 +68,7 @@ Lifecycle hooks (all free functions in the `thx` namespace, declared in `registr
 - `thx::shutdown()` — drains the deferred-close queue (via `PluginGarbage::collect()`) and clears the debug name. Does **not** destroy the Registry — the singleton persists until program exit. Safe to call multiple times. Callers MUST release any `shared_ptr<IService>` references into unloaded DSOs before invoking it.
 - `thx::registry()` — shorthand for `Registry::instance()`.
 
-User-facing free-function shims `thx::collectPluginGarbage()` / `thx::pendingPluginGarbage()` operate on the Registry-owned queue and remain the recommended entry points for code that just wants to drain.
+User-facing free-function shims `thx::plugin::collectGarbage()` / `thx::plugin::pendingGarbage()` operate on the Registry-owned queue and remain the recommended entry points for code that just wants to drain.
 
 ### Free-function facades
 
@@ -129,7 +129,7 @@ The manager keys entries by canonical path so loading the same file twice via `l
 **DSO keep-alive (Milestone 8b).** The deferred-close queue lives in [thx::plugin::PluginGarbage](include/thx/plugin/plugin_garbage.h) — owned by the process-wide `Registry`, accessible via `thx::registry().pluginGarbage()`. The class wraps a mutex + `vector<Library>` with `schedule(Library)`, `collect()`, and `pending()` members. `PluginHandle::close()` moves its `Library` into the queue instead of letting `~Library` run `dlclose`/`FreeLibrary` synchronously. This indirection is what makes it safe for callers to hold `shared_ptr<IService>` handles across `unload()`: the service's destructor and its `shared_ptr` control block both live in plugin code, so the DSO must stay mapped until every reference into it has been released. The queue drains on two occasions:
 
 1. Automatically at the start of `PluginManager::open()` (and therefore also the convenience `load(path)` overload, which calls `open()` internally), so long-running programs don't accumulate mapped-but-unused DSOs. `load(OpenedPlugin)` itself does *not* drain — meaning a `discover → open* → load*` batch drains exactly once, at the start of the open phase, and never yanks a DSO while another plugin is still being inspected;
-2. On demand via `thx::registry().pluginGarbage().collect()` (or the equivalent free-function shim `thx::collectPluginGarbage()`). `thx::pendingPluginGarbage()` exposes the current queue depth.
+2. On demand via `thx::registry().pluginGarbage().collect()` (or the equivalent free-function shim `thx::plugin::collectGarbage()`). `thx::plugin::pendingGarbage()` exposes the current queue depth.
 
 The class lives separately from `PluginManager` because the queue has to outlive any individual manager: a caller may destroy the `PluginManager` and still hold a service reference, which the queue keeps the DSO mapped for. `Registry` owns the `PluginGarbage` by value, declared *before* the `ServiceManager` so it is destroyed *after* — anything that schedules at teardown still finds a live queue.
 

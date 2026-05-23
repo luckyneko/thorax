@@ -226,8 +226,8 @@ pushes its native handle onto a process-wide deferred-close queue. The queue
 is drained:
 - automatically at the start of `PluginManager::load()` (keeps long-running
   programs from accumulating mappings), and
-- on demand via the public `thx::collectPluginGarbage()` (returns the
-  number of DSOs unmapped). `thx::pendingPluginGarbage()` exposes the
+- on demand via the public `thx::plugin::collectGarbage()` (returns the
+  number of DSOs unmapped). `thx::plugin::pendingGarbage()` exposes the
   current queue depth for diagnostics and tests.
 
 The queue itself is `std::vector<NativeHandle>` guarded by a `std::mutex`
@@ -237,7 +237,7 @@ other libraries).
 
 **Trade-offs (and how the contract handles them):**
 - A DSO stays mapped past the last apparent service reference, until the
-  next `load()` or explicit `collectPluginGarbage()`. Memory footprint
+  next `load()` or explicit `collectGarbage()`. Memory footprint
   grows in programs that unload many plugins without subsequent `load()`s.
   Mitigation: callers can drain explicitly.
 - A reload at the same path between `unload()` and the drain at the next
@@ -248,7 +248,7 @@ other libraries).
   because `load()` drains first. The header doc spells this out.
 
 **Tests:**
-- "service survives unload until collectPluginGarbage" — load, take a
+- "service survives unload until collectGarbage" — load, take a
   service, unload (then destroy the loader), call `ping()` afterwards,
   drop the service, then drain.
 - "load drains the deferred-close queue" — verifies the auto-drain
@@ -429,7 +429,7 @@ thorax/
 | Concern | Approach |
 |---|---|
 | Simple plugin interface | One C-linkage triple per DSO; `IPlugin` registers any number of services |
-| Memory safety | Allocate and free on the same side; deferred-dlclose keeps DSOs mapped past unload, drained on next load() or explicit collectPluginGarbage() |
+| Memory safety | Allocate and free on the same side; deferred-dlclose keeps DSOs mapped past unload, drained on next load() or explicit collectGarbage() |
 | Debuggability | Structured logging with source location; introspection API; assert-not-swallow |
 | Cross-platform ABI | C-linkage exports; ABI-stable parameter types; no STL types in virtual signatures |
 | User control | Discovery separated from loading; explicit load/unload; lifetime is automatic |

@@ -9,10 +9,12 @@
 #pragma once
 
 #include "thx/registry.h"
+#include "thx/plugin/plugin_garbage.h"
 #include "thx/plugin/plugin_manager.h"
 #include "thx/result.h"
 #include "thx/span.h"
 
+#include <cstddef>
 #include <string>
 #include <utility>
 #include <vector>
@@ -74,6 +76,18 @@ namespace thx::plugin
 	{
 		return PluginManager::checkRequirements(
 		    thx::registry().serviceManager(), reqs);
+	}
+
+	// PluginGarbage convenience shims; operate on the Registry-owned queue.
+	// Equivalent to thx::registry().pluginGarbage().collect() / .pending().
+	inline std::size_t collectGarbage() noexcept
+	{
+		return thx::registry().pluginGarbage().collect();
+	}
+
+	inline std::size_t pendingGarbage() noexcept
+	{
+		return thx::registry().pluginGarbage().pending();
 	}
 
 } // namespace thx::plugin

@@ -110,7 +110,7 @@ TEST_CASE("thx::plugin:: facades cover the load lifecycle",
 	REQUIRE(thx::service::getService<thx_mock::MockService>() == nullptr);
 
 	// Drain so the DSO unmap doesn't bleed into subsequent tests.
-	thx::collectPluginGarbage();
+	thx::plugin::collectGarbage();
 }
 
 TEST_CASE("thx::plugin::open + load(OpenedPlugin) work through the facade",
@@ -125,7 +125,7 @@ TEST_CASE("thx::plugin::open + load(OpenedPlugin) work through the facade",
 	REQUIRE(thx::plugin::isLoaded(THX_MOCK_PLUGIN_PATH));
 
 	REQUIRE(thx::plugin::unload(THX_MOCK_PLUGIN_PATH));
-	thx::collectPluginGarbage();
+	thx::plugin::collectGarbage();
 }
 
 TEST_CASE("thx::plugin::checkRequirements operates on the Registry's ServiceManager",
@@ -147,5 +147,5 @@ TEST_CASE("thx::plugin::checkRequirements operates on the Registry's ServiceMana
 
 	// Cleanup.
 	REQUIRE(thx::plugin::unload(THX_MOCK_PLUGIN_PATH));
-	thx::collectPluginGarbage();
+	thx::plugin::collectGarbage();
 }

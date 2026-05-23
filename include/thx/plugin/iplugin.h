@@ -32,7 +32,7 @@ namespace thx::plugin
 	//
 	// Lifetime: callers may hold shared_ptr<IService> handles past unload —
 	// PluginManager::unload defers the dlclose into a graveyard that's drained
-	// at the next load() or via thx::collectPluginGarbage(). Don't drain
+	// at the next load() or via thx::plugin::collectGarbage(). Don't drain
 	// while service references are still alive: their destructors live in
 	// plugin code and need the DSO mapped to run.
 	class IPlugin

@@ -7,9 +7,10 @@
  */
 
 #include <catch2/catch_all.hpp>
-#include <thx/registry.h>
+#include <thx/plugin/plugin.h>
 #include <thx/plugin/plugin_garbage.h>
 #include <thx/plugin/plugin_manager.h>
+#include <thx/registry.h>
 #include <thx/service/service_manager.h>
 
 // The Registry is a process-wide singleton; tests that mutate its state
@@ -42,15 +43,15 @@ TEST_CASE("Registry exposes ServiceManager, PluginManager, and PluginGarbage",
 	REQUIRE(&gc == &reg.pluginGarbage());
 }
 
-TEST_CASE("collectPluginGarbage / pendingPluginGarbage operate on the Registry-owned queue",
+TEST_CASE("collectGarbage / pendingGarbage operate on the Registry-owned queue",
           "[registry]")
 {
 	auto& gc = thx::registry().pluginGarbage();
 	// Drain in case earlier tests left handles queued.
 	gc.collect();
 
-	REQUIRE(thx::pendingPluginGarbage() == 0);
-	REQUIRE(thx::collectPluginGarbage() == 0);
+	REQUIRE(thx::plugin::pendingGarbage() == 0);
+	REQUIRE(thx::plugin::collectGarbage() == 0);
 }
 
 TEST_CASE("thx::initialise sets the debug name when previously empty",

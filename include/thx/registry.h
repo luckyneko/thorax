@@ -85,7 +85,7 @@ namespace thx
 
 	// shutdown() drains the deferred-close queue. It does NOT destroy the
 	// Registry — the singleton persists until program exit. Safe to call
-	// multiple times; equivalent to thx::collectPluginGarbage() followed by
+	// multiple times; equivalent to thx::plugin::collectGarbage() followed by
 	// clearing the debug name.
 	//
 	// Safety: callers MUST release any shared_ptr<IService> references into
