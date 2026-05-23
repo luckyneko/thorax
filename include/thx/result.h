@@ -28,6 +28,7 @@ namespace thx
 		RegistrationFailed,
 		InUse,                 // operation rejected because the target is still in active use
 		MalformedManifest,     // sidecar JSON could not be parsed or has wrong shape
+		ManifestMismatch,      // manifest's declared name/version/requires/provides disagrees with the live IPlugin
 	};
 
 	// Lightweight error descriptor returned (not thrown) by fallible operations.

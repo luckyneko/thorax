@@ -160,6 +160,46 @@ The class lives separately from `PluginManager` because the queue has to outlive
 
 `PluginManager::~PluginManager` calls `onUnload` for every still-loaded plugin and clears its entries, but does **not** drain `PluginGarbage`. Drain explicitly when no service references into those DSOs remain.
 
+### Sidecar manifests
+
+Every thorax plugin ships paired with a `<basename>.thx.json` sidecar that declares the plugin's name, version, the services it provides, and any service requirements. The sidecar is **mandatory** — `discover()` no longer matches `LIBRARY_EXTENSION` files blindly; it scans `*.thx.json` files and pairs each with its DSO by suffix swap. A bare DSO without a manifest is not a plugin, period.
+
+```json
+{
+  "schema":   1,
+  "name":     "thx.cameras.AcmeCameraDriver",
+  "version":  "1.2.0",
+  "provides": ["thx.cameras.ICameraDriver"],
+  "requires": [
+    {"id": "thx.io.ILogService", "version": "1.0.0"}
+  ]
+}
+```
+
+[thx::plugin::PluginManifest](include/thx/plugin/manifest.h) is the in-memory representation. [`parseManifest(path)`](include/thx/plugin/manifest.h) reads a sidecar and returns `Result<PluginManifest, Error>`; `ErrorCode::MalformedManifest` is the parse-time failure code. The parser is an in-house ~200-LoC JSON reader tailored to the fixed schema — no third-party dependency.
+
+**Pairing rule.** Derived (suffix swap): `foo.thx.json` ↔ `foo.<LIBRARY_EXTENSION>` (so `foo.dylib` on macOS, `foo.so` on Linux, `foo.dll` on Windows). The same manifest works across all three platforms; the manifest does NOT name the DSO.
+
+**`discover(dir)` behaviour:**
+1. Scan for `*.thx.json` files in `dir`.
+2. For each, compute the paired DSO path; warn-and-skip if missing.
+3. Parse the manifest; error-and-skip if malformed (other sidecars in the same dir still load).
+4. Add a `Discovered` entry containing the parsed manifest.
+
+**Discovered-state metadata.** Once `discover()` has run, `pluginInfo(path)` returns name / version / requirements / provides directly from the manifest — no dlopen needed. This is what lets a host filter "all plugins providing `ICameraDriver`" cheaply.
+
+**`load(path)` / `open(path)` shortcut.** If the path isn't yet in `m_discovered`, those methods do an *implicit single-file discover*: they look for `<path's basename>.thx.json`, parse it, populate a `Discovered` entry, then proceed. Missing sidecar → `FileNotFound`. Preserves the "just load this specific plugin" ergonomics without weakening the strict-sidecar rule.
+
+**Load-time verification.** After `onLoad` returns successfully, `finalizeLoad()` cross-checks four fields between the live IPlugin and the manifest:
+- `manifest.name` vs `IPlugin::name()`
+- `manifest.version` vs `IPlugin::version()`
+- `manifest.requirements` (as a set) vs `IPlugin::required()` (as a set)
+- `manifest.provides` (as a set) vs the services actually registered (as a set)
+
+Any divergence rolls back the registration and returns `ErrorCode::ManifestMismatch` with a diagnostic naming the field. Strict on all four; no warn-only mode. Catches stale manifests at the first load attempt rather than letting the cache rot.
+
+**CMake helper.** [`cmake/thx_plugin_manifest.cmake`](cmake/thx_plugin_manifest.cmake) provides `thx_plugin_manifest(target NAME ... VERSION ... [PROVIDES ...] [REQUIRES ...])` which emits the sidecar next to the DSO via `file(GENERATE)`. All 11 in-tree plugins (mock plugins, in-tree logging/io, example plugins) use this rather than hand-written JSON. `REQUIRES` entries are `"id:version"` strings parsed into JSON objects.
+
 ### Errors & logging
 
 Failures return `thx::Result<T, thx::Error>` ([include/thx/result.h](include/thx/result.h)) — no exceptions in library code. `thx::Result<void, Error>` is the void specialisation. `Result<T>` exposes `valueOr(fallback)` and `map(f)`; `discoverAndLoad` is the one operation that breaks the pattern (it returns a `LoadSummary` so callers can react to partial failure).

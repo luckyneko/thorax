@@ -219,10 +219,89 @@ PluginManager::finalizeLoad(OpenedEntry opened, std::string const& canonical)
 			"IPlugin::onLoad returned false for: " + canonical});
 	}
 
+	// --- Manifest verification -----------------------------------------
+	//
+	// The DSO is canonical: its IPlugin and actually-registered services
+	// must match what the manifest declared. Any divergence is a stale
+	// manifest (or an authoring bug); roll back the registration and fail
+	// the load with ManifestMismatch.
+
+	auto registered = diffNewIds();
+
+	auto rollback = [&]
+	{
+		for (auto const& id : registered)
+			m_sm.unregisterService(id);
+	};
+
+	auto mismatch = [&](std::string const& field, std::string const& detail)
+	{
+		rollback();
+		return Result<LoadedEntry, Error>::err({ErrorCode::ManifestMismatch,
+			"Plugin '" + canonical + "': manifest " + field + " does not match the live IPlugin — " + detail});
+	};
+
+	// name
+	{
+		auto liveName = std::string(static_cast<std::string_view>(opened.plugin->name()));
+		if (liveName != opened.manifest.name)
+			return mismatch("name",
+				"manifest='" + opened.manifest.name + "' live='" + liveName + "'");
+	}
+
+	// version
+	{
+		auto liveVersion = opened.plugin->version();
+		if (liveVersion != opened.manifest.version)
+			return mismatch("version",
+				"manifest=" + toString(opened.manifest.version)
+				+ " live=" + toString(liveVersion));
+	}
+
+	// requirements (compared as a set)
+	{
+		auto liveReq = opened.plugin->required();
+		std::vector<std::pair<std::string, Version>> liveSet;
+		liveSet.reserve(liveReq.size());
+		for (std::size_t i = 0; i < liveReq.size(); ++i)
+			liveSet.emplace_back(std::string(liveReq[i].id.name()), liveReq[i].version);
+		std::sort(liveSet.begin(), liveSet.end());
+
+		std::vector<std::pair<std::string, Version>> manifestSet;
+		manifestSet.reserve(opened.manifest.requirements.size());
+		for (auto const& r : opened.manifest.requirements)
+			manifestSet.emplace_back(r.id, r.version);
+		std::sort(manifestSet.begin(), manifestSet.end());
+
+		if (liveSet != manifestSet)
+			return mismatch("requirements",
+				"manifest lists " + std::to_string(manifestSet.size())
+				+ " requirement(s), IPlugin::required() reports "
+				+ std::to_string(liveSet.size()) + " (or contents differ)");
+	}
+
+	// provides (compared as a set against actually-registered services)
+	{
+		std::vector<std::string> liveSet;
+		liveSet.reserve(registered.size());
+		for (auto const& id : registered)
+			liveSet.emplace_back(id.name());
+		std::sort(liveSet.begin(), liveSet.end());
+
+		std::vector<std::string> manifestSet = opened.manifest.provides;
+		std::sort(manifestSet.begin(), manifestSet.end());
+
+		if (liveSet != manifestSet)
+			return mismatch("provides",
+				"manifest declares " + std::to_string(manifestSet.size())
+				+ " service(s), plugin registered "
+				+ std::to_string(liveSet.size()) + " (or contents differ)");
+	}
+
 	LoadedEntry entry;
 	entry.manifest   = std::move(opened.manifest);
 	entry.handle     = std::move(opened.handle);
-	entry.serviceIds = diffNewIds();
+	entry.serviceIds = std::move(registered);
 	entry.plugin     = std::move(opened.plugin);
 	return Result<LoadedEntry, Error>::ok(std::move(entry));
 }

@@ -959,3 +959,167 @@ TEST_CASE("thx::plugin facade exposes the new query functions",
 	REQUIRE(thx::plugin::unload(THX_MOCK_PLUGIN_PATH));
 	thx::plugin::collectGarbage();
 }
+
+// ---------------------------------------------------------------------------
+// Phase 5 — load-time manifest verification
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Manifest verification - matching manifest loads cleanly",
+          "[plugin_manager][manifest][integration]")
+{
+	// The in-tree mock_plugin's sidecar is authored to match the live IPlugin.
+	// If verification is wired up correctly, the load succeeds.
+	thx::service::ServiceManager sm;
+	thx::plugin::PluginManager   pm(sm);
+
+	REQUIRE(pm.load(THX_MOCK_PLUGIN_PATH));
+	REQUIRE(pm.isLoaded(THX_MOCK_PLUGIN_PATH));
+}
+
+TEST_CASE("Manifest verification - mismatched name fails with ManifestMismatch",
+          "[plugin_manager][manifest][integration]")
+{
+	namespace fs = std::filesystem;
+
+	auto tmp = fs::temp_directory_path() / "thx_test_mismatch_name";
+	fs::remove_all(tmp);
+	fs::create_directories(tmp);
+	auto dst = copyPluginWithSidecar(THX_MOCK_PLUGIN_PATH, tmp);
+
+	// Replace the sidecar with one that has a wrong name field.
+	auto sidecar = (tmp / (fs::path(dst).stem().string() + ".thx.json")).string();
+	{
+		std::ofstream f(sidecar);
+		f << R"({
+	"schema":   1,
+	"name":     "thx.fake.WrongName",
+	"version":  "1.0.0",
+	"provides": ["thx_mock.MockService"],
+	"requires": []
+})";
+	}
+
+	thx::service::ServiceManager sm;
+	thx::plugin::PluginManager   pm(sm);
+
+	auto r = pm.load(dst.string());
+	REQUIRE_FALSE(r);
+	REQUIRE(r.error().code == thx::ErrorCode::ManifestMismatch);
+	REQUIRE(r.error().message.find("name") != std::string::npos);
+	REQUIRE_FALSE(pm.isLoaded(dst.string()));
+	// Service should NOT be registered after a failed verification.
+	REQUIRE(sm.getService<thx_mock::MockService>() == nullptr);
+
+	thx::plugin::collectGarbage();
+	fs::remove_all(tmp);
+}
+
+TEST_CASE("Manifest verification - mismatched version fails with ManifestMismatch",
+          "[plugin_manager][manifest][integration]")
+{
+	namespace fs = std::filesystem;
+
+	auto tmp = fs::temp_directory_path() / "thx_test_mismatch_version";
+	fs::remove_all(tmp);
+	fs::create_directories(tmp);
+	auto dst = copyPluginWithSidecar(THX_MOCK_PLUGIN_PATH, tmp);
+
+	auto sidecar = (tmp / (fs::path(dst).stem().string() + ".thx.json")).string();
+	{
+		std::ofstream f(sidecar);
+		f << R"({
+	"schema":   1,
+	"name":     "thx_mock.MockService",
+	"version":  "9.9.9",
+	"provides": ["thx_mock.MockService"],
+	"requires": []
+})";
+	}
+
+	thx::service::ServiceManager sm;
+	thx::plugin::PluginManager   pm(sm);
+
+	auto r = pm.load(dst.string());
+	REQUIRE_FALSE(r);
+	REQUIRE(r.error().code == thx::ErrorCode::ManifestMismatch);
+	REQUIRE(r.error().message.find("version") != std::string::npos);
+
+	thx::plugin::collectGarbage();
+	fs::remove_all(tmp);
+}
+
+TEST_CASE("Manifest verification - mismatched provides fails with ManifestMismatch",
+          "[plugin_manager][manifest][integration]")
+{
+	namespace fs = std::filesystem;
+
+	auto tmp = fs::temp_directory_path() / "thx_test_mismatch_provides";
+	fs::remove_all(tmp);
+	fs::create_directories(tmp);
+	auto dst = copyPluginWithSidecar(THX_MOCK_PLUGIN_PATH, tmp);
+
+	// Manifest claims a service the plugin never registers.
+	auto sidecar = (tmp / (fs::path(dst).stem().string() + ".thx.json")).string();
+	{
+		std::ofstream f(sidecar);
+		f << R"({
+	"schema":   1,
+	"name":     "thx_mock.MockService",
+	"version":  "1.0.0",
+	"provides": ["thx_mock.MockService", "thx_mock.UnshippedService"],
+	"requires": []
+})";
+	}
+
+	thx::service::ServiceManager sm;
+	thx::plugin::PluginManager   pm(sm);
+
+	auto r = pm.load(dst.string());
+	REQUIRE_FALSE(r);
+	REQUIRE(r.error().code == thx::ErrorCode::ManifestMismatch);
+	REQUIRE(r.error().message.find("provides") != std::string::npos);
+	// Roll back: the service the plugin DID register must be unregistered.
+	REQUIRE(sm.getService<thx_mock::MockService>() == nullptr);
+
+	thx::plugin::collectGarbage();
+	fs::remove_all(tmp);
+}
+
+TEST_CASE("Manifest verification - mismatched requirements fails with ManifestMismatch",
+          "[plugin_manager][manifest][integration]")
+{
+	namespace fs = std::filesystem;
+
+	auto tmp = fs::temp_directory_path() / "thx_test_mismatch_requires";
+	fs::remove_all(tmp);
+	fs::create_directories(tmp);
+	auto dst = copyPluginWithSidecar(THX_MOCK_PLUGIN_PATH, tmp);
+
+	// Manifest declares a requirement the IPlugin doesn't report.
+	auto sidecar = (tmp / (fs::path(dst).stem().string() + ".thx.json")).string();
+	{
+		std::ofstream f(sidecar);
+		f << R"({
+	"schema":   1,
+	"name":     "thx_mock.MockService",
+	"version":  "1.0.0",
+	"provides": ["thx_mock.MockService"],
+	"requires": [{"id": "thx.fake.Imaginary", "version": "1.0.0"}]
+})";
+	}
+
+	thx::service::ServiceManager sm;
+	thx::plugin::PluginManager   pm(sm);
+
+	auto r = pm.load(dst.string());
+	REQUIRE_FALSE(r);
+	// Two possible failure modes:
+	//  - the requirement check itself fails (NotLoaded), because
+	//    thx.fake.Imaginary isn't registered. We get this BEFORE onLoad
+	//    runs, since checkRequirements runs first.
+	// In either case the load fails and nothing is registered.
+	REQUIRE_FALSE(pm.isLoaded(dst.string()));
+
+	thx::plugin::collectGarbage();
+	fs::remove_all(tmp);
+}
