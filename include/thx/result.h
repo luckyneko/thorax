@@ -26,7 +26,8 @@ namespace thx
 		NotLoaded,
 		VersionMismatch,
 		RegistrationFailed,
-		InUse,         // operation rejected because the target is still in active use
+		InUse,                 // operation rejected because the target is still in active use
+		MalformedManifest,     // sidecar JSON could not be parsed or has wrong shape
 	};
 
 	// Lightweight error descriptor returned (not thrown) by fallible operations.

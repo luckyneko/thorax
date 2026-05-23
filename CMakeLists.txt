@@ -71,6 +71,7 @@ add_library(${PROJECT_NAME} STATIC
 
     # Headers — plugin/
     include/thx/plugin/iplugin.h
+    include/thx/plugin/manifest.h
     include/thx/plugin/platform.h
     include/thx/plugin/plugin_handle.h
     include/thx/plugin/plugin_garbage.h
@@ -89,6 +90,7 @@ add_library(${PROJECT_NAME} STATIC
     src/plugin/plugin_handle.cpp
     src/plugin/plugin_garbage.cpp
     src/plugin/plugin_manager.cpp
+    src/plugin/manifest.cpp
 )
 target_include_directories(${PROJECT_NAME} PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -205,6 +207,7 @@ if(THORAX_BUILD_TESTING)
         test/test_service_manager.cpp
         test/test_abi_types.cpp
         test/test_library.cpp
+        test/test_manifest.cpp
         test/test_plugin_manager.cpp
         test/test_diagnostics.cpp
         test/test_iplugin.cpp
