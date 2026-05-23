@@ -19,7 +19,7 @@
 namespace thx::plugin
 {
 
-// Bring the service-layer types we touch heavily into scope, so the
+// Bring the service-layer types we touch heavily into scope so the
 // implementation reads the same as before the namespace split. The public
 // header still uses fully-qualified names.
 using thx::service::IService;
@@ -28,51 +28,14 @@ using thx::service::ServiceManager;
 
 PluginManager::PluginManager(ServiceManager& sm) : m_sm(sm) {}
 
-// --- OpenedPlugin ----------------------------------------------------------
-
-OpenedPlugin::OpenedPlugin(PluginHandle handle,
-                           std::shared_ptr<IPlugin> plugin,
-                           std::string canonical)
-    : m_handle(std::move(handle))
-    , m_plugin(std::move(plugin))
-    , m_canonical(std::move(canonical))
-{
-}
-
-OpenedPlugin::OpenedPlugin(OpenedPlugin&&) noexcept            = default;
-OpenedPlugin& OpenedPlugin::operator=(OpenedPlugin&&) noexcept = default;
-
-OpenedPlugin::~OpenedPlugin()
-{
-	// Reset m_plugin before m_handle goes out of scope so the IPlugin destructor
-	// (which lives in DSO code) runs while the DSO is still mapped. ~PluginHandle
-	// then defers the dlclose into the graveyard.
-	m_plugin.reset();
-}
-
-StringView OpenedPlugin::name() const noexcept
-{
-	return m_plugin ? m_plugin->name() : StringView{};
-}
-
-Version OpenedPlugin::version() const noexcept
-{
-	return m_plugin ? m_plugin->version() : Version{};
-}
-
-Span<const ServiceRequirement> OpenedPlugin::required() const noexcept
-{
-	return m_plugin ? m_plugin->required() : Span<const ServiceRequirement>{};
-}
-
 namespace
 {
 	// Force-unregister any service IDs the plugin's onUnload neglected to drop.
 	// A well-behaved IPlugin removes everything it registered; this is a safety
 	// net against third-party plugins that forget.
 	void sweepSurvivingServices(ServiceManager&               sm,
-	                              std::vector<ServiceID> const& ids,
-	                              std::string const&            pluginName)
+	                            std::vector<ServiceID> const& ids,
+	                            std::string const&            pluginName)
 	{
 		for (auto const& id : ids)
 		{
@@ -86,20 +49,33 @@ namespace
 			}
 		}
 	}
+
+	std::string pluginDisplayName(std::shared_ptr<IPlugin> const& plugin,
+	                              std::string const&              fallback)
+	{
+		return plugin
+		    ? std::string(static_cast<std::string_view>(plugin->name()))
+		    : fallback;
+	}
 } // namespace
 
 PluginManager::~PluginManager()
 {
+	// Loaded entries first: onUnload + service cleanup, then ~LoadedEntry
+	// schedules the DSO to the garbage queue.
 	for (auto& [path, entry] : m_plugins)
 	{
-		std::string name = entry.plugin
-		                       ? std::string(static_cast<std::string_view>(entry.plugin->name()))
-		                       : path;
+		auto name = pluginDisplayName(entry.plugin, path);
 		if (entry.plugin)
 			entry.plugin->onUnload(m_sm);
 		sweepSurvivingServices(m_sm, entry.serviceIds, name);
 	}
 	m_plugins.clear();
+	// Opened-but-not-Loaded entries: just drop them. ~OpenedEntry destroys
+	// the IPlugin and queues the DSO to the garbage queue. No services to
+	// unregister.
+	m_opened.clear();
+	// Discovered entries hold nothing; clearing is implicit.
 }
 
 std::string PluginManager::resolveCanonical(std::string const& path)
@@ -133,65 +109,51 @@ Result<void, Error> PluginManager::checkRequirements(ServiceManager const&      
 	return Result<void, Error>::ok();
 }
 
-Result<OpenedPlugin, Error> PluginManager::open(std::string const& path)
+// --- Internal: open a DSO and produce an OpenedEntry -------------------------
+
+Result<PluginManager::OpenedEntry, Error>
+PluginManager::openHandle(std::string const& canonical)
 {
 	// Drain the deferred-close queue before any new dlopen so we don't
 	// accumulate a long tail of mapped-but-released DSOs in long-running
-	// processes. Safe at this point: any references that survived the previous
-	// unload have either been released by now (the user's responsibility) or
-	// the user is intentionally keeping them alive — in which case they should
-	// not be calling open() yet.
+	// processes.
 	Registry::instance().pluginGarbage().collect();
 
-	auto canonical = resolveCanonical(path);
-	if (canonical.empty())
-		return Result<OpenedPlugin, Error>::err({ErrorCode::FileNotFound,
-			"Cannot resolve path: " + path});
+	auto handleResult = PluginHandle::open(canonical);
+	if (!handleResult)
+		return Result<OpenedEntry, Error>::err(handleResult.error());
 
-	if (m_plugins.count(canonical))
-		return Result<OpenedPlugin, Error>::err({ErrorCode::AlreadyLoaded,
-			"Plugin already loaded: " + canonical});
-
-	auto openResult = PluginHandle::open(canonical);
-	if (!openResult)
-		return Result<OpenedPlugin, Error>::err(openResult.error());
-
-	PluginHandle handle = std::move(openResult.value());
+	PluginHandle handle = std::move(handleResult.value());
 
 	auto* destroy = handle.destroyFn();
 	IPlugin* raw  = handle.createFn()();
 	if (!raw)
-		return Result<OpenedPlugin, Error>::err({ErrorCode::FactoryFailed,
+		return Result<OpenedEntry, Error>::err({ErrorCode::FactoryFailed,
 			"thx_create_plugin returned null for: " + canonical});
 
 	// Wrap in shared_ptr so destruction routes back through the DSO's destroy
-	// function. The destroy function pointer remains valid while the handle is
-	// alive — OpenedPlugin's destruction order (m_plugin before m_handle)
-	// guarantees that.
+	// function. The destroy function pointer remains valid while the handle
+	// is alive — OpenedEntry's declaration order (plugin before handle in
+	// the struct, hence destroyed first) guarantees that.
 	std::shared_ptr<IPlugin> plugin(raw, [destroy](IPlugin* p)
 	{
 		if (p && destroy)
 			destroy(p);
 	});
 
-	return Result<OpenedPlugin, Error>::ok(
-	    OpenedPlugin(std::move(handle), std::move(plugin), std::move(canonical)));
+	OpenedEntry entry;
+	entry.handle = std::move(handle);
+	entry.plugin = std::move(plugin);
+	return Result<OpenedEntry, Error>::ok(std::move(entry));
 }
 
-Result<void, Error> PluginManager::load(OpenedPlugin opened)
+// --- Internal: promote an OpenedEntry into a LoadedEntry ---------------------
+
+Result<PluginManager::LoadedEntry, Error>
+PluginManager::finalizeLoad(OpenedEntry opened, std::string const& canonical)
 {
-	if (!opened)
-		return Result<void, Error>::err({ErrorCode::Unknown,
-			"PluginManager::load called with empty OpenedPlugin"});
-
-	// Guard against a race / programming error: another entry with the same
-	// canonical path appearing between open() and load().
-	if (m_plugins.count(opened.m_canonical))
-		return Result<void, Error>::err({ErrorCode::AlreadyLoaded,
-			"Plugin already loaded: " + opened.m_canonical});
-
-	if (auto r = checkRequirements(m_sm, opened.m_plugin->required()); !r)
-		return r;
+	if (auto r = checkRequirements(m_sm, opened.plugin->required()); !r)
+		return Result<LoadedEntry, Error>::err(std::move(r.error()));
 
 	// Snapshot the registry so we can attribute new registrations to this plugin.
 	auto before = m_sm.listServices();
@@ -214,76 +176,24 @@ Result<void, Error> PluginManager::load(OpenedPlugin opened)
 		return ids;
 	};
 
-	if (!opened.m_plugin->onLoad(m_sm))
+	if (!opened.plugin->onLoad(m_sm))
 	{
 		// onLoad may have partially registered services before returning false.
 		// Unregister them so the failed load leaves the registry as it was.
 		for (auto const& id : diffNewIds())
 			m_sm.unregisterService(id);
-		return Result<void, Error>::err({ErrorCode::RegistrationFailed,
-			"IPlugin::onLoad returned false for: " + opened.m_canonical});
+		return Result<LoadedEntry, Error>::err({ErrorCode::RegistrationFailed,
+			"IPlugin::onLoad returned false for: " + canonical});
 	}
 
-	Entry entry;
-	entry.handle      = std::move(opened.m_handle);
+	LoadedEntry entry;
+	entry.handle     = std::move(opened.handle);
 	entry.serviceIds = diffNewIds();
-	entry.plugin      = std::move(opened.m_plugin);
-	m_plugins.emplace(opened.m_canonical, std::move(entry));
-	return Result<void, Error>::ok();
+	entry.plugin     = std::move(opened.plugin);
+	return Result<LoadedEntry, Error>::ok(std::move(entry));
 }
 
-Result<void, Error> PluginManager::load(std::string const& path)
-{
-	// Preserve the historical "loading the same path twice is a no-op"
-	// behaviour. open() reports AlreadyLoaded as an error; here we swallow it.
-	auto canonical = resolveCanonical(path);
-	if (!canonical.empty() && m_plugins.count(canonical))
-		return Result<void, Error>::ok();
-
-	auto opened = open(path);
-	if (!opened)
-		return Result<void, Error>::err(std::move(opened.error()));
-
-	return load(std::move(opened.value()));
-}
-
-Result<void, Error> PluginManager::unload(std::string const& path)
-{
-	// Map keys are always canonical paths from a successful load(); if the
-	// caller's path can't be canonicalized now (file deleted, or never existed)
-	// we can't find the entry. Report NotLoaded — from the caller's point of
-	// view "no such file" and "loaded under a different path" are both "this
-	// thing isn't loaded right now."
-	auto canonical = resolveCanonical(path);
-	if (canonical.empty())
-		return Result<void, Error>::err({ErrorCode::NotLoaded,
-			"Plugin not loaded (path cannot be resolved): " + path});
-
-	auto it = m_plugins.find(canonical);
-	if (it == m_plugins.end())
-		return Result<void, Error>::err({ErrorCode::NotLoaded,
-			"Plugin not loaded: " + path});
-
-	std::string name = it->second.plugin
-	                       ? std::string(static_cast<std::string_view>(it->second.plugin->name()))
-	                       : canonical;
-	if (it->second.plugin)
-		it->second.plugin->onUnload(m_sm);
-	sweepSurvivingServices(m_sm, it->second.serviceIds, name);
-
-	m_plugins.erase(it); // ~Entry: plugin destroyed first, then handle dlclose
-	return Result<void, Error>::ok();
-}
-
-bool PluginManager::isLoaded(std::string const& path) const
-{
-	// Map keys are canonical paths; if canonicalization fails the file isn't
-	// reachable on disk and therefore can't match any loaded entry.
-	auto canonical = resolveCanonical(path);
-	if (canonical.empty())
-		return false;
-	return m_plugins.count(canonical) > 0;
-}
+// --- Lifecycle ---------------------------------------------------------------
 
 Result<void, Error> PluginManager::discover(std::string const& directory)
 {
@@ -302,9 +212,9 @@ Result<void, Error> PluginManager::discover(std::string const& directory)
 		if (canonical.empty())
 			continue; // file vanished between iteration and canonicalize; skip silently
 
-		// Don't disturb an entry that's already Opened or Loaded — those
+		// Don't disturb entries that are already Opened or Loaded — those
 		// states supersede Discovered.
-		if (m_plugins.count(canonical))
+		if (m_plugins.count(canonical) || m_opened.count(canonical))
 			continue;
 
 		// emplace is a no-op if already discovered; that's the intended
@@ -317,17 +227,128 @@ Result<void, Error> PluginManager::discover(std::string const& directory)
 Result<void, Error> PluginManager::forget(std::string const& path)
 {
 	auto canonical = resolveCanonical(path);
-	// If the path can't be canonicalized, fall back to the raw input — the
-	// file may have been deleted but the entry could still be in our map.
 	auto const& key = canonical.empty() ? path : canonical;
 
 	if (m_plugins.count(key))
 		return Result<void, Error>::err({ErrorCode::InUse,
 			"Cannot forget '" + key + "': still loaded (call unload() first)"});
+	if (m_opened.count(key))
+		return Result<void, Error>::err({ErrorCode::InUse,
+			"Cannot forget '" + key + "': still opened (call close() first)"});
 
 	m_discovered.erase(key);
 	// Either we erased it or it was already gone; both are "ok" — forget is
 	// idempotent on absence.
+	return Result<void, Error>::ok();
+}
+
+Result<void, Error> PluginManager::open(std::string const& path)
+{
+	auto canonical = resolveCanonical(path);
+	if (canonical.empty())
+		return Result<void, Error>::err({ErrorCode::FileNotFound,
+			"Cannot resolve path: " + path});
+
+	// Idempotent: Loaded supersedes Opened; Opened already in place is ok.
+	if (m_plugins.count(canonical) || m_opened.count(canonical))
+		return Result<void, Error>::ok();
+
+	auto entryResult = openHandle(canonical);
+	if (!entryResult)
+		return Result<void, Error>::err(std::move(entryResult.error()));
+
+	// Successful open: remove any Discovered shadow and install the OpenedEntry.
+	m_discovered.erase(canonical);
+	m_opened.emplace(canonical, std::move(entryResult.value()));
+	return Result<void, Error>::ok();
+}
+
+Result<void, Error> PluginManager::close(std::string const& path)
+{
+	auto canonical = resolveCanonical(path);
+	auto const& key = canonical.empty() ? path : canonical;
+
+	auto it = m_opened.find(key);
+	if (it == m_opened.end())
+		return Result<void, Error>::ok(); // not Opened — no-op (idempotent)
+
+	// Drop the OpenedEntry — its IPlugin and PluginHandle (Library) are
+	// destroyed in declaration order, queuing the DSO to the garbage queue.
+	m_opened.erase(it);
+	// Per the spec, close() always returns the entry to Discovered.
+	m_discovered.emplace(key, DiscoveredEntry{});
+	return Result<void, Error>::ok();
+}
+
+std::size_t PluginManager::closeAllOpened()
+{
+	std::size_t count = m_opened.size();
+	for (auto& [path, _] : m_opened)
+		m_discovered.emplace(path, DiscoveredEntry{});
+	m_opened.clear();
+	return count;
+}
+
+Result<void, Error> PluginManager::load(std::string const& path)
+{
+	auto canonical = resolveCanonical(path);
+	if (canonical.empty())
+		return Result<void, Error>::err({ErrorCode::FileNotFound,
+			"Cannot resolve path: " + path});
+
+	// Idempotent: already loaded → ok no-op.
+	if (m_plugins.count(canonical))
+		return Result<void, Error>::ok();
+
+	// Extract or build the OpenedEntry. If the path is already Opened, take
+	// the existing entry; otherwise open it implicitly.
+	OpenedEntry opened;
+	if (auto it = m_opened.find(canonical); it != m_opened.end())
+	{
+		opened = std::move(it->second);
+		m_opened.erase(it);
+	}
+	else
+	{
+		auto openedResult = openHandle(canonical);
+		if (!openedResult)
+			return Result<void, Error>::err(std::move(openedResult.error()));
+		opened = std::move(openedResult.value());
+	}
+
+	auto loaded = finalizeLoad(std::move(opened), canonical);
+	if (!loaded)
+	{
+		// finalizeLoad consumed `opened`; the OpenedEntry it built is now
+		// gone (DSO queued to garbage). The Discovered shadow, if any, is
+		// untouched — callers can retry or forget().
+		return Result<void, Error>::err(std::move(loaded.error()));
+	}
+
+	// Successful load: remove any Discovered shadow and install the LoadedEntry.
+	m_discovered.erase(canonical);
+	m_plugins.emplace(canonical, std::move(loaded.value()));
+	return Result<void, Error>::ok();
+}
+
+Result<void, Error> PluginManager::unload(std::string const& path)
+{
+	auto canonical = resolveCanonical(path);
+	auto const& key = canonical.empty() ? path : canonical;
+
+	auto it = m_plugins.find(key);
+	if (it == m_plugins.end())
+		return Result<void, Error>::err({ErrorCode::NotLoaded,
+			"Plugin not loaded: " + path});
+
+	auto name = pluginDisplayName(it->second.plugin, key);
+	if (it->second.plugin)
+		it->second.plugin->onUnload(m_sm);
+	sweepSurvivingServices(m_sm, it->second.serviceIds, name);
+
+	m_plugins.erase(it); // ~LoadedEntry queues DSO to garbage
+	// Per the spec, unload() returns the entry to Discovered.
+	m_discovered.emplace(key, DiscoveredEntry{});
 	return Result<void, Error>::ok();
 }
 
@@ -341,7 +362,7 @@ PluginManager::LoadSummary PluginManager::discoverAndLoad(std::string const& dir
 		return summary;
 	}
 
-	// Snapshot the paths first — load() may move entries between maps as it
+	// Snapshot the paths first — load() moves entries between maps as it
 	// runs, so iterating m_discovered directly would invalidate.
 	std::vector<std::string> paths;
 	paths.reserve(m_discovered.size());
@@ -366,26 +387,9 @@ PluginManager::LoadSummary PluginManager::discoverAndLoad(std::string const& dir
 	return summary;
 }
 
-std::vector<LoadedPluginInfo> PluginManager::listPlugins() const
-{
-	std::vector<LoadedPluginInfo> result;
-	result.reserve(m_plugins.size());
-	for (auto const& [path, entry] : m_plugins)
-	{
-		std::string name = entry.plugin
-		                       ? std::string(static_cast<std::string_view>(entry.plugin->name()))
-		                       : std::string{};
-		result.push_back({path, std::move(name), entry.serviceIds});
-	}
-	return result;
-}
+// --- PluginInfo construction -------------------------------------------------
 
-// --- Phase 6 query API -------------------------------------------------------
-//
-// Discovered and Loaded entries are populated. Opened tracking arrives in
-// Commit 3.
-
-PluginInfo PluginManager::infoFromEntry(std::string const& path, Entry const& entry) const
+PluginInfo PluginManager::infoFromLoaded(std::string const& path, LoadedEntry const& entry) const
 {
 	PluginInfo info;
 	info.path  = path;
@@ -402,6 +406,22 @@ PluginInfo PluginManager::infoFromEntry(std::string const& path, Entry const& en
 	return info;
 }
 
+PluginInfo PluginManager::infoFromOpened(std::string const& path, OpenedEntry const& entry) const
+{
+	PluginInfo info;
+	info.path  = path;
+	info.state = State::Opened;
+	if (entry.plugin)
+	{
+		info.name    = std::string(static_cast<std::string_view>(entry.plugin->name()));
+		info.version = entry.plugin->version();
+		auto reqs    = entry.plugin->required();
+		info.requirements.assign(reqs.begin(), reqs.end());
+	}
+	// services stays empty: onLoad hasn't been called yet.
+	return info;
+}
+
 namespace
 {
 	PluginInfo infoFromDiscovered(std::string const& path)
@@ -415,14 +435,18 @@ namespace
 	}
 } // namespace
 
+// --- Queries -----------------------------------------------------------------
+
 std::vector<PluginInfo> PluginManager::plugins() const
 {
 	std::vector<PluginInfo> result;
-	result.reserve(m_discovered.size() + m_plugins.size());
+	result.reserve(m_discovered.size() + m_opened.size() + m_plugins.size());
 	for (auto const& [path, _] : m_discovered)
 		result.push_back(infoFromDiscovered(path));
+	for (auto const& [path, entry] : m_opened)
+		result.push_back(infoFromOpened(path, entry));
 	for (auto const& [path, entry] : m_plugins)
-		result.push_back(infoFromEntry(path, entry));
+		result.push_back(infoFromLoaded(path, entry));
 	return result;
 }
 
@@ -437,12 +461,14 @@ std::vector<PluginInfo> PluginManager::plugins(State state) const
 				result.push_back(infoFromDiscovered(path));
 			return result;
 		case State::Opened:
-			// Opened tracking arrives in Commit 3.
+			result.reserve(m_opened.size());
+			for (auto const& [path, entry] : m_opened)
+				result.push_back(infoFromOpened(path, entry));
 			return result;
 		case State::Loaded:
 			result.reserve(m_plugins.size());
 			for (auto const& [path, entry] : m_plugins)
-				result.push_back(infoFromEntry(path, entry));
+				result.push_back(infoFromLoaded(path, entry));
 			return result;
 	}
 	return result;
@@ -454,7 +480,9 @@ std::optional<PluginInfo> PluginManager::pluginInfo(std::string const& path) con
 	auto const& key = canonical.empty() ? path : canonical;
 
 	if (auto it = m_plugins.find(key); it != m_plugins.end())
-		return infoFromEntry(it->first, it->second);
+		return infoFromLoaded(it->first, it->second);
+	if (auto it = m_opened.find(key); it != m_opened.end())
+		return infoFromOpened(it->first, it->second);
 	if (m_discovered.count(key))
 		return infoFromDiscovered(key);
 	return std::nullopt;
@@ -467,12 +495,9 @@ bool PluginManager::is(State state, std::string const& path) const
 
 	switch (state)
 	{
-		case State::Discovered:
-			return m_discovered.count(key) > 0;
-		case State::Opened:
-			return false; // Opened tracking arrives in Commit 3.
-		case State::Loaded:
-			return m_plugins.count(key) > 0;
+		case State::Discovered: return m_discovered.count(key) > 0;
+		case State::Opened:     return m_opened.count(key)     > 0;
+		case State::Loaded:     return m_plugins.count(key)    > 0;
 	}
 	return false;
 }

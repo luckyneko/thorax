@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "thx/library.h"
 #include "thx/plugin/iplugin.h"
 #include "thx/plugin/plugin_garbage.h"
 #include "thx/plugin/plugin_handle.h"
@@ -16,6 +17,7 @@
 #include "thx/service/service_manager.h"
 #include "thx/log.h"
 
+#include <cstddef>
 #include <memory>
 #include <optional>
 #include <string>
@@ -24,14 +26,6 @@
 
 namespace thx::plugin
 {
-	// Snapshot entry returned by PluginManager::listPlugins().
-	struct LoadedPluginInfo
-	{
-		std::string                            path;
-		std::string                            pluginName; // from IPlugin::name()
-		std::vector<thx::service::ServiceID>   services;   // all service IDs registered by this plugin
-	};
-
 	// Lifecycle state of a plugin tracked by PluginManager.
 	//
 	// Discovered — filesystem entry has been seen (and, when Phase 5 manifests
@@ -76,67 +70,18 @@ namespace thx::plugin
 		std::vector<thx::service::ServiceID> services;
 	};
 
-	// A plugin DSO that has been opened and its IPlugin instantiated, but whose
-	// onLoad has NOT yet been called and whose required() services have NOT yet
-	// been checked. The caller queries name()/version()/required() to plan load
-	// order, then passes the value to PluginManager::load(OpenedPlugin) to
-	// commit. Three-step flow: discover -> open -> load.
+	// Loads, unloads, and tracks plugin shared libraries by canonical path
+	// across three lifecycle states (see State enum). All state lives inside
+	// PluginManager; callers only see value-typed PluginInfo snapshots and
+	// Result<void, Error> outcomes.
 	//
-	// Move-only. A default-constructed or moved-from OpenedPlugin is empty and
-	// converts to false.
+	// Thread safety: not thread-safe. Protect concurrent calls externally if
+	// needed. (The deferred-dlclose garbage queue used internally is thread-safe.)
 	//
-	// Lifetime: while alive, the DSO is mapped and the IPlugin instance exists.
-	// Dropping the value without passing it to load() destroys the IPlugin and
-	// queues the DSO into the deferred-close graveyard (drained at the next
-	// PluginManager::open() or thx::plugin::collectGarbage()).
-	class OpenedPlugin
-	{
-	public:
-		OpenedPlugin() = default;
-		~OpenedPlugin();
-
-		OpenedPlugin(OpenedPlugin&&) noexcept;
-		OpenedPlugin& operator=(OpenedPlugin&&) noexcept;
-
-		OpenedPlugin(OpenedPlugin const&)            = delete;
-		OpenedPlugin& operator=(OpenedPlugin const&) = delete;
-
-		explicit operator bool() const noexcept { return static_cast<bool>(m_plugin); }
-
-		// Canonical filesystem path of the DSO.
-		std::string const& path() const noexcept { return m_canonical; }
-
-		// Plugin-reported metadata. Valid once open() has succeeded.
-		StringView                     name() const noexcept;
-		Version                        version() const noexcept;
-		Span<const ServiceRequirement> required() const noexcept;
-
-	private:
-		friend class PluginManager;
-		OpenedPlugin(PluginHandle handle,
-		             std::shared_ptr<IPlugin> plugin,
-		             std::string canonical);
-
-		// Destruction order matters: m_plugin (whose destructor lives in plugin
-		// code) is reset before m_handle is destroyed.
-		PluginHandle             m_handle;
-		std::shared_ptr<IPlugin> m_plugin;
-		std::string              m_canonical;
-	};
-
-	// Loads, unloads, and discovers plugin shared libraries.
-	//
-	// Owns the DSO handles and integrates with a ServiceManager. Each loaded
-	// plugin produces an IPlugin (via THX_DEFINE_SERVICE_PLUGIN or THX_DEFINE_PLUGIN)
-	// which registers any number of services in onLoad. The loader tracks
-	// canonical paths so loading the same file twice is a safe no-op.
-	//
-	// Thread safety: not thread-safe. Protect concurrent calls externally if needed.
-	// (The deferred-dlclose graveyard used internally is thread-safe.)
-	//
-	// Destruction: any plugins still loaded when the PluginManager is destroyed
-	// are unloaded automatically (services unregistered, DSO handles deferred).
-	// The destructor does NOT call collectGarbage(); call it explicitly
+	// Destruction: any plugins still Loaded when the PluginManager is destroyed
+	// are unloaded automatically (services unregistered, DSO handles deferred);
+	// Opened-but-not-Loaded entries have their DSOs released to the garbage
+	// queue. The destructor does NOT call collectGarbage(); call it explicitly
 	// when no service references into those DSOs remain.
 	class PluginManager
 	{
@@ -147,133 +92,126 @@ namespace thx::plugin
 		PluginManager(PluginManager const&)            = delete;
 		PluginManager& operator=(PluginManager const&) = delete;
 
-		// Opens the DSO at path, ABI-checks it, and instantiates its IPlugin —
-		// but does NOT call onLoad and does NOT check required(). Use this to
-		// inspect a plugin's name/version/required() before committing to a
-		// load order across many plugins.
+		// --- Lifecycle (state mutators) ------------------------------------
 		//
-		// As a side effect, drains the deferred-close queue (see unload). This
-		// keeps the queue bounded in long-running programs but means any
-		// service references held over from an earlier unload MUST be released
-		// before calling open() — otherwise the drain unmaps the DSO out from
-		// under them.
-		//
-		// Returns Err(AlreadyLoaded) if this PluginManager already has the
-		// canonical path loaded.
-		Result<OpenedPlugin, Error> open(std::string const& path);
+		// All take a path by value or reference, all return Result<void, Error>.
+		// Each method's documented state transition is enforced; transitions
+		// not listed are either no-ops (idempotent) or return an error.
 
-		// Completes the load of a previously opened plugin: checks required()
-		// against the registry, calls IPlugin::onLoad, and takes ownership of
-		// the DSO + IPlugin on success.
-		//
-		// The OpenedPlugin is consumed either way; on failure its DSO is
-		// released to the graveyard at the next drain.
-		//
-		// Returns Err(AlreadyLoaded) if another entry with the same canonical
-		// path has appeared since the plugin was opened.
-		Result<void, Error> load(OpenedPlugin opened);
-
-		// Convenience: opens the DSO at path and immediately loads it.
-		// If the canonical path is already loaded, returns ok (no-op).
-		// Equivalent to a chained open() + load(OpenedPlugin), except that
-		// duplicate paths are treated as a successful no-op rather than an
-		// AlreadyLoaded error.
-		Result<void, Error> load(std::string const& path);
-
-		// Dry-runs the requirement check that load(OpenedPlugin) would perform.
-		// Returns ok if every requirement is satisfied by a service currently
-		// registered in sm at a compatible version, or the first failure.
-		// Does not mutate sm.
-		static Result<void, Error> checkRequirements(thx::service::ServiceManager const& sm,
-		                                              Span<const ServiceRequirement>     reqs);
-
-		// Unregisters the plugin's services and releases the DSO from this loader.
-		// Returns Err(NotLoaded) if path was not previously loaded.
-		//
-		// Lifetime: the DSO is NOT immediately unmapped. Its native handle is
-		// pushed onto a process-wide deferred-close queue, drained at the next
-		// call to load() or thx::plugin::collectGarbage(). This means callers
-		// MAY hold shared_ptr<IService> handles across unload — the DSO stays
-		// mapped (and the service's destructor / shared_ptr control block stay
-		// reachable) until the next drain. Once collectGarbage() runs,
-		// every still-held service reference into the unmapped DSO becomes
-		// undefined behaviour, so drain only when no such references remain.
-		Result<void, Error> unload(std::string const& path);
-
-		// Returns true if the canonical path is currently loaded.
-		bool isLoaded(std::string const& path) const;
-
-		// Scans directory for files whose extension matches the platform plugin
-		// extension (.dylib / .so / .dll) and records each as a Discovered
-		// entry. Does not open the DSOs. Returns ok on a successful scan,
-		// even if the directory contained no plugins; returns FileNotFound
-		// if the directory itself can't be iterated.
-		//
-		// Re-scanning a directory that has already been discovered adds any
-		// newly-present files and leaves existing entries (including Opened /
-		// Loaded ones) untouched.
-		//
-		// Query the resulting entries via plugins(State::Discovered) or
-		// pluginInfo(path).
+		// Scans `directory` for files matching LIBRARY_EXTENSION and adds each
+		// as a Discovered entry. Idempotent: re-scanning leaves existing
+		// Opened / Loaded entries untouched and silently skips already-known
+		// Discovered paths. Returns FileNotFound if the directory cannot be
+		// iterated.
 		Result<void, Error> discover(std::string const& directory);
 
-		// Removes a Discovered entry from the index. Returns InUse if the
-		// path is currently Opened or Loaded (the caller should close() /
-		// unload() first). Returns ok if the path is unknown to the manager
-		// (idempotent — the entry is already in the "not tracked" state).
+		// Removes a Discovered entry. Returns InUse if the path is Opened or
+		// Loaded (caller must close() / unload() first). Idempotent on absence
+		// — forgetting an unknown path returns ok.
 		Result<void, Error> forget(std::string const& path);
+
+		// Transitions a plugin into Opened: opens the DSO, ABI-checks it, and
+		// instantiates the IPlugin. Does NOT call onLoad and does NOT verify
+		// required().
+		//
+		// Allowed source states:
+		//   (nothing)  — opens directly (no prior discover required).
+		//   Discovered — removes the Discovered entry and adds an Opened one.
+		//   Opened     — no-op (idempotent).
+		//   Loaded     — no-op (Loaded supersedes Opened).
+		//
+		// As a side effect, drains the deferred-close queue first. Callers
+		// holding shared_ptr<IService> handles from a previously unloaded
+		// plugin MUST release them before calling open().
+		Result<void, Error> open(std::string const& path);
+
+		// Drops an Opened entry back to Discovered: the IPlugin is destroyed
+		// and the DSO is queued for deferred close. No-op if the path is not
+		// Opened (idempotent).
+		Result<void, Error> close(std::string const& path);
+
+		// Drops every Opened-but-not-Loaded entry back to Discovered. Returns
+		// the number of entries closed. Useful after a batch open/inspect
+		// phase where only a subset will be loaded.
+		std::size_t closeAllOpened();
+
+		// Transitions a plugin into Loaded: checks required(), calls onLoad,
+		// and registers the plugin's services.
+		//
+		// Allowed source states:
+		//   (nothing)  — implicit open + load.
+		//   Discovered — implicit open + load.
+		//   Opened     — loads the existing Opened entry.
+		//   Loaded     — no-op (idempotent).
+		Result<void, Error> load(std::string const& path);
+
+		// Transitions a Loaded plugin back to Discovered: calls onUnload, the
+		// plugin's services are unregistered, and the DSO is queued for
+		// deferred close. Returns NotLoaded if the path is not currently
+		// Loaded.
+		Result<void, Error> unload(std::string const& path);
+
+		// --- Aggregate ----------------------------------------------------
 
 		// Outcome of a discoverAndLoad call: which paths loaded successfully
 		// and which failed (with their associated Error). Either list may be
-		// empty. Callers can choose how to react to partial failure.
+		// empty.
 		struct LoadSummary
 		{
 			std::vector<std::string>                       loaded;
 			std::vector<std::pair<std::string, Error>>     failed;
 		};
 
-		// Discovers all plugins in directory and loads each one.
-		// Always returns a summary; callers inspect loaded/failed to decide
-		// what counts as success. Individual failures are also logged via
-		// thx::log().
+		// Discovers all plugins in `directory` and loads each one.
+		// Returns a summary; individual failures are also logged.
 		LoadSummary discoverAndLoad(std::string const& directory);
 
-		// Returns a snapshot of currently loaded plugins and the service ID each
-		// registered. Useful for diagnostics and test assertions.
-		std::vector<LoadedPluginInfo> listPlugins() const;
+		// Dry-runs the requirement check that load() would perform. Does not
+		// mutate sm.
+		static Result<void, Error> checkRequirements(thx::service::ServiceManager const& sm,
+		                                              Span<const ServiceRequirement>     reqs);
 
-		// --- Phase 6 query API ---------------------------------------------
-		//
-		// These methods will become the canonical inspection surface once the
-		// PluginManager-owned-lifecycle reshape lands. For now they coexist
-		// with listPlugins(); only the Loaded state is populated, since
-		// Discovered/Opened tracking is added in later commits.
+		// --- Queries ------------------------------------------------------
 
-		// Returns a snapshot of every plugin known to the manager in any state.
+		// Snapshot of every plugin known to the manager in any state.
 		std::vector<PluginInfo> plugins() const;
 
-		// Returns a snapshot of plugins filtered to a single lifecycle state.
+		// Snapshot filtered to a single lifecycle state.
 		std::vector<PluginInfo> plugins(State state) const;
 
-		// Returns the snapshot for one plugin by canonical path, or nullopt if
-		// the path isn't currently tracked.
+		// Snapshot for one plugin by path, or nullopt if untracked.
 		std::optional<PluginInfo> pluginInfo(std::string const& path) const;
 
 		// True if the plugin at `path` is currently in `state`.
 		bool is(State state, std::string const& path) const;
 
+		// Convenience aliases for the most common state checks.
+		bool isDiscovered(std::string const& path) const { return is(State::Discovered, path); }
+		bool isOpened    (std::string const& path) const { return is(State::Opened,     path); }
+		bool isLoaded    (std::string const& path) const { return is(State::Loaded,     path); }
+
 	private:
-		struct Entry
+		// Loaded entry: owns the DSO + IPlugin plus the service IDs it
+		// registered. Declaration order matters — `plugin` is destroyed before
+		// `handle`, so the IPlugin destructor (which lives in DSO code) runs
+		// before the DSO is dlclose()d.
+		struct LoadedEntry
 		{
-			// Declaration order matters: `plugin` is destroyed before `handle`,
-			// so the IPlugin's destructor (which lives in plugin code) runs
-			// before the DSO is dlclose()d.
 			PluginHandle                         handle;
 			std::vector<thx::service::ServiceID> serviceIds;
 			std::shared_ptr<IPlugin>             plugin;
 		};
 
-		// Currently a placeholder. Phase 5 manifests will populate name,
+		// Opened-but-not-Loaded entry: the DSO is mapped and an IPlugin
+		// exists, but onLoad has not been called. Same destruction-order
+		// rationale as LoadedEntry.
+		struct OpenedEntry
+		{
+			PluginHandle             handle;
+			std::shared_ptr<IPlugin> plugin;
+		};
+
+		// Discovered entry placeholder. Phase 5 manifests will populate name,
 		// version, requirements, and provides here so Discovered entries
 		// carry metadata without a dlopen.
 		struct DiscoveredEntry
@@ -281,14 +219,25 @@ namespace thx::plugin
 		};
 
 		thx::service::ServiceManager& m_sm;
-		std::unordered_map<std::string, DiscoveredEntry> m_discovered;  // canonical_path → entry
-		std::unordered_map<std::string, Entry>           m_plugins;     // canonical_path → entry
+		std::unordered_map<std::string, DiscoveredEntry> m_discovered;
+		std::unordered_map<std::string, OpenedEntry>     m_opened;
+		std::unordered_map<std::string, LoadedEntry>     m_plugins;
 
 		static std::string resolveCanonical(std::string const& path);
 
-		// Build a PluginInfo from a Loaded entry. Member function so it can
-		// reach Entry, which is private.
-		PluginInfo infoFromEntry(std::string const& path, Entry const& entry) const;
+		// Open a DSO at `canonical` and produce an OpenedEntry. Used by both
+		// open() and the implicit-open path inside load(). Drains the garbage
+		// queue first.
+		Result<OpenedEntry, Error> openHandle(std::string const& canonical);
+
+		// Promote an OpenedEntry into a LoadedEntry by checking required(),
+		// calling onLoad, and attributing the resulting service IDs.
+		Result<LoadedEntry, Error> finalizeLoad(OpenedEntry opened,
+		                                        std::string const& canonical);
+
+		// Build PluginInfo snapshots from internal state.
+		PluginInfo infoFromLoaded(std::string const& path, LoadedEntry const& entry) const;
+		PluginInfo infoFromOpened(std::string const& path, OpenedEntry const& entry) const;
 	};
 
 } // namespace thx::plugin

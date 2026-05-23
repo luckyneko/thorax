@@ -23,7 +23,6 @@ namespace thx
 		FileNotFound,
 		SymbolNotFound,
 		FactoryFailed,
-		AlreadyLoaded,
 		NotLoaded,
 		VersionMismatch,
 		RegistrationFailed,

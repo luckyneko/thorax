@@ -92,11 +92,11 @@ TEST_CASE("thx::plugin:: facades cover the load lifecycle",
 	REQUIRE(svc->ping() == 42);
 	svc.reset();
 
-	// listPlugins includes our entry.
-	auto entries = thx::plugin::listPlugins();
+	// plugins(Loaded) includes our entry.
+	auto entries = thx::plugin::plugins(thx::plugin::State::Loaded);
 	bool found = false;
 	for (auto const& e : entries)
-		if (e.path == THX_MOCK_PLUGIN_PATH || e.pluginName == "thx_mock.MockService")
+		if (e.path == THX_MOCK_PLUGIN_PATH || e.name == "thx_mock.MockService")
 		{
 			found = true;
 			break;
@@ -113,15 +113,13 @@ TEST_CASE("thx::plugin:: facades cover the load lifecycle",
 	thx::plugin::collectGarbage();
 }
 
-TEST_CASE("thx::plugin::open + load(OpenedPlugin) work through the facade",
+TEST_CASE("thx::plugin::open then load work through the facade",
           "[facade][plugin][integration]")
 {
-	auto opened = thx::plugin::open(THX_MOCK_PLUGIN_PATH);
-	REQUIRE(opened);
-	REQUIRE(bool(opened.value()));
+	REQUIRE(thx::plugin::open(THX_MOCK_PLUGIN_PATH));
+	REQUIRE(thx::plugin::isOpened(THX_MOCK_PLUGIN_PATH));
 
-	auto r = thx::plugin::load(std::move(opened.value()));
-	REQUIRE(r);
+	REQUIRE(thx::plugin::load(THX_MOCK_PLUGIN_PATH));
 	REQUIRE(thx::plugin::isLoaded(THX_MOCK_PLUGIN_PATH));
 
 	REQUIRE(thx::plugin::unload(THX_MOCK_PLUGIN_PATH));

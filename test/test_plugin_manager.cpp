@@ -610,39 +610,40 @@ TEST_CASE("PluginManager::discoverAndLoad - loads real plugin from directory",
 }
 
 // ---------------------------------------------------------------------------
-// PluginManager::open / load(OpenedPlugin) — three-step flow
+// PluginManager::open / close / load — path-based lifecycle
 // ---------------------------------------------------------------------------
 
-TEST_CASE("PluginManager::open - exposes plugin metadata without registering services",
+TEST_CASE("PluginManager::open - moves entry to Opened without registering services",
           "[plugin_manager][open][integration]")
 {
 	thx::service::ServiceManager sm;
 	thx::plugin::PluginManager   loader(sm);
 
-	auto opened = loader.open(THX_MOCK_PLUGIN_PATH);
-	REQUIRE(opened);
-	REQUIRE(bool(opened.value()));
+	REQUIRE(loader.open(THX_MOCK_PLUGIN_PATH));
+	REQUIRE(loader.is(thx::plugin::State::Opened, THX_MOCK_PLUGIN_PATH));
 
-	// Metadata is readable before the plugin is loaded.
-	REQUIRE(std::string(static_cast<std::string_view>(opened.value().name())) == "thx_mock.MockService");
+	// Metadata is queryable post-open via PluginInfo.
+	auto info = loader.pluginInfo(THX_MOCK_PLUGIN_PATH);
+	REQUIRE(info.has_value());
+	REQUIRE(info->state == thx::plugin::State::Opened);
+	REQUIRE(info->name == "thx_mock.MockService");
 
 	// Nothing was registered — open() does not call onLoad.
 	REQUIRE(sm.getService<thx_mock::MockService>() == nullptr);
 	REQUIRE_FALSE(loader.isLoaded(THX_MOCK_PLUGIN_PATH));
 }
 
-TEST_CASE("PluginManager::open - then load(OpenedPlugin) registers the service",
+TEST_CASE("PluginManager::open then load - registers the service",
           "[plugin_manager][open][integration]")
 {
 	thx::service::ServiceManager sm;
 	thx::plugin::PluginManager   loader(sm);
 
-	auto opened = loader.open(THX_MOCK_PLUGIN_PATH);
-	REQUIRE(opened);
+	REQUIRE(loader.open(THX_MOCK_PLUGIN_PATH));
+	REQUIRE(loader.load(THX_MOCK_PLUGIN_PATH));
 
-	auto r = loader.load(std::move(opened.value()));
-	REQUIRE(r);
 	REQUIRE(loader.isLoaded(THX_MOCK_PLUGIN_PATH));
+	REQUIRE_FALSE(loader.isOpened(THX_MOCK_PLUGIN_PATH));
 	REQUIRE(sm.getService<thx_mock::MockService>() != nullptr);
 }
 
@@ -657,7 +658,7 @@ TEST_CASE("PluginManager::open - missing file returns FileNotFound",
 	REQUIRE(r.error().code == thx::ErrorCode::FileNotFound);
 }
 
-TEST_CASE("PluginManager::open - already-loaded path returns AlreadyLoaded",
+TEST_CASE("PluginManager::open / load are idempotent on the target state",
           "[plugin_manager][open][integration]")
 {
 	thx::service::ServiceManager sm;
@@ -665,12 +666,16 @@ TEST_CASE("PluginManager::open - already-loaded path returns AlreadyLoaded",
 
 	REQUIRE(loader.load(THX_MOCK_PLUGIN_PATH));
 
-	auto r = loader.open(THX_MOCK_PLUGIN_PATH);
-	REQUIRE_FALSE(r);
-	REQUIRE(r.error().code == thx::ErrorCode::AlreadyLoaded);
+	// open() on a Loaded plugin is ok-no-op (Loaded supersedes Opened).
+	REQUIRE(loader.open(THX_MOCK_PLUGIN_PATH));
+	REQUIRE(loader.isLoaded(THX_MOCK_PLUGIN_PATH));
+
+	// load() on a Loaded plugin is also ok-no-op.
+	REQUIRE(loader.load(THX_MOCK_PLUGIN_PATH));
+	REQUIRE(loader.isLoaded(THX_MOCK_PLUGIN_PATH));
 }
 
-TEST_CASE("PluginManager - dropping OpenedPlugin without loading releases the DSO",
+TEST_CASE("PluginManager::close - returns an Opened entry to Discovered",
           "[plugin_manager][open][lifetime][integration]")
 {
 	thx::plugin::collectGarbage();
@@ -678,54 +683,88 @@ TEST_CASE("PluginManager - dropping OpenedPlugin without loading releases the DS
 	thx::service::ServiceManager sm;
 	thx::plugin::PluginManager   loader(sm);
 
-	{
-		auto opened = loader.open(THX_MOCK_PLUGIN_PATH);
-		REQUIRE(opened);
-		// Drop without calling load(): destructor releases the DSO to the graveyard.
-	}
+	REQUIRE(loader.open(THX_MOCK_PLUGIN_PATH));
+	REQUIRE(loader.isOpened(THX_MOCK_PLUGIN_PATH));
 
+	REQUIRE(loader.close(THX_MOCK_PLUGIN_PATH));
+	REQUIRE_FALSE(loader.isOpened(THX_MOCK_PLUGIN_PATH));
+	// close() always returns the entry to Discovered, even when never explicitly discovered.
+	REQUIRE(loader.isDiscovered(THX_MOCK_PLUGIN_PATH));
+
+	// The Library went to the garbage queue, not unmapped synchronously.
 	REQUIRE(thx::plugin::pendingGarbage() >= 1);
-	REQUIRE_FALSE(loader.isLoaded(THX_MOCK_PLUGIN_PATH));
-	REQUIRE(sm.getService<thx_mock::MockService>() == nullptr);
-
 	REQUIRE(thx::plugin::collectGarbage() >= 1);
+
+	// close() on a non-Opened path is ok-no-op.
+	REQUIRE(loader.close(THX_MOCK_PLUGIN_PATH));
 }
 
-TEST_CASE("PluginManager::load(OpenedPlugin) - still checks required() at load time",
+TEST_CASE("PluginManager::closeAllOpened - sweeps every Opened-not-Loaded entry",
+          "[plugin_manager][open][integration]")
+{
+	thx::plugin::collectGarbage();
+
+	thx::service::ServiceManager sm;
+	thx::plugin::PluginManager   loader(sm);
+
+	REQUIRE(loader.open(THX_MOCK_PLUGIN_PATH));
+	REQUIRE(loader.open(THX_MOCK_MULTI_PLUGIN_PATH));
+	REQUIRE(loader.isOpened(THX_MOCK_PLUGIN_PATH));
+	REQUIRE(loader.isOpened(THX_MOCK_MULTI_PLUGIN_PATH));
+
+	auto closed = loader.closeAllOpened();
+	REQUIRE(closed == 2);
+	REQUIRE_FALSE(loader.isOpened(THX_MOCK_PLUGIN_PATH));
+	REQUIRE_FALSE(loader.isOpened(THX_MOCK_MULTI_PLUGIN_PATH));
+	REQUIRE(loader.isDiscovered(THX_MOCK_PLUGIN_PATH));
+	REQUIRE(loader.isDiscovered(THX_MOCK_MULTI_PLUGIN_PATH));
+
+	thx::plugin::collectGarbage();
+}
+
+TEST_CASE("PluginManager::load on Opened entry - still checks required()",
           "[plugin_manager][open][iplugin][integration]")
 {
 	thx::service::ServiceManager sm;
 	thx::plugin::PluginManager   loader(sm);
 
-	// mock_plugin_multi requires MockService. Open it (no requirement check
-	// yet), then attempt to load without first providing MockService.
-	auto opened = loader.open(THX_MOCK_MULTI_PLUGIN_PATH);
-	REQUIRE(opened);
+	// mock_plugin_multi requires MockService. Open it first (no requirement
+	// check yet), then attempt to load without first providing MockService.
+	REQUIRE(loader.open(THX_MOCK_MULTI_PLUGIN_PATH));
+	REQUIRE(loader.isOpened(THX_MOCK_MULTI_PLUGIN_PATH));
 
-	auto r = loader.load(std::move(opened.value()));
+	auto r = loader.load(THX_MOCK_MULTI_PLUGIN_PATH);
 	REQUIRE_FALSE(r);
 	REQUIRE(r.error().code == thx::ErrorCode::NotLoaded);
+	// Failed load leaves the entry in neither Opened nor Loaded — the
+	// OpenedEntry was consumed by finalizeLoad and the DSO is in the garbage queue.
 	REQUIRE_FALSE(loader.isLoaded(THX_MOCK_MULTI_PLUGIN_PATH));
+	REQUIRE_FALSE(loader.isOpened(THX_MOCK_MULTI_PLUGIN_PATH));
+
+	thx::plugin::collectGarbage();
 }
 
-TEST_CASE("PluginManager - inspect required(), then load in dependency order",
+TEST_CASE("PluginManager - inspect required() on Opened entries, load in dependency order",
           "[plugin_manager][open][integration]")
 {
 	thx::service::ServiceManager sm;
 	thx::plugin::PluginManager   loader(sm);
 
-	// Open both plugins up front to inspect their requirements.
-	auto multi_opened = loader.open(THX_MOCK_MULTI_PLUGIN_PATH);
-	auto base_opened  = loader.open(THX_MOCK_PLUGIN_PATH);
-	REQUIRE(multi_opened);
-	REQUIRE(base_opened);
+	// Open both plugins up front to inspect their requirements via PluginInfo.
+	REQUIRE(loader.open(THX_MOCK_MULTI_PLUGIN_PATH));
+	REQUIRE(loader.open(THX_MOCK_PLUGIN_PATH));
 
-	REQUIRE(multi_opened.value().required().size() == 1);
-	REQUIRE(base_opened.value().required().size() == 0);
+	auto multi = loader.pluginInfo(THX_MOCK_MULTI_PLUGIN_PATH);
+	auto base  = loader.pluginInfo(THX_MOCK_PLUGIN_PATH);
+	REQUIRE(multi.has_value());
+	REQUIRE(base.has_value());
+
+	REQUIRE(multi->requirements.size() == 1);
+	REQUIRE(base->requirements.size()  == 0);
 
 	// Load base first (it provides MockService), then the multi plugin.
-	REQUIRE(loader.load(std::move(base_opened.value())));
-	REQUIRE(loader.load(std::move(multi_opened.value())));
+	REQUIRE(loader.load(THX_MOCK_PLUGIN_PATH));
+	REQUIRE(loader.load(THX_MOCK_MULTI_PLUGIN_PATH));
 
 	REQUIRE(loader.isLoaded(THX_MOCK_PLUGIN_PATH));
 	REQUIRE(loader.isLoaded(THX_MOCK_MULTI_PLUGIN_PATH));

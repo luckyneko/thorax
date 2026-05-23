@@ -287,36 +287,38 @@ TEST_CASE("ServiceManager::listServices - multiple independent services",
 }
 
 // ---------------------------------------------------------------------------
-// PluginManager::listPlugins
+// PluginManager::plugins(State::Loaded)
 // ---------------------------------------------------------------------------
 
-TEST_CASE("PluginManager::listPlugins - empty before load", "[introspection]")
+TEST_CASE("PluginManager::plugins(Loaded) - empty before load", "[introspection]")
 {
 	thx::service::ServiceManager sm;
 	thx::plugin::PluginManager   loader(sm);
 
-	REQUIRE(loader.listPlugins().empty());
+	REQUIRE(loader.plugins(thx::plugin::State::Loaded).empty());
 }
 
-TEST_CASE("PluginManager::listPlugins - entry present after load", "[introspection]")
+TEST_CASE("PluginManager::plugins(Loaded) - entry present after load", "[introspection]")
 {
 	thx::service::ServiceManager sm;
 	thx::plugin::PluginManager   loader(sm);
 	loader.load(THX_MOCK_PLUGIN_PATH);
 
-	auto plugins = loader.listPlugins();
-	REQUIRE(plugins.size() == 1);
-	REQUIRE(!plugins[0].pluginName.empty());
-	REQUIRE(plugins[0].services.size() == 1);
-	REQUIRE(plugins[0].services[0] == thx_mock::MockService::staticId());
+	auto loaded = loader.plugins(thx::plugin::State::Loaded);
+	REQUIRE(loaded.size() == 1);
+	REQUIRE(!loaded[0].name.empty());
+	REQUIRE(loaded[0].services.size() == 1);
+	REQUIRE(loaded[0].services[0] == thx_mock::MockService::staticId());
 }
 
-TEST_CASE("PluginManager::listPlugins - empty after unload", "[introspection]")
+TEST_CASE("PluginManager::plugins(Loaded) - empty after unload", "[introspection]")
 {
 	thx::service::ServiceManager sm;
 	thx::plugin::PluginManager   loader(sm);
 	loader.load(THX_MOCK_PLUGIN_PATH);
 	loader.unload(THX_MOCK_PLUGIN_PATH);
 
-	REQUIRE(loader.listPlugins().empty());
+	// After unload, the entry transitions to Discovered (per Phase 6 spec),
+	// not removed entirely. Loaded-filtered query is empty.
+	REQUIRE(loader.plugins(thx::plugin::State::Loaded).empty());
 }

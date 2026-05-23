@@ -40,19 +40,29 @@ namespace thx::plugin
 		return thx::registry().pluginManager().forget(path);
 	}
 
-	inline Result<OpenedPlugin, Error> open(std::string const& path)
+	inline Result<void, Error> open(std::string const& path)
 	{
 		return thx::registry().pluginManager().open(path);
 	}
 
-	inline Result<void, Error> load(OpenedPlugin opened)
+	inline Result<void, Error> close(std::string const& path)
 	{
-		return thx::registry().pluginManager().load(std::move(opened));
+		return thx::registry().pluginManager().close(path);
+	}
+
+	inline std::size_t closeAllOpened()
+	{
+		return thx::registry().pluginManager().closeAllOpened();
 	}
 
 	inline Result<void, Error> load(std::string const& path)
 	{
 		return thx::registry().pluginManager().load(path);
+	}
+
+	inline Result<void, Error> unload(std::string const& path)
+	{
+		return thx::registry().pluginManager().unload(path);
 	}
 
 	// Aggregate / convenience operations.
@@ -61,24 +71,7 @@ namespace thx::plugin
 		return thx::registry().pluginManager().discoverAndLoad(directory);
 	}
 
-	inline Result<void, Error> unload(std::string const& path)
-	{
-		return thx::registry().pluginManager().unload(path);
-	}
-
-	inline bool isLoaded(std::string const& path)
-	{
-		return thx::registry().pluginManager().isLoaded(path);
-	}
-
-	inline std::vector<LoadedPluginInfo> listPlugins()
-	{
-		return thx::registry().pluginManager().listPlugins();
-	}
-
-	// Phase 6 query API — value-typed snapshots of the Registry-owned PluginManager.
-	// Currently only Loaded entries are populated; Discovered/Opened tracking
-	// arrives in later commits.
+	// Query API — value-typed snapshots of the Registry-owned PluginManager.
 	inline std::vector<PluginInfo> plugins()
 	{
 		return thx::registry().pluginManager().plugins();
@@ -97,6 +90,21 @@ namespace thx::plugin
 	inline bool is(State state, std::string const& path)
 	{
 		return thx::registry().pluginManager().is(state, path);
+	}
+
+	inline bool isDiscovered(std::string const& path)
+	{
+		return thx::registry().pluginManager().isDiscovered(path);
+	}
+
+	inline bool isOpened(std::string const& path)
+	{
+		return thx::registry().pluginManager().isOpened(path);
+	}
+
+	inline bool isLoaded(std::string const& path)
+	{
+		return thx::registry().pluginManager().isLoaded(path);
 	}
 
 	// Dry-run requirement check against the Registry-owned ServiceManager.
