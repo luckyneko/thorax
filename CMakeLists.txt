@@ -350,7 +350,9 @@ if(THORAX_INSTALL)
     )
     install(DIRECTORY include/thx/
             DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/thx
-            FILES_MATCHING PATTERN "*.h"
+            FILES_MATCHING
+                PATTERN "*.h"
+                PATTERN "*.inl"
     )
     install(FILES "${CMAKE_CURRENT_BINARY_DIR}/include/thx/version.h"
             DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/thx
