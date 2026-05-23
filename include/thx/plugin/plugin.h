@@ -15,6 +15,7 @@
 #include "thx/span.h"
 
 #include <cstddef>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -68,6 +69,29 @@ namespace thx::plugin
 	inline std::vector<LoadedPluginInfo> listPlugins()
 	{
 		return thx::registry().pluginManager().listPlugins();
+	}
+
+	// Phase 6 query API — value-typed snapshots of the Registry-owned PluginManager.
+	// Currently only Loaded entries are populated; Discovered/Opened tracking
+	// arrives in later commits.
+	inline std::vector<PluginInfo> plugins()
+	{
+		return thx::registry().pluginManager().plugins();
+	}
+
+	inline std::vector<PluginInfo> plugins(State state)
+	{
+		return thx::registry().pluginManager().plugins(state);
+	}
+
+	inline std::optional<PluginInfo> pluginInfo(std::string const& path)
+	{
+		return thx::registry().pluginManager().pluginInfo(path);
+	}
+
+	inline bool is(State state, std::string const& path)
+	{
+		return thx::registry().pluginManager().is(state, path);
 	}
 
 	// Dry-run requirement check against the Registry-owned ServiceManager.

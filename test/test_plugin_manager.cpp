@@ -646,3 +646,112 @@ TEST_CASE("PluginManager::checkRequirements - dry-run against the registry",
 	REQUIRE_FALSE(vm);
 	REQUIRE(vm.error().code == thx::ErrorCode::VersionMismatch);
 }
+
+// ---------------------------------------------------------------------------
+// Phase 6 query API — pluginInfo / plugins / is(State, path)
+//
+// Only the Loaded state is populated at this stage of the migration;
+// Discovered/Opened tracking arrives in later commits.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginManager::plugins() returns empty when nothing is loaded",
+          "[plugin_manager][query]")
+{
+	thx::service::ServiceManager sm;
+	thx::plugin::PluginManager   pm(sm);
+
+	REQUIRE(pm.plugins().empty());
+	REQUIRE(pm.plugins(thx::plugin::State::Loaded).empty());
+	REQUIRE(pm.plugins(thx::plugin::State::Opened).empty());
+	REQUIRE(pm.plugins(thx::plugin::State::Discovered).empty());
+}
+
+TEST_CASE("PluginManager::pluginInfo returns nullopt for unknown paths",
+          "[plugin_manager][query]")
+{
+	thx::service::ServiceManager sm;
+	thx::plugin::PluginManager   pm(sm);
+
+	REQUIRE_FALSE(pm.pluginInfo("/nonexistent/path.dylib").has_value());
+	REQUIRE_FALSE(pm.pluginInfo(THX_MOCK_PLUGIN_PATH).has_value());
+}
+
+TEST_CASE("PluginManager::plugins() reflects a loaded plugin",
+          "[plugin_manager][query][integration]")
+{
+	thx::service::ServiceManager sm;
+	thx::plugin::PluginManager   pm(sm);
+
+	REQUIRE(pm.load(THX_MOCK_PLUGIN_PATH));
+
+	auto all = pm.plugins();
+	REQUIRE(all.size() == 1);
+	REQUIRE(all[0].state == thx::plugin::State::Loaded);
+	REQUIRE_FALSE(all[0].path.empty());
+	REQUIRE_FALSE(all[0].name.empty());
+	REQUIRE(all[0].services.size() >= 1);
+
+	// Filtered query agrees.
+	auto loaded = pm.plugins(thx::plugin::State::Loaded);
+	REQUIRE(loaded.size() == 1);
+	REQUIRE(loaded[0].path == all[0].path);
+
+	// Discovered/Opened are not populated yet.
+	REQUIRE(pm.plugins(thx::plugin::State::Discovered).empty());
+	REQUIRE(pm.plugins(thx::plugin::State::Opened).empty());
+}
+
+TEST_CASE("PluginManager::pluginInfo returns a snapshot for a loaded plugin",
+          "[plugin_manager][query][integration]")
+{
+	thx::service::ServiceManager sm;
+	thx::plugin::PluginManager   pm(sm);
+
+	REQUIRE(pm.load(THX_MOCK_PLUGIN_PATH));
+
+	auto info = pm.pluginInfo(THX_MOCK_PLUGIN_PATH);
+	REQUIRE(info.has_value());
+	REQUIRE(info->state == thx::plugin::State::Loaded);
+	REQUIRE_FALSE(info->name.empty());
+	REQUIRE(info->services.size() == 1);
+	REQUIRE(info->services[0] == thx_mock::MockService::staticId());
+
+	// `provides` stays empty until Phase 5 manifests.
+	REQUIRE(info->provides.empty());
+}
+
+TEST_CASE("PluginManager::is(State, path) for loaded plugins",
+          "[plugin_manager][query][integration]")
+{
+	thx::service::ServiceManager sm;
+	thx::plugin::PluginManager   pm(sm);
+
+	REQUIRE_FALSE(pm.is(thx::plugin::State::Loaded, THX_MOCK_PLUGIN_PATH));
+
+	REQUIRE(pm.load(THX_MOCK_PLUGIN_PATH));
+
+	REQUIRE(pm.is(thx::plugin::State::Loaded, THX_MOCK_PLUGIN_PATH));
+	REQUIRE_FALSE(pm.is(thx::plugin::State::Discovered, THX_MOCK_PLUGIN_PATH));
+	REQUIRE_FALSE(pm.is(thx::plugin::State::Opened, THX_MOCK_PLUGIN_PATH));
+}
+
+TEST_CASE("thx::plugin facade exposes the new query functions",
+          "[plugin_manager][query][integration][facade]")
+{
+	REQUIRE(thx::plugin::load(THX_MOCK_PLUGIN_PATH));
+
+	auto info = thx::plugin::pluginInfo(THX_MOCK_PLUGIN_PATH);
+	REQUIRE(info.has_value());
+	REQUIRE(info->state == thx::plugin::State::Loaded);
+
+	auto loaded = thx::plugin::plugins(thx::plugin::State::Loaded);
+	bool found = false;
+	for (auto const& p : loaded)
+		if (p.path == info->path) { found = true; break; }
+	REQUIRE(found);
+
+	REQUIRE(thx::plugin::is(thx::plugin::State::Loaded, THX_MOCK_PLUGIN_PATH));
+
+	REQUIRE(thx::plugin::unload(THX_MOCK_PLUGIN_PATH));
+	thx::plugin::collectGarbage();
+}

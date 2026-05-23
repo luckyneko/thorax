@@ -17,6 +17,7 @@
 #include "thx/log.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -29,6 +30,50 @@ namespace thx::plugin
 		std::string                            path;
 		std::string                            pluginName; // from IPlugin::name()
 		std::vector<thx::service::ServiceID>   services;   // all service IDs registered by this plugin
+	};
+
+	// Lifecycle state of a plugin tracked by PluginManager.
+	//
+	// Discovered — filesystem entry has been seen (and, when Phase 5 manifests
+	//              land, its sidecar parsed). No DSO interaction yet.
+	// Opened     — DSO mapped, IPlugin instantiated, ready for load. onLoad
+	//              has NOT been called.
+	// Loaded     — onLoad succeeded, services registered.
+	enum class State
+	{
+		Discovered,
+		Opened,
+		Loaded,
+	};
+
+	// Value-typed snapshot of one plugin known to PluginManager. Fields are
+	// populated incrementally as the entry progresses through the State
+	// machine; consult `state` to know what's actually meaningful.
+	//
+	// Field availability by state:
+	//   path          — always.
+	//   state         — always.
+	//   name          — Discovered if a manifest provided it, otherwise filled
+	//                   in once Opened (from IPlugin::name()).
+	//   version       — same.
+	//   requirements  — same; from manifest if present, else from IPlugin once
+	//                   Opened.
+	//   provides      — populated from the manifest when present; once Loaded,
+	//                   matches the services actually registered.
+	//   services      — empty until Loaded; then the service IDs registered by
+	//                   the plugin's onLoad().
+	//
+	// `requirements` is spelled out instead of `requires` to avoid the C++20
+	// concepts keyword.
+	struct PluginInfo
+	{
+		std::string                          path;
+		State                                state;
+		std::string                          name;
+		Version                              version;
+		std::vector<ServiceRequirement>      requirements;
+		std::vector<thx::service::ServiceID> provides;
+		std::vector<thx::service::ServiceID> services;
 	};
 
 	// A plugin DSO that has been opened and its IPlugin instantiated, but whose
@@ -181,6 +226,26 @@ namespace thx::plugin
 		// registered. Useful for diagnostics and test assertions.
 		std::vector<LoadedPluginInfo> listPlugins() const;
 
+		// --- Phase 6 query API ---------------------------------------------
+		//
+		// These methods will become the canonical inspection surface once the
+		// PluginManager-owned-lifecycle reshape lands. For now they coexist
+		// with listPlugins(); only the Loaded state is populated, since
+		// Discovered/Opened tracking is added in later commits.
+
+		// Returns a snapshot of every plugin known to the manager in any state.
+		std::vector<PluginInfo> plugins() const;
+
+		// Returns a snapshot of plugins filtered to a single lifecycle state.
+		std::vector<PluginInfo> plugins(State state) const;
+
+		// Returns the snapshot for one plugin by canonical path, or nullopt if
+		// the path isn't currently tracked.
+		std::optional<PluginInfo> pluginInfo(std::string const& path) const;
+
+		// True if the plugin at `path` is currently in `state`.
+		bool is(State state, std::string const& path) const;
+
 	private:
 		struct Entry
 		{
@@ -196,6 +261,10 @@ namespace thx::plugin
 		std::unordered_map<std::string, Entry> m_plugins; // canonical_path → entry
 
 		static std::string resolveCanonical(std::string const& path);
+
+		// Build a PluginInfo from a Loaded entry. Member function so it can
+		// reach Entry, which is private.
+		PluginInfo infoFromEntry(std::string const& path, Entry const& entry) const;
 	};
 
 } // namespace thx::plugin

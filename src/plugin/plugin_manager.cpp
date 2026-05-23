@@ -334,4 +334,63 @@ std::vector<LoadedPluginInfo> PluginManager::listPlugins() const
 	return result;
 }
 
+// --- Phase 6 query API -------------------------------------------------------
+//
+// Only the Loaded state is populated here. Discovered/Opened tracking lands in
+// later commits; until then those states are reported as empty.
+
+PluginInfo PluginManager::infoFromEntry(std::string const& path, Entry const& entry) const
+{
+	PluginInfo info;
+	info.path  = path;
+	info.state = State::Loaded;
+	if (entry.plugin)
+	{
+		info.name    = std::string(static_cast<std::string_view>(entry.plugin->name()));
+		info.version = entry.plugin->version();
+		auto reqs    = entry.plugin->required();
+		info.requirements.assign(reqs.begin(), reqs.end());
+	}
+	info.services = entry.serviceIds;
+	// `provides` stays empty until Phase 5 manifests populate it.
+	return info;
+}
+
+std::vector<PluginInfo> PluginManager::plugins() const
+{
+	std::vector<PluginInfo> result;
+	result.reserve(m_plugins.size());
+	for (auto const& [path, entry] : m_plugins)
+		result.push_back(infoFromEntry(path, entry));
+	return result;
+}
+
+std::vector<PluginInfo> PluginManager::plugins(State state) const
+{
+	if (state != State::Loaded)
+		return {};
+	return plugins();
+}
+
+std::optional<PluginInfo> PluginManager::pluginInfo(std::string const& path) const
+{
+	auto canonical = resolveCanonical(path);
+	if (canonical.empty())
+		return std::nullopt;
+	auto it = m_plugins.find(canonical);
+	if (it == m_plugins.end())
+		return std::nullopt;
+	return infoFromEntry(canonical, it->second);
+}
+
+bool PluginManager::is(State state, std::string const& path) const
+{
+	if (state != State::Loaded)
+		return false;
+	auto canonical = resolveCanonical(path);
+	if (canonical.empty())
+		return false;
+	return m_plugins.count(canonical) > 0;
+}
+
 } // namespace thx::plugin
