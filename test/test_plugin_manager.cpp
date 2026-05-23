@@ -282,19 +282,55 @@ TEST_CASE("PluginManager - load drains the deferred-close queue",
 // PluginManager::discover
 // ---------------------------------------------------------------------------
 
-TEST_CASE("PluginManager::discover - finds platform-extension files only",
+// Helper: write a minimal-but-valid manifest at `path` advertising `name`.
+namespace
+{
+	void writeStubManifest(std::filesystem::path const& path, std::string const& name)
+	{
+		std::ofstream f(path);
+		f << R"({
+	"schema":   1,
+	"name":     ")" << name << R"(",
+	"version":  "1.0.0",
+	"provides": [],
+	"requires": []
+})";
+	}
+
+	// Helper: copy a plugin DSO and its sidecar from src_dso path into dst_dir.
+	// The sidecar is assumed to live next to the source with the same basename
+	// and a .thx.json suffix.
+	std::filesystem::path copyPluginWithSidecar(std::filesystem::path const& src_dso,
+	                                            std::filesystem::path const& dst_dir)
+	{
+		namespace fs = std::filesystem;
+		auto basename = src_dso.stem().string();   // e.g. "libmock_plugin"
+		auto src_dir  = src_dso.parent_path();
+		auto src_mf   = src_dir / (basename + ".thx.json");
+
+		auto dst_dso = dst_dir / src_dso.filename();
+		auto dst_mf  = dst_dir / src_mf.filename();
+		fs::copy_file(src_dso, dst_dso);
+		fs::copy_file(src_mf,  dst_mf);
+		return dst_dso;
+	}
+}
+
+TEST_CASE("PluginManager::discover - DSO without sidecar is ignored, paired DSO+sidecar is discovered",
           "[plugin_manager][discover]")
 {
 	namespace fs = std::filesystem;
 
-	// Create a temp directory with mixed file types.
 	auto tmp = fs::temp_directory_path() / "thx_test_discover";
 	fs::remove_all(tmp);
 	fs::create_directories(tmp);
 
-	// Create one file for each supported extension and one unrelated file.
+	// Stub DSO with no sidecar — must be ignored.
 	std::ofstream{(tmp / ("plugin_a" + std::string(thx::LIBRARY_EXTENSION))).string()};
+	// Stub DSO with paired sidecar — must be discovered.
 	std::ofstream{(tmp / ("plugin_b" + std::string(thx::LIBRARY_EXTENSION))).string()};
+	writeStubManifest(tmp / "plugin_b.thx.json", "thx.test.PluginB");
+	// Unrelated files — must be ignored.
 	std::ofstream{(tmp / "readme.txt").string()};
 	std::ofstream{(tmp / "data.bin").string()};
 
@@ -304,9 +340,31 @@ TEST_CASE("PluginManager::discover - finds platform-extension files only",
 	REQUIRE(loader.discover(tmp.string()));
 	auto discovered = loader.plugins(thx::plugin::State::Discovered);
 
-	fs::remove_all(tmp); // cleanup before assertions so temp files don't linger
+	fs::remove_all(tmp);
 
-	REQUIRE(discovered.size() == 2);
+	REQUIRE(discovered.size() == 1);
+	REQUIRE(discovered[0].name == "thx.test.PluginB");
+}
+
+TEST_CASE("PluginManager::discover - orphan sidecar (no DSO) is skipped with a warning",
+          "[plugin_manager][discover]")
+{
+	namespace fs = std::filesystem;
+
+	auto tmp = fs::temp_directory_path() / "thx_test_discover_orphan";
+	fs::remove_all(tmp);
+	fs::create_directories(tmp);
+
+	// Manifest without a paired DSO.
+	writeStubManifest(tmp / "ghost.thx.json", "thx.test.Ghost");
+
+	thx::service::ServiceManager sm;
+	thx::plugin::PluginManager   loader(sm);
+
+	REQUIRE(loader.discover(tmp.string()));
+	REQUIRE(loader.plugins(thx::plugin::State::Discovered).empty());
+
+	fs::remove_all(tmp);
 }
 
 TEST_CASE("PluginManager::discover - empty directory yields no entries",
@@ -340,18 +398,15 @@ TEST_CASE("PluginManager::discover - missing directory returns FileNotFound",
 	REQUIRE(r.error().code == thx::ErrorCode::FileNotFound);
 }
 
-TEST_CASE("PluginManager::discover - real plugin populates a Discovered entry",
+TEST_CASE("PluginManager::discover - real plugin populates a Discovered entry from its manifest",
           "[plugin_manager][discover][integration]")
 {
 	namespace fs = std::filesystem;
 
 	auto tmp = fs::temp_directory_path() / "thx_test_discover_real";
-	auto src = fs::path(THX_MOCK_PLUGIN_PATH);
-	auto dst = tmp / src.filename();
-
 	fs::remove_all(tmp);
 	fs::create_directories(tmp);
-	fs::copy_file(src, dst);
+	auto dst = copyPluginWithSidecar(THX_MOCK_PLUGIN_PATH, tmp);
 
 	thx::service::ServiceManager sm;
 	thx::plugin::PluginManager   loader(sm);
@@ -362,9 +417,12 @@ TEST_CASE("PluginManager::discover - real plugin populates a Discovered entry",
 	auto info = loader.pluginInfo(dst.string());
 	REQUIRE(info.has_value());
 	REQUIRE(info->state == thx::plugin::State::Discovered);
-	// Discovered entries carry no metadata yet (Phase 5 manifests will fix this).
-	REQUIRE(info->name.empty());
-	REQUIRE(info->services.empty());
+	// Manifest data is available without opening the DSO.
+	REQUIRE(info->name == "thx_mock.MockService");
+	REQUIRE(info->version == thx::Version{1, 0, 0});
+	REQUIRE(info->provides.size() == 1);
+	REQUIRE(info->provides[0] == "thx_mock.MockService");
+	REQUIRE(info->services.empty()); // not loaded yet
 
 	fs::remove_all(tmp);
 }
@@ -375,12 +433,9 @@ TEST_CASE("PluginManager::forget - removes a Discovered entry",
 	namespace fs = std::filesystem;
 
 	auto tmp = fs::temp_directory_path() / "thx_test_forget";
-	auto src = fs::path(THX_MOCK_PLUGIN_PATH);
-	auto dst = tmp / src.filename();
-
 	fs::remove_all(tmp);
 	fs::create_directories(tmp);
-	fs::copy_file(src, dst);
+	auto dst = copyPluginWithSidecar(THX_MOCK_PLUGIN_PATH, tmp);
 
 	thx::service::ServiceManager sm;
 	thx::plugin::PluginManager   loader(sm);
@@ -419,12 +474,9 @@ TEST_CASE("PluginManager::discover - re-scan leaves Loaded entries untouched",
 	namespace fs = std::filesystem;
 
 	auto tmp = fs::temp_directory_path() / "thx_test_discover_rescan";
-	auto src = fs::path(THX_MOCK_PLUGIN_PATH);
-	auto dst = tmp / src.filename();
-
 	fs::remove_all(tmp);
 	fs::create_directories(tmp);
-	fs::copy_file(src, dst);
+	auto dst = copyPluginWithSidecar(THX_MOCK_PLUGIN_PATH, tmp);
 
 	thx::service::ServiceManager sm;
 	thx::plugin::PluginManager   loader(sm);
@@ -575,14 +627,10 @@ TEST_CASE("PluginManager::discoverAndLoad - loads real plugin from directory",
 {
 	namespace fs = std::filesystem;
 
-	// Create a temp directory containing a symlink (or copy) of the mock plugin.
-	auto tmp     = fs::temp_directory_path() / "thx_test_discover_load";
-	auto src     = fs::path(THX_MOCK_PLUGIN_PATH);
-	auto dst     = tmp / src.filename();
-
+	auto tmp = fs::temp_directory_path() / "thx_test_discover_load";
 	fs::remove_all(tmp);
 	fs::create_directories(tmp);
-	fs::copy_file(src, dst);
+	auto dst = copyPluginWithSidecar(THX_MOCK_PLUGIN_PATH, tmp);
 
 	thx::service::ServiceManager sm;
 	thx::plugin::PluginManager   loader(sm);
@@ -869,10 +917,11 @@ TEST_CASE("PluginManager::pluginInfo returns a snapshot for a loaded plugin",
 	REQUIRE(info->state == thx::plugin::State::Loaded);
 	REQUIRE_FALSE(info->name.empty());
 	REQUIRE(info->services.size() == 1);
-	REQUIRE(info->services[0] == thx_mock::MockService::staticId());
+	REQUIRE(info->services[0] == thx_mock::MockService::staticId().name());
 
-	// `provides` stays empty until Phase 5 manifests.
-	REQUIRE(info->provides.empty());
+	// Phase 5 manifests populate `provides` for the mock plugin.
+	REQUIRE(info->provides.size() == 1);
+	REQUIRE(info->provides[0] == "thx_mock.MockService");
 }
 
 TEST_CASE("PluginManager::is(State, path) for loaded plugins",

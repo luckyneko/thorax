@@ -10,10 +10,13 @@
 #include "thx/library.h"
 #include "thx/registry.h"
 #include "thx/to_string.h"
+#include "thx/plugin/manifest.h"
 #include "thx/plugin/platform.h"
 
 #include <algorithm>
 #include <filesystem>
+#include <string>
+#include <string_view>
 #include <unordered_set>
 
 namespace thx::plugin
@@ -85,6 +88,35 @@ std::string PluginManager::resolveCanonical(std::string const& path)
 	return ec ? std::string{} : c.string();
 }
 
+std::string PluginManager::manifestPathForDso(std::string const& dsoPath)
+{
+	// Strip the platform DSO suffix if present, then append .thx.json.
+	std::string const suffix = LIBRARY_EXTENSION;
+	if (dsoPath.size() > suffix.size()
+	    && dsoPath.compare(dsoPath.size() - suffix.size(), suffix.size(), suffix) == 0)
+	{
+		return dsoPath.substr(0, dsoPath.size() - suffix.size()) + ".thx.json";
+	}
+	// Caller gave us a path without LIBRARY_EXTENSION; best-effort fallback.
+	return dsoPath + ".thx.json";
+}
+
+Result<void, Error> PluginManager::ensureDiscovered(std::string const& canonical)
+{
+	if (m_discovered.count(canonical)
+	    || m_opened.count(canonical)
+	    || m_plugins.count(canonical))
+		return Result<void, Error>::ok();
+
+	auto manifestPath = manifestPathForDso(canonical);
+	auto parsed = parseManifest(manifestPath);
+	if (!parsed)
+		return Result<void, Error>::err(std::move(parsed.error()));
+
+	m_discovered.emplace(canonical, DiscoveredEntry{std::move(parsed.value())});
+	return Result<void, Error>::ok();
+}
+
 Result<void, Error> PluginManager::checkRequirements(ServiceManager const&          sm,
                                                      Span<const ServiceRequirement> reqs)
 {
@@ -112,7 +144,7 @@ Result<void, Error> PluginManager::checkRequirements(ServiceManager const&      
 // --- Internal: open a DSO and produce an OpenedEntry -------------------------
 
 Result<PluginManager::OpenedEntry, Error>
-PluginManager::openHandle(std::string const& canonical)
+PluginManager::openHandle(std::string const& canonical, PluginManifest manifest)
 {
 	// Drain the deferred-close queue before any new dlopen so we don't
 	// accumulate a long tail of mapped-but-released DSOs in long-running
@@ -142,8 +174,9 @@ PluginManager::openHandle(std::string const& canonical)
 	});
 
 	OpenedEntry entry;
-	entry.handle = std::move(handle);
-	entry.plugin = std::move(plugin);
+	entry.manifest = std::move(manifest);
+	entry.handle   = std::move(handle);
+	entry.plugin   = std::move(plugin);
 	return Result<OpenedEntry, Error>::ok(std::move(entry));
 }
 
@@ -187,6 +220,7 @@ PluginManager::finalizeLoad(OpenedEntry opened, std::string const& canonical)
 	}
 
 	LoadedEntry entry;
+	entry.manifest   = std::move(opened.manifest);
 	entry.handle     = std::move(opened.handle);
 	entry.serviceIds = diffNewIds();
 	entry.plugin     = std::move(opened.plugin);
@@ -203,23 +237,53 @@ Result<void, Error> PluginManager::discover(std::string const& directory)
 		return Result<void, Error>::err({ErrorCode::FileNotFound,
 			"Cannot iterate directory '" + directory + "': " + ec.message()});
 
+	// The sidecar manifest is the marker that says "this is a thorax plugin."
+	// Iterate `*.thx.json` files and pair each with its DSO by suffix swap.
+	// Bare DSOs without a manifest are silently ignored — they're not plugins.
+	constexpr std::string_view kSidecarSuffix = ".thx.json";
+
 	for (auto const& entry : iter)
 	{
-		if (entry.path().extension().string() != LIBRARY_EXTENSION)
+		auto const& filename = entry.path().filename().string();
+		if (filename.size() <= kSidecarSuffix.size()
+		    || filename.compare(filename.size() - kSidecarSuffix.size(),
+		                        kSidecarSuffix.size(), kSidecarSuffix) != 0)
 			continue;
 
-		auto canonical = resolveCanonical(entry.path().string());
+		// Compute the paired DSO path: strip .thx.json, add LIBRARY_EXTENSION.
+		auto manifestPath = entry.path().string();
+		std::string dsoPath = manifestPath.substr(
+		    0, manifestPath.size() - kSidecarSuffix.size())
+		    + LIBRARY_EXTENSION;
+
+		if (!std::filesystem::exists(dsoPath))
+		{
+			thx::log(LogLevel::Warn,
+			    "discover: sidecar '" + manifestPath
+			    + "' has no paired DSO at '" + dsoPath + "' — skipping");
+			continue;
+		}
+
+		auto canonical = resolveCanonical(dsoPath);
 		if (canonical.empty())
-			continue; // file vanished between iteration and canonicalize; skip silently
+			continue; // file vanished between exists() and canonicalize; skip silently
 
 		// Don't disturb entries that are already Opened or Loaded — those
 		// states supersede Discovered.
-		if (m_plugins.count(canonical) || m_opened.count(canonical))
+		if (m_plugins.count(canonical) || m_opened.count(canonical)
+		    || m_discovered.count(canonical))
 			continue;
 
-		// emplace is a no-op if already discovered; that's the intended
-		// idempotent re-scan behaviour.
-		m_discovered.emplace(canonical, DiscoveredEntry{});
+		auto parsed = parseManifest(manifestPath);
+		if (!parsed)
+		{
+			thx::log(LogLevel::Error,
+			    "discover: failed to parse '" + manifestPath
+			    + "': " + parsed.error().message);
+			continue;
+		}
+
+		m_discovered.emplace(canonical, DiscoveredEntry{std::move(parsed.value())});
 	}
 	return Result<void, Error>::ok();
 }
@@ -253,12 +317,25 @@ Result<void, Error> PluginManager::open(std::string const& path)
 	if (m_plugins.count(canonical) || m_opened.count(canonical))
 		return Result<void, Error>::ok();
 
-	auto entryResult = openHandle(canonical);
+	// Implicit single-file discover: if the path isn't in m_discovered yet,
+	// locate and parse its sidecar manifest before opening the DSO. This
+	// supports the "load this specific plugin by path" shortcut without
+	// requiring a prior discover(dir).
+	if (auto r = ensureDiscovered(canonical); !r)
+		return Result<void, Error>::err(std::move(r.error()));
+
+	// Copy (not move) the manifest out of the Discovered entry so that, on
+	// failure, the Discovered entry still has its data and the caller can
+	// retry / forget cleanly.
+	auto discIt   = m_discovered.find(canonical);
+	auto manifest = discIt->second.manifest;
+
+	auto entryResult = openHandle(canonical, std::move(manifest));
 	if (!entryResult)
 		return Result<void, Error>::err(std::move(entryResult.error()));
 
-	// Successful open: remove any Discovered shadow and install the OpenedEntry.
-	m_discovered.erase(canonical);
+	// Successful open: remove the Discovered entry and install the OpenedEntry.
+	m_discovered.erase(discIt);
 	m_opened.emplace(canonical, std::move(entryResult.value()));
 	return Result<void, Error>::ok();
 }
@@ -272,19 +349,23 @@ Result<void, Error> PluginManager::close(std::string const& path)
 	if (it == m_opened.end())
 		return Result<void, Error>::ok(); // not Opened — no-op (idempotent)
 
+	// Hold on to the manifest so the entry can return to Discovered with
+	// its metadata intact.
+	auto manifest = std::move(it->second.manifest);
+
 	// Drop the OpenedEntry — its IPlugin and PluginHandle (Library) are
 	// destroyed in declaration order, queuing the DSO to the garbage queue.
 	m_opened.erase(it);
 	// Per the spec, close() always returns the entry to Discovered.
-	m_discovered.emplace(key, DiscoveredEntry{});
+	m_discovered.emplace(key, DiscoveredEntry{std::move(manifest)});
 	return Result<void, Error>::ok();
 }
 
 std::size_t PluginManager::closeAllOpened()
 {
 	std::size_t count = m_opened.size();
-	for (auto& [path, _] : m_opened)
-		m_discovered.emplace(path, DiscoveredEntry{});
+	for (auto& [path, entry] : m_opened)
+		m_discovered.emplace(path, DiscoveredEntry{std::move(entry.manifest)});
 	m_opened.clear();
 	return count;
 }
@@ -301,7 +382,7 @@ Result<void, Error> PluginManager::load(std::string const& path)
 		return Result<void, Error>::ok();
 
 	// Extract or build the OpenedEntry. If the path is already Opened, take
-	// the existing entry; otherwise open it implicitly.
+	// the existing entry; otherwise discover (if needed) and open implicitly.
 	OpenedEntry opened;
 	if (auto it = m_opened.find(canonical); it != m_opened.end())
 	{
@@ -310,9 +391,18 @@ Result<void, Error> PluginManager::load(std::string const& path)
 	}
 	else
 	{
-		auto openedResult = openHandle(canonical);
+		if (auto r = ensureDiscovered(canonical); !r)
+			return Result<void, Error>::err(std::move(r.error()));
+
+		auto discIt   = m_discovered.find(canonical);
+		auto manifest = discIt->second.manifest;     // copy in case openHandle fails
+
+		auto openedResult = openHandle(canonical, std::move(manifest));
 		if (!openedResult)
 			return Result<void, Error>::err(std::move(openedResult.error()));
+
+		// The Discovered entry is consumed by the successful open.
+		m_discovered.erase(discIt);
 		opened = std::move(openedResult.value());
 	}
 
@@ -320,13 +410,13 @@ Result<void, Error> PluginManager::load(std::string const& path)
 	if (!loaded)
 	{
 		// finalizeLoad consumed `opened`; the OpenedEntry it built is now
-		// gone (DSO queued to garbage). The Discovered shadow, if any, is
-		// untouched — callers can retry or forget().
+		// gone (DSO queued to garbage). The Discovered shadow, if any, was
+		// already consumed above. Callers can retry or call discover/load
+		// again to reattempt.
 		return Result<void, Error>::err(std::move(loaded.error()));
 	}
 
-	// Successful load: remove any Discovered shadow and install the LoadedEntry.
-	m_discovered.erase(canonical);
+	// Successful load: install the LoadedEntry.
 	m_plugins.emplace(canonical, std::move(loaded.value()));
 	return Result<void, Error>::ok();
 }
@@ -341,14 +431,16 @@ Result<void, Error> PluginManager::unload(std::string const& path)
 		return Result<void, Error>::err({ErrorCode::NotLoaded,
 			"Plugin not loaded: " + path});
 
-	auto name = pluginDisplayName(it->second.plugin, key);
+	auto name     = pluginDisplayName(it->second.plugin, key);
+	auto manifest = std::move(it->second.manifest);
 	if (it->second.plugin)
 		it->second.plugin->onUnload(m_sm);
 	sweepSurvivingServices(m_sm, it->second.serviceIds, name);
 
 	m_plugins.erase(it); // ~LoadedEntry queues DSO to garbage
-	// Per the spec, unload() returns the entry to Discovered.
-	m_discovered.emplace(key, DiscoveredEntry{});
+	// Per the spec, unload() returns the entry to Discovered with its
+	// manifest preserved so it can be reloaded.
+	m_discovered.emplace(key, DiscoveredEntry{std::move(manifest)});
 	return Result<void, Error>::ok();
 }
 
@@ -389,51 +481,61 @@ PluginManager::LoadSummary PluginManager::discoverAndLoad(std::string const& dir
 
 // --- PluginInfo construction -------------------------------------------------
 
-PluginInfo PluginManager::infoFromLoaded(std::string const& path, LoadedEntry const& entry) const
+namespace
+{
+	// Populate the manifest-derived fields on a PluginInfo.
+	void populateFromManifest(PluginInfo& info, PluginManifest const& m)
+	{
+		info.name         = m.name;
+		info.version      = m.version;
+		info.requirements = m.requirements;
+		info.provides     = m.provides;
+	}
+
+	// Convert runtime ServiceIDs to their string form for the value-typed
+	// PluginInfo snapshot.
+	std::vector<std::string> serviceNames(std::vector<thx::service::ServiceID> const& ids)
+	{
+		std::vector<std::string> out;
+		out.reserve(ids.size());
+		for (auto const& id : ids)
+			out.emplace_back(id.name());
+		return out;
+	}
+} // namespace
+
+PluginInfo PluginManager::infoFromDiscovered(std::string const& path,
+                                             DiscoveredEntry const& entry) const
 {
 	PluginInfo info;
 	info.path  = path;
-	info.state = State::Loaded;
-	if (entry.plugin)
-	{
-		info.name    = std::string(static_cast<std::string_view>(entry.plugin->name()));
-		info.version = entry.plugin->version();
-		auto reqs    = entry.plugin->required();
-		info.requirements.assign(reqs.begin(), reqs.end());
-	}
-	info.services = entry.serviceIds;
-	// `provides` stays empty until Phase 5 manifests populate it.
+	info.state = State::Discovered;
+	populateFromManifest(info, entry.manifest);
+	// services stays empty: the DSO hasn't been opened yet.
 	return info;
 }
 
-PluginInfo PluginManager::infoFromOpened(std::string const& path, OpenedEntry const& entry) const
+PluginInfo PluginManager::infoFromOpened(std::string const& path,
+                                         OpenedEntry const& entry) const
 {
 	PluginInfo info;
 	info.path  = path;
 	info.state = State::Opened;
-	if (entry.plugin)
-	{
-		info.name    = std::string(static_cast<std::string_view>(entry.plugin->name()));
-		info.version = entry.plugin->version();
-		auto reqs    = entry.plugin->required();
-		info.requirements.assign(reqs.begin(), reqs.end());
-	}
+	populateFromManifest(info, entry.manifest);
 	// services stays empty: onLoad hasn't been called yet.
 	return info;
 }
 
-namespace
+PluginInfo PluginManager::infoFromLoaded(std::string const& path,
+                                         LoadedEntry const& entry) const
 {
-	PluginInfo infoFromDiscovered(std::string const& path)
-	{
-		PluginInfo info;
-		info.path  = path;
-		info.state = State::Discovered;
-		// Other fields are empty: until Phase 5 manifests, a Discovered
-		// entry carries no metadata.
-		return info;
-	}
-} // namespace
+	PluginInfo info;
+	info.path  = path;
+	info.state = State::Loaded;
+	populateFromManifest(info, entry.manifest);
+	info.services = serviceNames(entry.serviceIds);
+	return info;
+}
 
 // --- Queries -----------------------------------------------------------------
 
@@ -441,8 +543,8 @@ std::vector<PluginInfo> PluginManager::plugins() const
 {
 	std::vector<PluginInfo> result;
 	result.reserve(m_discovered.size() + m_opened.size() + m_plugins.size());
-	for (auto const& [path, _] : m_discovered)
-		result.push_back(infoFromDiscovered(path));
+	for (auto const& [path, entry] : m_discovered)
+		result.push_back(infoFromDiscovered(path, entry));
 	for (auto const& [path, entry] : m_opened)
 		result.push_back(infoFromOpened(path, entry));
 	for (auto const& [path, entry] : m_plugins)
@@ -457,8 +559,8 @@ std::vector<PluginInfo> PluginManager::plugins(State state) const
 	{
 		case State::Discovered:
 			result.reserve(m_discovered.size());
-			for (auto const& [path, _] : m_discovered)
-				result.push_back(infoFromDiscovered(path));
+			for (auto const& [path, entry] : m_discovered)
+				result.push_back(infoFromDiscovered(path, entry));
 			return result;
 		case State::Opened:
 			result.reserve(m_opened.size());
@@ -483,8 +585,8 @@ std::optional<PluginInfo> PluginManager::pluginInfo(std::string const& path) con
 		return infoFromLoaded(it->first, it->second);
 	if (auto it = m_opened.find(key); it != m_opened.end())
 		return infoFromOpened(it->first, it->second);
-	if (m_discovered.count(key))
-		return infoFromDiscovered(key);
+	if (auto it = m_discovered.find(key); it != m_discovered.end())
+		return infoFromDiscovered(it->first, it->second);
 	return std::nullopt;
 }
 

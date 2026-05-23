@@ -1,4 +1,5 @@
 include(thx_warnings)
+include(thx_plugin_manifest)
 
 add_library(plugin_io SHARED
     src/io_plugin.cpp
@@ -10,3 +11,8 @@ target_include_directories(plugin_io PUBLIC
 )
 thx_set_warnings(plugin_io)
 target_compile_options(plugin_io PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fvisibility=hidden>)
+thx_plugin_manifest(plugin_io
+    NAME     "thx.plugins.io.IIOService"
+    VERSION  "1.0.0"
+    PROVIDES "thx.plugins.io.IIOService"
+)

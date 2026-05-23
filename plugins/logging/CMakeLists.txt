@@ -1,4 +1,5 @@
 include(thx_warnings)
+include(thx_plugin_manifest)
 
 add_library(plugin_logging SHARED
     src/logging_plugin.cpp
@@ -10,3 +11,8 @@ target_include_directories(plugin_logging PUBLIC
 )
 thx_set_warnings(plugin_logging)
 target_compile_options(plugin_logging PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fvisibility=hidden>)
+thx_plugin_manifest(plugin_logging
+    NAME     "thx.plugins.logging.ILoggingService"
+    VERSION  "1.0.0"
+    PROVIDES "thx.plugins.logging.ILoggingService"
+)

@@ -19,6 +19,7 @@ project(thorax LANGUAGES CXX VERSION 0.0.1)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 include(thx_warnings)
+include(thx_plugin_manifest)
 
 # GCC 9.1 is the minimum version that supports __PRETTY_FUNCTION__ in constexpr.
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS "9.1")
@@ -143,6 +144,11 @@ if(THORAX_BUILD_TESTING)
     target_include_directories(mock_plugin PRIVATE test/mock_plugin)
     thx_set_warnings(mock_plugin)
     target_compile_options(mock_plugin PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fvisibility=hidden>)
+    thx_plugin_manifest(mock_plugin
+        NAME     "thx_mock.MockService"
+        VERSION  "1.0.0"
+        PROVIDES "thx_mock.MockService"
+    )
 
     # Mock plugin that exports thx_abi_version() = 999 to test version-mismatch rejection.
     add_library(mock_plugin_bad_abi SHARED
@@ -151,6 +157,10 @@ if(THORAX_BUILD_TESTING)
     target_link_libraries(mock_plugin_bad_abi PRIVATE ${PROJECT_NAME})
     thx_set_warnings(mock_plugin_bad_abi)
     target_compile_options(mock_plugin_bad_abi PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fvisibility=hidden>)
+    thx_plugin_manifest(mock_plugin_bad_abi
+        NAME    "test.BadAbi"
+        VERSION "1.0.0"
+    )
 
     # IPlugin-based mock that registers ServiceA + ServiceB and requires MockService.
     add_library(mock_plugin_multi SHARED
@@ -160,6 +170,13 @@ if(THORAX_BUILD_TESTING)
     target_include_directories(mock_plugin_multi PRIVATE test/mock_plugin)
     thx_set_warnings(mock_plugin_multi)
     target_compile_options(mock_plugin_multi PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fvisibility=hidden>)
+    thx_plugin_manifest(mock_plugin_multi
+        NAME     "thx.mock.MultiPlugin"
+        VERSION  "1.0.0"
+        PROVIDES "thx_mock.ServiceA"
+                 "thx_mock.ServiceB"
+        REQUIRES "thx_mock.MockService:1.0.0"
+    )
 
     # IPlugin-based mock whose onLoad returns false.
     add_library(mock_plugin_bails SHARED
@@ -168,6 +185,10 @@ if(THORAX_BUILD_TESTING)
     target_link_libraries(mock_plugin_bails PRIVATE ${PROJECT_NAME})
     thx_set_warnings(mock_plugin_bails)
     target_compile_options(mock_plugin_bails PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fvisibility=hidden>)
+    thx_plugin_manifest(mock_plugin_bails
+        NAME    "thx.mock.BailingPlugin"
+        VERSION "1.0.0"
+    )
 
     # IPlugin-based mock that requires MockService at 2.0.0 (mock_plugin only
     # registers 1.0.0), used to test the versioned-requirement rejection path.
@@ -178,6 +199,11 @@ if(THORAX_BUILD_TESTING)
     target_include_directories(mock_plugin_requires_newer PRIVATE test/mock_plugin)
     thx_set_warnings(mock_plugin_requires_newer)
     target_compile_options(mock_plugin_requires_newer PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fvisibility=hidden>)
+    thx_plugin_manifest(mock_plugin_requires_newer
+        NAME     "thx.mock.RequiresNewerPlugin"
+        VERSION  "1.0.0"
+        REQUIRES "thx_mock.MockService:2.0.0"
+    )
 
     # IPlugin-based mock that registers ServiceA in onLoad and then returns false.
     # Used to verify PluginManager rolls back partial registrations on failure.
@@ -188,6 +214,11 @@ if(THORAX_BUILD_TESTING)
     target_include_directories(mock_plugin_bails_after_register PRIVATE test/mock_plugin)
     thx_set_warnings(mock_plugin_bails_after_register)
     target_compile_options(mock_plugin_bails_after_register PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fvisibility=hidden>)
+    thx_plugin_manifest(mock_plugin_bails_after_register
+        NAME     "thx.mock.BailsAfterRegisterPlugin"
+        VERSION  "1.0.0"
+        PROVIDES "thx_mock.ServiceA"
+    )
 
     # IPlugin-based mock that registers ServiceA in onLoad but does NOT unregister
     # it in onUnload. Used to verify PluginManager's safety-net sweep catches
@@ -199,6 +230,11 @@ if(THORAX_BUILD_TESTING)
     target_include_directories(mock_plugin_forgets_unload PRIVATE test/mock_plugin)
     thx_set_warnings(mock_plugin_forgets_unload)
     target_compile_options(mock_plugin_forgets_unload PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fvisibility=hidden>)
+    thx_plugin_manifest(mock_plugin_forgets_unload
+        NAME     "thx.mock.ForgetsUnloadPlugin"
+        VERSION  "1.0.0"
+        PROVIDES "thx_mock.ServiceA"
+    )
 
     add_executable(test-${PROJECT_NAME}
         test/test_umbrella_header.cpp

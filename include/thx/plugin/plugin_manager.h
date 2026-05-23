@@ -10,6 +10,7 @@
 
 #include "thx/library.h"
 #include "thx/plugin/iplugin.h"
+#include "thx/plugin/manifest.h"
 #include "thx/plugin/plugin_garbage.h"
 #include "thx/plugin/plugin_handle.h"
 #include "thx/result.h"
@@ -47,27 +48,32 @@ namespace thx::plugin
 	// Field availability by state:
 	//   path          — always.
 	//   state         — always.
-	//   name          — Discovered if a manifest provided it, otherwise filled
-	//                   in once Opened (from IPlugin::name()).
+	//   name          — populated from the manifest once Discovered, verified
+	//                   against IPlugin::name() at Loaded.
 	//   version       — same.
-	//   requirements  — same; from manifest if present, else from IPlugin once
-	//                   Opened.
-	//   provides      — populated from the manifest when present; once Loaded,
-	//                   matches the services actually registered.
+	//   requirements  — populated from the manifest once Discovered, verified
+	//                   against IPlugin::required() at Loaded.
+	//   provides      — populated from the manifest once Discovered, verified
+	//                   against the services actually registered at Loaded.
 	//   services      — empty until Loaded; then the service IDs registered by
-	//                   the plugin's onLoad().
+	//                   the plugin's onLoad(), as strings.
+	//
+	// All ID fields are stored as `std::string` (not `thx::service::ServiceID`)
+	// because ServiceID is designed around string-literal lifetimes and a
+	// value-typed snapshot can't safely carry literal-backed pointers across
+	// copies / moves. Compare against a `ServiceID` via its `.name()` accessor.
 	//
 	// `requirements` is spelled out instead of `requires` to avoid the C++20
 	// concepts keyword.
 	struct PluginInfo
 	{
-		std::string                          path;
-		State                                state;
-		std::string                          name;
-		Version                              version;
-		std::vector<ServiceRequirement>      requirements;
-		std::vector<thx::service::ServiceID> provides;
-		std::vector<thx::service::ServiceID> services;
+		std::string                      path;
+		State                            state;
+		std::string                      name;
+		Version                          version;
+		std::vector<ManifestRequirement> requirements;
+		std::vector<std::string>         provides;
+		std::vector<std::string>         services;
 	};
 
 	// Loads, unloads, and tracks plugin shared libraries by canonical path
@@ -191,12 +197,19 @@ namespace thx::plugin
 		bool isLoaded    (std::string const& path) const { return is(State::Loaded,     path); }
 
 	private:
+		// Each entry carries its PluginManifest through every state transition
+		// so callers can query the static declaration regardless of where the
+		// plugin sits in the lifecycle. The manifest is also what
+		// `finalizeLoad` cross-checks against the live IPlugin at load time
+		// (see Phase 5 Commit 3).
+
 		// Loaded entry: owns the DSO + IPlugin plus the service IDs it
 		// registered. Declaration order matters — `plugin` is destroyed before
 		// `handle`, so the IPlugin destructor (which lives in DSO code) runs
 		// before the DSO is dlclose()d.
 		struct LoadedEntry
 		{
+			PluginManifest                       manifest;
 			PluginHandle                         handle;
 			std::vector<thx::service::ServiceID> serviceIds;
 			std::shared_ptr<IPlugin>             plugin;
@@ -207,15 +220,16 @@ namespace thx::plugin
 		// rationale as LoadedEntry.
 		struct OpenedEntry
 		{
+			PluginManifest           manifest;
 			PluginHandle             handle;
 			std::shared_ptr<IPlugin> plugin;
 		};
 
-		// Discovered entry placeholder. Phase 5 manifests will populate name,
-		// version, requirements, and provides here so Discovered entries
-		// carry metadata without a dlopen.
+		// Discovered entry: manifest read from the sidecar, DSO not yet
+		// opened.
 		struct DiscoveredEntry
 		{
+			PluginManifest manifest;
 		};
 
 		thx::service::ServiceManager& m_sm;
@@ -225,19 +239,31 @@ namespace thx::plugin
 
 		static std::string resolveCanonical(std::string const& path);
 
-		// Open a DSO at `canonical` and produce an OpenedEntry. Used by both
-		// open() and the implicit-open path inside load(). Drains the garbage
-		// queue first.
-		Result<OpenedEntry, Error> openHandle(std::string const& canonical);
+		// Compute the sidecar manifest path paired with a DSO path: strip
+		// LIBRARY_EXTENSION, append ".thx.json".
+		static std::string manifestPathForDso(std::string const& dsoPath);
+
+		// Open a DSO at `canonical` and produce an OpenedEntry (without the
+		// manifest — caller supplies it). Used by both open() and the
+		// implicit-open path inside load(). Drains the garbage queue first.
+		Result<OpenedEntry, Error> openHandle(std::string const& canonical,
+		                                      PluginManifest manifest);
 
 		// Promote an OpenedEntry into a LoadedEntry by checking required(),
 		// calling onLoad, and attributing the resulting service IDs.
 		Result<LoadedEntry, Error> finalizeLoad(OpenedEntry opened,
 		                                        std::string const& canonical);
 
+		// Ensure the path has a Discovered entry by locating and parsing
+		// its sidecar manifest. No-op if the path already has a Discovered
+		// / Opened / Loaded entry. Used by open()/load() to support the
+		// "load by direct path without prior discover" shortcut.
+		Result<void, Error> ensureDiscovered(std::string const& canonical);
+
 		// Build PluginInfo snapshots from internal state.
-		PluginInfo infoFromLoaded(std::string const& path, LoadedEntry const& entry) const;
-		PluginInfo infoFromOpened(std::string const& path, OpenedEntry const& entry) const;
+		PluginInfo infoFromDiscovered(std::string const& path, DiscoveredEntry const& entry) const;
+		PluginInfo infoFromOpened    (std::string const& path, OpenedEntry     const& entry) const;
+		PluginInfo infoFromLoaded    (std::string const& path, LoadedEntry     const& entry) const;
 	};
 
 } // namespace thx::plugin

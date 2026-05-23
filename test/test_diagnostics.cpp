@@ -308,7 +308,7 @@ TEST_CASE("PluginManager::plugins(Loaded) - entry present after load", "[introsp
 	REQUIRE(loaded.size() == 1);
 	REQUIRE(!loaded[0].name.empty());
 	REQUIRE(loaded[0].services.size() == 1);
-	REQUIRE(loaded[0].services[0] == thx_mock::MockService::staticId());
+	REQUIRE(loaded[0].services[0] == thx_mock::MockService::staticId().name());
 }
 
 TEST_CASE("PluginManager::plugins(Loaded) - empty after unload", "[introspection]")
