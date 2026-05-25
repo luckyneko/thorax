@@ -16,6 +16,7 @@
 #include "mock_plugin.h"
 #include <thx/plugin/iplugin.h>
 #include <thx/plugin/platform.h>
+#include <thx/service/service.h>
 
 #include <memory>
 
@@ -28,14 +29,14 @@ public:
 	thx::StringView name()    const override { return "thx.mock.MultiPlugin"; }
 	thx::Version    version() const override { return thx::Version{1, 0, 0}; }
 
-	bool onLoad(thx::service::ServiceManager& sm) override
+	bool onLoad() override
 	{
-		bool a = sm.registerService<thx_mock::ServiceA>(
+		bool a = thx::service::registerService<thx_mock::ServiceA>(
 			[]() -> std::shared_ptr<thx::service::IService>
 			{
 				return std::make_shared<thx_mock::ServiceA>();
 			});
-		bool b = sm.registerService<thx_mock::ServiceB>(
+		bool b = thx::service::registerService<thx_mock::ServiceB>(
 			[]() -> std::shared_ptr<thx::service::IService>
 			{
 				return std::make_shared<thx_mock::ServiceB>();
@@ -43,10 +44,10 @@ public:
 		return a && b;
 	}
 
-	void onUnload(thx::service::ServiceManager& sm) override
+	void onUnload() override
 	{
-		sm.unregisterService<thx_mock::ServiceB>();
-		sm.unregisterService<thx_mock::ServiceA>();
+		thx::service::unregisterService<thx_mock::ServiceB>();
+		thx::service::unregisterService<thx_mock::ServiceA>();
 	}
 
 	thx::Span<const thx::plugin::ServiceRequirement> required() const override

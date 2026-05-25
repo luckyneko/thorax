@@ -16,7 +16,7 @@
 #include "thx/plugin/plugin.h"          // PluginInfo, State, LoadSummary
 #include "thx/result.h"
 #include "thx/service/service_id.h"
-#include "thx/service/service_manager.h"
+#include "service/service_manager.h"
 #include "thx/thx_api.h"
 #include "thx/log.h"
 

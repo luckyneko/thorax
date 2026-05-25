@@ -9,9 +9,9 @@
 #pragma once
 
 #include "thx/service/iservice.h"
+#include "thx/service/service.h"   // ServiceFactory, ServiceInfo
 #include "thx/thx_api.h"
 
-#include <functional>
 #include <memory>
 #include <mutex>
 #include <type_traits>
@@ -22,16 +22,6 @@
 
 namespace thx::service
 {
-
-	// Factory callable type used by registerService.
-	using ServiceFactory = std::function<std::shared_ptr<IService>()>;
-
-	// Snapshot entry returned by ServiceManager::listServices().
-	struct ServiceInfo
-	{
-		ServiceID id;
-		Version version;
-	};
 
 	// Central registry that owns the lifetime of all registered services.
 	//
@@ -106,4 +96,4 @@ namespace thx::service
 		std::unordered_set<ServiceID> m_reserved;
 	};
 } // namespace thx::service
-#include "thx/service/service_manager.inl"
+#include "service/service_manager.inl"

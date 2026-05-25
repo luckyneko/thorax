@@ -1,4 +1,4 @@
-﻿/*
+/*
  *  Created by LuckyNeko on 25/04/2026.
  *  Copyright 2026 LuckyNeko
  *
@@ -9,7 +9,10 @@
 #include <catch2/catch_all.hpp>
 #include <thx/plugin/iplugin.h>
 #include <thx/service/iservice.h>
-#include <thx/service/service_manager.h>
+#include <thx/service/service.h>
+
+#include "service/active_service_manager.h"
+#include "service/service_manager.h"
 
 #include <memory>
 
@@ -35,8 +38,8 @@ namespace
 		thx::StringView name()    const override { return "thx.test.EmptyPlugin"; }
 		thx::Version    version() const override { return thx::Version{2, 3, 4}; }
 
-		bool onLoad(thx::service::ServiceManager&)  override { return true; }
-		void onUnload(thx::service::ServiceManager&) override {}
+		bool onLoad()   override { return true; }
+		void onUnload() override {}
 	};
 
 	// A custom IPlugin that registers two services in onLoad and unregisters them
@@ -55,17 +58,17 @@ namespace
 		thx::StringView name()    const override { return "thx.test.MultiServicePlugin"; }
 		thx::Version    version() const override { return thx::Version{1, 0, 0}; }
 
-		bool onLoad(thx::service::ServiceManager& sm) override
+		bool onLoad() override
 		{
-			bool ok_a = sm.registerService<ServiceA>([] { return std::make_shared<ServiceA>(); });
-			bool ok_b = sm.registerService<ServiceB>([] { return std::make_shared<ServiceB>(); });
+			bool ok_a = thx::service::registerService<ServiceA>([] { return std::make_shared<ServiceA>(); });
+			bool ok_b = thx::service::registerService<ServiceB>([] { return std::make_shared<ServiceB>(); });
 			return ok_a && ok_b;
 		}
 
-		void onUnload(thx::service::ServiceManager& sm) override
+		void onUnload() override
 		{
-			sm.unregisterService<ServiceB>();
-			sm.unregisterService<ServiceA>();
+			thx::service::unregisterService<ServiceB>();
+			thx::service::unregisterService<ServiceA>();
 		}
 	};
 
@@ -75,16 +78,18 @@ TEST_CASE("ServicePluginShim - registers and unregisters one service",
 		  "[iplugin]")
 {
 	thx::service::ServiceManager sm;
+	thx::service::detail::ActiveServiceManagerScope scope(sm);
+
 	thx::plugin::ServicePluginShim<ShimTestService> shim;
 
 	REQUIRE(sm.getService<ShimTestService>() == nullptr);
-	REQUIRE(shim.onLoad(sm));
+	REQUIRE(shim.onLoad());
 
 	auto svc = sm.getService<ShimTestService>();
 	REQUIRE(svc != nullptr);
 	REQUIRE(svc->m_constructed);
 
-	shim.onUnload(sm);
+	shim.onUnload();
 	REQUIRE(sm.getService<ShimTestService>() == nullptr);
 }
 
@@ -128,13 +133,15 @@ TEST_CASE("IPlugin - custom plugin can register multiple services",
 		  "[iplugin]")
 {
 	thx::service::ServiceManager sm;
+	thx::service::detail::ActiveServiceManagerScope scope(sm);
+
 	MultiServicePlugin plugin;
 
-	REQUIRE(plugin.onLoad(sm));
+	REQUIRE(plugin.onLoad());
 	REQUIRE(sm.getService<ServiceA>() != nullptr);
 	REQUIRE(sm.getService<ServiceB>() != nullptr);
 
-	plugin.onUnload(sm);
+	plugin.onUnload();
 	REQUIRE(sm.getService<ServiceA>() == nullptr);
 	REQUIRE(sm.getService<ServiceB>() == nullptr);
 }
@@ -147,13 +154,15 @@ TEST_CASE("IPlugin - onLoad returning false does not register anything",
 		thx::StringView name()    const override { return "thx.test.Bailing"; }
 		thx::Version    version() const override { return thx::Version{1, 0, 0}; }
 
-		bool onLoad(thx::service::ServiceManager&)   override { return false; }
-		void onUnload(thx::service::ServiceManager&) override {}
+		bool onLoad()   override { return false; }
+		void onUnload() override {}
 	};
 
 	thx::service::ServiceManager sm;
+	thx::service::detail::ActiveServiceManagerScope scope(sm);
+
 	BailingPlugin p;
 
-	REQUIRE_FALSE(p.onLoad(sm));
+	REQUIRE_FALSE(p.onLoad());
 	REQUIRE(sm.listServices().empty());
 }

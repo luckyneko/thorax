@@ -9,7 +9,7 @@
 #pragma once
 
 #include "thx/service/iservice.h"
-#include "thx/service/service_manager.h"
+#include "thx/service/service.h"
 #include "thx/span.h"
 #include "thx/string_view.h"
 #include "thx/thx_api.h"
@@ -36,6 +36,12 @@ namespace thx::plugin
 	// at the next load() or via thx::plugin::collectGarbage(). Don't drain
 	// while service references are still alive: their destructors live in
 	// plugin code and need the DSO mapped to run.
+	//
+	// `onLoad`/`onUnload` take no parameters: plugin authors use the free-function
+	// facades in thx::service::* (registerService/unregisterService/getService).
+	// While onLoad is executing, the facade routes through the PluginManager's
+	// active ServiceManager (which is the Registry-owned one in production, or a
+	// caller-supplied one when constructing a local PluginManager in tests).
 	class THX_API IPlugin
 	{
 	public:
@@ -50,14 +56,15 @@ namespace thx::plugin
 		virtual Version version() const = 0;
 
 		// Called by PluginManager after the DSO is loaded but before the plugin
-		// becomes visible to callers. Register any services here. Return false
-		// to abort the load; the plugin will be destroyed and the DSO closed
-		// without becoming visible.
-		virtual bool onLoad(thx::service::ServiceManager& sm) = 0;
+		// becomes visible to callers. Register any services here using the
+		// thx::service::* facade functions. Return false to abort the load;
+		// the plugin will be destroyed and the DSO closed without becoming
+		// visible.
+		virtual bool onLoad() = 0;
 
 		// Called by PluginManager before the DSO is closed. Unregister any
-		// services registered in onLoad.
-		virtual void onUnload(thx::service::ServiceManager& sm) = 0;
+		// services registered in onLoad, using the thx::service::* facades.
+		virtual void onUnload() = 0;
 
 		// Optional: services that must already be registered (at a sufficient
 		// version) before onLoad runs. PluginManager rejects the load if any
@@ -94,17 +101,18 @@ namespace thx::plugin
 		StringView name() const override { return T::staticId().name(); }
 		Version    version() const override { return T::staticVersion(); }
 
-		bool onLoad(thx::service::ServiceManager& sm) override
+		bool onLoad() override
 		{
-			return sm.template registerService<T>([]() -> std::shared_ptr<thx::service::IService>
+			return thx::service::registerService<T>(
+			    []() -> std::shared_ptr<thx::service::IService>
 			{
 				return std::make_shared<T>();
 			});
 		}
 
-		void onUnload(thx::service::ServiceManager& sm) override
+		void onUnload() override
 		{
-			sm.template unregisterService<T>();
+			thx::service::unregisterService<T>();
 		}
 
 		Span<const thx::service::ServiceID> provides() const override

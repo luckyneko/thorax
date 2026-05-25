@@ -67,8 +67,6 @@ add_library(${PROJECT_NAME} SHARED
     include/thx/service/iservice.h
     include/thx/service/service.h
     include/thx/service/service_id.h
-    include/thx/service/service_manager.h
-    include/thx/service/service_manager.inl
 
     # Public headers — plugin/
     include/thx/plugin/iplugin.h
@@ -82,6 +80,9 @@ add_library(${PROJECT_NAME} SHARED
     # Private headers
     src/library.h
     src/registry.h
+    src/service/active_service_manager.h
+    src/service/service_manager.h
+    src/service/service_manager.inl
     src/plugin/plugin_handle.h
     src/plugin/plugin_garbage.h
     src/plugin/plugin_manager.h

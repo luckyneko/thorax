@@ -9,23 +9,34 @@
 #pragma once
 
 #include "thx/service/iservice.h"
-#include "thx/service/service_manager.h"  // ServiceFactory, ServiceInfo
 #include "thx/thx_api.h"
 #include "thx/version_type.h"
 
+#include <functional>
 #include <memory>
 #include <type_traits>
 #include <utility>
 #include <vector>
 
 // Public service-layer surface. Free functions forward to the framework's
-// internal ServiceManager (owned by the process-wide Registry singleton).
-// Callers that already hold a ServiceManager& (e.g. inside IPlugin::onLoad)
-// can keep calling its methods directly — these facades exist so code with no
-// ServiceManager& in scope doesn't have to reach for the Registry by hand.
+// internal ServiceManager (which is an implementation detail in src/). Plugin
+// authors use these from inside IPlugin::onLoad / onUnload; while those hooks
+// are executing, the facade routes through the PluginManager's active
+// ServiceManager (the Registry-owned one in production, or a caller-supplied
+// one when constructing a local PluginManager in tests).
 
 namespace thx::service
 {
+	// Factory callable type used by registerService.
+	using ServiceFactory = std::function<std::shared_ptr<IService>()>;
+
+	// Snapshot entry returned by listServices().
+	struct ServiceInfo
+	{
+		ServiceID id;
+		Version   version;
+	};
+
 	// --- Detail: exported impls the templates dispatch through ------------
 	// Public consumers should call the template wrappers below, not these.
 	namespace detail

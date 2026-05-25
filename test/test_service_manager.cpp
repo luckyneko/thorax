@@ -8,7 +8,7 @@
 
 #include <catch2/catch_all.hpp>
 #include <thx/service/iservice.h>
-#include <thx/service/service_manager.h>
+#include <service/service_manager.h>
 
 #include <atomic>
 #include <stdexcept>

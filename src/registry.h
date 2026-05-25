@@ -10,7 +10,7 @@
 
 #include "plugin/plugin_garbage.h"
 #include "plugin/plugin_manager.h"
-#include "thx/service/service_manager.h"
+#include "service/service_manager.h"
 #include "thx/thx_api.h"
 
 #include <string>

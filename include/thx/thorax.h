@@ -20,7 +20,6 @@
 // Service layer
 #include "thx/service/service_id.h"
 #include "thx/service/iservice.h"
-#include "thx/service/service_manager.h"   // still public — IPlugin::onLoad takes ServiceManager&
 #include "thx/service/service.h"           // free-function facade
 
 // Plugin layer

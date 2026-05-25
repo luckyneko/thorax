@@ -13,6 +13,7 @@
 #include "mock_plugin.h"
 #include <thx/plugin/iplugin.h>
 #include <thx/plugin/platform.h>
+#include <thx/service/service.h>
 
 #include <memory>
 
@@ -25,9 +26,9 @@ public:
 	thx::StringView name()    const override { return "thx.mock.BailsAfterRegisterPlugin"; }
 	thx::Version    version() const override { return thx::Version{1, 0, 0}; }
 
-	bool onLoad(thx::service::ServiceManager& sm) override
+	bool onLoad() override
 	{
-		sm.registerService<thx_mock::ServiceA>(
+		thx::service::registerService<thx_mock::ServiceA>(
 			[]() -> std::shared_ptr<thx::service::IService>
 			{
 				return std::make_shared<thx_mock::ServiceA>();
@@ -35,7 +36,7 @@ public:
 		return false; // PluginManager must roll back the ServiceA registration.
 	}
 
-	void onUnload(thx::service::ServiceManager&) override {}
+	void onUnload() override {}
 
 	thx::Span<const thx::service::ServiceID> provides() const override
 	{

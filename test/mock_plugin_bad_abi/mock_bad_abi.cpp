@@ -25,8 +25,8 @@ public:
 	thx::StringView name()    const override { return "test.BadAbi"; }
 	thx::Version    version() const override { return thx::Version{1, 0, 0}; }
 
-	bool onLoad(thx::service::ServiceManager&)   override { return true; }
-	void onUnload(thx::service::ServiceManager&) override {}
+	bool onLoad()   override { return true; }
+	void onUnload() override {}
 };
 
 } // namespace

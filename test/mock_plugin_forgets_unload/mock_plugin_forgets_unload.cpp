@@ -14,6 +14,7 @@
 #include "mock_plugin.h"
 #include <thx/plugin/iplugin.h>
 #include <thx/plugin/platform.h>
+#include <thx/service/service.h>
 
 #include <memory>
 
@@ -26,9 +27,9 @@ public:
 	thx::StringView name()    const override { return "thx.mock.ForgetsUnloadPlugin"; }
 	thx::Version    version() const override { return thx::Version{1, 0, 0}; }
 
-	bool onLoad(thx::service::ServiceManager& sm) override
+	bool onLoad() override
 	{
-		return sm.registerService<thx_mock::ServiceA>(
+		return thx::service::registerService<thx_mock::ServiceA>(
 			[]() -> std::shared_ptr<thx::service::IService>
 			{
 				return std::make_shared<thx_mock::ServiceA>();
@@ -37,7 +38,7 @@ public:
 
 	// Intentionally empty: simulate a misbehaved plugin that forgets to
 	// unregister what it registered.
-	void onUnload(thx::service::ServiceManager&) override {}
+	void onUnload() override {}
 
 	thx::Span<const thx::service::ServiceID> provides() const override
 	{

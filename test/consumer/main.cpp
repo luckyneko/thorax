@@ -14,8 +14,9 @@ int main()
 	            thx::THORAX_VERSION.minor,
 	            thx::THORAX_VERSION.patch);
 
-	thx::service::ServiceManager sm;
-	auto services = sm.listServices();
+	// ServiceManager is now an implementation detail. Consumers use the
+	// free-function facade (forwards to the framework's internal manager).
+	auto services = thx::service::listServices();
 	std::printf("Services registered: %zu\n", services.size());
 	return 0;
 }

@@ -8,7 +8,7 @@
 
 #include <catch2/catch_all.hpp>
 #include <plugin/plugin_manager.h>
-#include <thx/service/service_manager.h>
+#include <service/service_manager.h>
 #include <thx/plugins/io/io_service.h>
 
 #include <cstring>
