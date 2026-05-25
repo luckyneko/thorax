@@ -6,9 +6,9 @@
  *  (See accompanying file LICENSE.md)
  */
 
-#include "thx/plugin/plugin_manager.h"
-#include "thx/library.h"
-#include "thx/registry.h"
+#include "plugin/plugin_manager.h"
+#include "library.h"
+#include "registry.h"
 #include "thx/to_string.h"
 #include "thx/plugin/manifest.h"
 #include "thx/plugin/platform.h"
@@ -523,7 +523,7 @@ Result<void, Error> PluginManager::unload(std::string const& path)
 	return Result<void, Error>::ok();
 }
 
-PluginManager::LoadSummary PluginManager::discoverAndLoad(std::string const& directory)
+LoadSummary PluginManager::discoverAndLoad(std::string const& directory)
 {
 	LoadSummary summary;
 	if (auto r = discover(directory); !r)

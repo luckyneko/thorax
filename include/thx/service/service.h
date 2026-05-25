@@ -8,61 +8,71 @@
 
 #pragma once
 
-#include "thx/registry.h"
-#include "thx/service/service_manager.h"
+#include "thx/service/iservice.h"
+#include "thx/service/service_manager.h"  // ServiceFactory, ServiceInfo
+#include "thx/version_type.h"
 
 #include <memory>
 #include <utility>
 #include <vector>
 
-// Free-function shims over the Registry-owned ServiceManager. Each function
-// is a one-liner forwarding to `thx::registry().serviceManager().method(...)`,
-// matching the method name exactly. Callers that already hold a
-// ServiceManager& (e.g. inside an IPlugin::onLoad) should keep using the
-// member functions directly — the facades exist so that code with no
-// ServiceManager& in scope doesn't have to reach for the registry by hand.
+// Public service-layer surface. Free functions forward to the framework's
+// internal ServiceManager (owned by the process-wide Registry singleton).
+// Callers that already hold a ServiceManager& (e.g. inside IPlugin::onLoad)
+// can keep calling its methods directly — these facades exist so code with no
+// ServiceManager& in scope doesn't have to reach for the Registry by hand.
 
 namespace thx::service
 {
+	// --- Detail: exported impls the templates dispatch through ------------
+	// Public consumers should call the template wrappers below, not these.
+	namespace detail
+	{
+		bool                      registerServiceImpl(ServiceID id, Version version, ServiceFactory factory);
+		bool                      unregisterServiceImpl(ServiceID id);
+		std::shared_ptr<IService> getServiceImpl(ServiceID id);
+		std::vector<ServiceInfo>  listServicesImpl();
+	}
+
+	// --- Facade -----------------------------------------------------------
+
 	inline bool registerService(ServiceID id, Version version, ServiceFactory factory)
 	{
-		return thx::registry().serviceManager()
-		    .registerService(std::move(id), version, std::move(factory));
+		return detail::registerServiceImpl(std::move(id), version, std::move(factory));
 	}
 
 	template <typename T>
 	inline bool registerService(ServiceFactory factory)
 	{
-		return thx::registry().serviceManager()
-		    .template registerService<T>(std::move(factory));
+		return detail::registerServiceImpl(T::staticId(), T::staticVersion(), std::move(factory));
 	}
 
 	inline bool unregisterService(ServiceID id)
 	{
-		return thx::registry().serviceManager().unregisterService(std::move(id));
+		return detail::unregisterServiceImpl(std::move(id));
 	}
 
 	template <typename T>
 	inline bool unregisterService()
 	{
-		return thx::registry().serviceManager().template unregisterService<T>();
+		return detail::unregisterServiceImpl(T::staticId());
 	}
 
 	template <typename T>
 	inline std::shared_ptr<T> getService(ServiceID id)
 	{
-		return thx::registry().serviceManager().template getService<T>(id);
+		return std::dynamic_pointer_cast<T>(detail::getServiceImpl(std::move(id)));
 	}
 
 	template <typename T>
 	inline std::shared_ptr<T> getService()
 	{
-		return thx::registry().serviceManager().template getService<T>();
+		return getService<T>(T::staticId());
 	}
 
 	inline std::vector<ServiceInfo> listServices()
 	{
-		return thx::registry().serviceManager().listServices();
+		return detail::listServicesImpl();
 	}
 
 } // namespace thx::service

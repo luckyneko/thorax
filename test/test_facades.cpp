@@ -8,7 +8,7 @@
 
 #include <catch2/catch_all.hpp>
 #include <thx/plugin/plugin.h>
-#include <thx/registry.h>
+#include <registry.h>
 #include <thx/service/iservice.h>
 #include <thx/service/service.h>
 

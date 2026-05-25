@@ -22,10 +22,10 @@
 // destroyed before the file is written; the DSO is queued to PluginGarbage
 // on PluginHandle teardown and reclaimed by the OS at exit.
 
-#include "thx/library.h"
+#include "library.h"
 #include "thx/plugin/iplugin.h"
 #include "thx/plugin/manifest.h"
-#include "thx/plugin/plugin_handle.h"
+#include "plugin/plugin_handle.h"
 
 #include <cstdio>
 #include <fstream>

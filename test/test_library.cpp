@@ -7,7 +7,7 @@
  */
 
 #include <catch2/catch_all.hpp>
-#include <thx/library.h>
+#include <library.h>
 
 #ifndef THX_MOCK_PLUGIN_PATH
 #  error "THX_MOCK_PLUGIN_PATH not defined — set via target_compile_definitions in CMakeLists.txt"

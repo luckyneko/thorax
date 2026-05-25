@@ -6,8 +6,8 @@
  *  (See accompanying file LICENSE.md)
  */
 
-#include "thx/plugin/plugin_handle.h"
-#include "thx/registry.h"
+#include "plugin/plugin_handle.h"
+#include "registry.h"
 #include "thx/to_string.h"
 #include "thx/version.h"
 

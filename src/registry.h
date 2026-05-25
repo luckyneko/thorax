@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "thx/plugin/plugin_garbage.h"
-#include "thx/plugin/plugin_manager.h"
+#include "plugin/plugin_garbage.h"
+#include "plugin/plugin_manager.h"
 #include "thx/service/service_manager.h"
 
 #include <string>
@@ -81,7 +81,7 @@ namespace thx
 	//
 	// Returns true if this call set the debug name (i.e. it was empty before),
 	// false if a previous initialise() already set one.
-	bool initialise(std::string debugName = "thorax");
+	bool initialise(std::string debugName);
 
 	// shutdown() drains the deferred-close queue. It does NOT destroy the
 	// Registry — the singleton persists until program exit. Safe to call

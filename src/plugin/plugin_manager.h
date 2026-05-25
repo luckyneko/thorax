@@ -8,11 +8,12 @@
 
 #pragma once
 
-#include "thx/library.h"
+#include "library.h"
+#include "plugin/plugin_garbage.h"
+#include "plugin/plugin_handle.h"
 #include "thx/plugin/iplugin.h"
 #include "thx/plugin/manifest.h"
-#include "thx/plugin/plugin_garbage.h"
-#include "thx/plugin/plugin_handle.h"
+#include "thx/plugin/plugin.h"          // PluginInfo, State, LoadSummary
 #include "thx/result.h"
 #include "thx/service/service_id.h"
 #include "thx/service/service_manager.h"
@@ -27,55 +28,6 @@
 
 namespace thx::plugin
 {
-	// Lifecycle state of a plugin tracked by PluginManager.
-	//
-	// Discovered — filesystem entry has been seen (and, when Phase 5 manifests
-	//              land, its sidecar parsed). No DSO interaction yet.
-	// Opened     — DSO mapped, IPlugin instantiated, ready for load. onLoad
-	//              has NOT been called.
-	// Loaded     — onLoad succeeded, services registered.
-	enum class State
-	{
-		Discovered,
-		Opened,
-		Loaded,
-	};
-
-	// Value-typed snapshot of one plugin known to PluginManager. Fields are
-	// populated incrementally as the entry progresses through the State
-	// machine; consult `state` to know what's actually meaningful.
-	//
-	// Field availability by state:
-	//   path          — always.
-	//   state         — always.
-	//   name          — populated from the manifest once Discovered, verified
-	//                   against IPlugin::name() at Loaded.
-	//   version       — same.
-	//   requirements  — populated from the manifest once Discovered, verified
-	//                   against IPlugin::required() at Loaded.
-	//   provides      — populated from the manifest once Discovered, verified
-	//                   against the services actually registered at Loaded.
-	//   services      — empty until Loaded; then the service IDs registered by
-	//                   the plugin's onLoad(), as strings.
-	//
-	// All ID fields are stored as `std::string` (not `thx::service::ServiceID`)
-	// because ServiceID is designed around string-literal lifetimes and a
-	// value-typed snapshot can't safely carry literal-backed pointers across
-	// copies / moves. Compare against a `ServiceID` via its `.name()` accessor.
-	//
-	// `requirements` is spelled out instead of `requires` to avoid the C++20
-	// concepts keyword.
-	struct PluginInfo
-	{
-		std::string                      path;
-		State                            state;
-		std::string                      name;
-		Version                          version;
-		std::vector<ManifestRequirement> requirements;
-		std::vector<std::string>         provides;
-		std::vector<std::string>         services;
-	};
-
 	// Loads, unloads, and tracks plugin shared libraries by canonical path
 	// across three lifecycle states (see State enum). All state lives inside
 	// PluginManager; callers only see value-typed PluginInfo snapshots and
@@ -158,15 +110,6 @@ namespace thx::plugin
 		Result<void, Error> unload(std::string const& path);
 
 		// --- Aggregate ----------------------------------------------------
-
-		// Outcome of a discoverAndLoad call: which paths loaded successfully
-		// and which failed (with their associated Error). Either list may be
-		// empty.
-		struct LoadSummary
-		{
-			std::vector<std::string>                       loaded;
-			std::vector<std::pair<std::string, Error>>     failed;
-		};
 
 		// Discovers all plugins in `directory` and loads each one.
 		// Returns a summary; individual failures are also logged.

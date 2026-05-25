@@ -6,7 +6,7 @@
  *  (See accompanying file LICENSE.md)
  */
 
-#include "thx/library.h"
+#include "library.h"
 
 #include <utility>
 

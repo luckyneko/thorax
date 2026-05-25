@@ -6,7 +6,8 @@
  *  (See accompanying file LICENSE.md)
  */
 
-#include "thx/registry.h"
+#include "registry.h"
+#include "thx/lifecycle.h"
 
 namespace thx
 {

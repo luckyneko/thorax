@@ -51,36 +51,39 @@ configure_file(
 # Static Library Target
 find_package(Threads REQUIRED)
 add_library(${PROJECT_NAME} STATIC
-    # Headers — top-level (cross-cutting types and umbrella)
+    # Public headers — top-level (cross-cutting types and umbrella)
     include/thx/thorax.h
+    include/thx/lifecycle.h
     include/thx/string_view.h
     include/thx/span.h
     include/thx/version_type.h
     include/thx/version.h.in
     include/thx/to_string.h
     include/thx/result.h
-    include/thx/library.h
-    include/thx/registry.h
     include/thx/log.h
 
-    # Headers — service/
+    # Public headers — service/
     include/thx/service/iservice.h
     include/thx/service/service.h
     include/thx/service/service_id.h
     include/thx/service/service_manager.h
     include/thx/service/service_manager.inl
 
-    # Headers — plugin/
+    # Public headers — plugin/
     include/thx/plugin/iplugin.h
     include/thx/plugin/manifest.h
     include/thx/plugin/platform.h
-    include/thx/plugin/plugin_handle.h
-    include/thx/plugin/plugin_garbage.h
-    include/thx/plugin/plugin_manager.h
     include/thx/plugin/plugin.h
 
-    # Headers — rtti/
+    # Public headers — rtti/
     include/thx/rtti/type_name.h
+
+    # Private headers
+    src/library.h
+    src/registry.h
+    src/plugin/plugin_handle.h
+    src/plugin/plugin_garbage.h
+    src/plugin/plugin_manager.h
 
     # Source
     src/thorax.cpp
@@ -88,15 +91,20 @@ add_library(${PROJECT_NAME} STATIC
     src/library.cpp
     src/registry.cpp
     src/service/service_manager.cpp
+    src/service/service.cpp
     src/plugin/plugin_handle.cpp
     src/plugin/plugin_garbage.cpp
     src/plugin/plugin_manager.cpp
+    src/plugin/plugin.cpp
     src/plugin/manifest.cpp
 )
-target_include_directories(${PROJECT_NAME} PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
-    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+target_include_directories(${PROJECT_NAME}
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+    PRIVATE
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
 )
 target_link_libraries(${PROJECT_NAME} PUBLIC
     Threads::Threads

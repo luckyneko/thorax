@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "thx/library.h"
+#include "library.h"
 
 #include <cstddef>
 #include <mutex>

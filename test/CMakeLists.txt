@@ -30,6 +30,10 @@ add_executable(test-${PROJECT_NAME}
     test_facades.cpp
 )
 target_link_libraries(test-${PROJECT_NAME} mock_plugin_headers Catch2::Catch2WithMain)
+# Tests are in-tree and may exercise private internals (Registry, PluginManager,
+# Library, etc.). Add the library's private include dir so existing #include
+# paths keep resolving.
+target_include_directories(test-${PROJECT_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/src)
 thx_set_warnings(test-${PROJECT_NAME})
 target_compile_definitions(test-${PROJECT_NAME} PRIVATE
     THX_MOCK_PLUGIN_PATH="$<TARGET_FILE:mock_plugin>"
