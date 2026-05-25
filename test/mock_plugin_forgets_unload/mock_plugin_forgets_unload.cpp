@@ -38,6 +38,14 @@ public:
 	// Intentionally empty: simulate a misbehaved plugin that forgets to
 	// unregister what it registered.
 	void onUnload(thx::service::ServiceManager&) override {}
+
+	thx::Span<const thx::service::ServiceID> provides() const override
+	{
+		static const thx::service::ServiceID kProvides[] = {
+			thx_mock::ServiceA::staticId()
+		};
+		return thx::Span<const thx::service::ServiceID>(kProvides, 1);
+	}
 };
 
 } // namespace

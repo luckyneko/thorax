@@ -61,6 +61,20 @@ namespace thx::plugin
 		// requirement is missing or the registered version is too old.
 		// Default: no requirements.
 		virtual Span<const ServiceRequirement> required() const { return {}; }
+
+		// Declaration of which services this plugin will register in onLoad().
+		// Must match the actual set registered (load-time verification compares
+		// the two as sets). Default: empty — a plugin that registers nothing
+		// (or hasn't yet declared its providers) returns this.
+		//
+		// THX_DEFINE_SERVICE_PLUGIN-based plugins get this populated
+		// automatically by ServicePluginShim<T>; custom THX_DEFINE_PLUGIN
+		// authors override it themselves.
+		//
+		// The framework also uses this declaration at build time to generate
+		// the *.thx.json sidecar via the `thx_emit_manifest` tool, so a
+		// correct provides() override means zero manifest authoring.
+		virtual Span<const thx::service::ServiceID> provides() const { return {}; }
 	};
 
 	// Convenience IPlugin used by THX_DEFINE_SERVICE_PLUGIN. Registers exactly
@@ -88,6 +102,13 @@ namespace thx::plugin
 		void onUnload(thx::service::ServiceManager& sm) override
 		{
 			sm.template unregisterService<T>();
+		}
+
+		Span<const thx::service::ServiceID> provides() const override
+		{
+			// Static storage so the Span's pointer remains valid across calls.
+			static const thx::service::ServiceID kProvides[] = { T::staticId() };
+			return { kProvides, 1 };
 		}
 	};
 

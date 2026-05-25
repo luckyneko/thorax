@@ -107,6 +107,23 @@ TEST_CASE("IPlugin - default required() is empty",
 	REQUIRE(p.required().empty());
 }
 
+TEST_CASE("IPlugin - default provides() is empty",
+		  "[iplugin]")
+{
+	EmptyPlugin p;
+	REQUIRE(p.provides().size() == 0);
+	REQUIRE(p.provides().empty());
+}
+
+TEST_CASE("ServicePluginShim - provides() reports T::staticId()",
+		  "[iplugin]")
+{
+	thx::plugin::ServicePluginShim<ShimTestService> shim;
+	auto p = shim.provides();
+	REQUIRE(p.size() == 1);
+	REQUIRE(p[0] == ShimTestService::staticId());
+}
+
 TEST_CASE("IPlugin - custom plugin can register multiple services",
 		  "[iplugin]")
 {
