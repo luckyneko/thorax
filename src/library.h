@@ -9,6 +9,7 @@
 #pragma once
 
 #include "thx/result.h"
+#include "thx/thx_api.h"
 
 #include <filesystem>
 #include <string>
@@ -45,7 +46,7 @@ namespace thx
 	//   BarFn bar = nullptr;
 	//   lib.open(path).bind("foo", foo).bind("bar", bar);
 	//   if (!lib) { logError(lib.error()); return; }
-	class Library
+	class THX_API Library
 	{
 	public:
 		Library() noexcept = default;

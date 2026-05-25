@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "thx/thx_api.h"
+
 #include <cstdlib>
 #include <memory>
 #include <string>
@@ -66,6 +68,7 @@ namespace thx
 
 	// Implement this interface and call setLogSink() to intercept all library
 	// diagnostics — including ServiceManager and PluginManager messages.
+	// See note on IService re: THX_API and dynamic_cast across DSOs in STATIC mode.
 	class ILogSink
 	{
 	public:
@@ -77,18 +80,18 @@ namespace thx
 	// records are dropped on the floor. Thread-safe; the new sink takes effect
 	// for all subsequent log calls. To go back to the built-in stderr sink,
 	// call restoreDefaultLogSink().
-	void setLogSink(std::shared_ptr<ILogSink> sink);
+	THX_API void setLogSink(std::shared_ptr<ILogSink> sink);
 
 	// Restores the built-in stderr log sink. Equivalent to constructing a fresh
 	// instance of the default sink and passing it to setLogSink(). Thread-safe.
-	void restoreDefaultLogSink();
+	THX_API void restoreDefaultLogSink();
 
 	// Emits a log record to the active sink.
 	// The source location is captured automatically at the call site on supported
 	// compilers (GCC, Clang, MSVC >= VS 2019 16.6).
-	void log(LogLevel            level,
-	         std::string const&  message,
-	         SourceLocation      location = SourceLocation::current());
+	THX_API void log(LogLevel            level,
+	                 std::string const&  message,
+	                 SourceLocation      location = SourceLocation::current());
 
 	// Logs message at Error level if condition is false.
 	// Debug builds also call std::abort(); Release builds only log.

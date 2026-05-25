@@ -12,6 +12,7 @@
 #include "thx/service/service_manager.h"
 #include "thx/span.h"
 #include "thx/string_view.h"
+#include "thx/thx_api.h"
 #include "thx/version_type.h"
 
 #include <memory>
@@ -35,6 +36,7 @@ namespace thx::plugin
 	// at the next load() or via thx::plugin::collectGarbage(). Don't drain
 	// while service references are still alive: their destructors live in
 	// plugin code and need the DSO mapped to run.
+	// See note on IService re: THX_API and dynamic_cast across DSOs in STATIC mode.
 	class IPlugin
 	{
 	public:

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "thx/service/iservice.h"
+#include "thx/thx_api.h"
 
 #include <functional>
 #include <memory>
@@ -42,7 +43,7 @@ namespace thx::service
 	// silently sharing it. Plugins that want to *contribute* to an existing
 	// service (rather than replace it) should use the provider pattern
 	// exposed by the relevant service interface.
-	class ServiceManager
+	class THX_API ServiceManager
 	{
 	public:
 		ServiceManager() = default;

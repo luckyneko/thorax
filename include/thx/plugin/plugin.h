@@ -12,6 +12,7 @@
 #include "thx/plugin/manifest.h"
 #include "thx/result.h"
 #include "thx/span.h"
+#include "thx/thx_api.h"
 #include "thx/version_type.h"
 
 #include <cstddef>
@@ -88,33 +89,33 @@ namespace thx::plugin
 	// All take a path by value or reference; all return Result<void, Error>.
 	// Documented behaviour matches the previous PluginManager methods.
 
-	Result<void, Error> discover(std::string const& directory);
-	Result<void, Error> forget(std::string const& path);
-	Result<void, Error> open(std::string const& path);
-	Result<void, Error> close(std::string const& path);
-	std::size_t         closeAllOpened();
-	Result<void, Error> load(std::string const& path);
-	Result<void, Error> unload(std::string const& path);
+	THX_API Result<void, Error> discover(std::string const& directory);
+	THX_API Result<void, Error> forget(std::string const& path);
+	THX_API Result<void, Error> open(std::string const& path);
+	THX_API Result<void, Error> close(std::string const& path);
+	THX_API std::size_t         closeAllOpened();
+	THX_API Result<void, Error> load(std::string const& path);
+	THX_API Result<void, Error> unload(std::string const& path);
 
 	// --- Aggregate ---------------------------------------------------------
-	LoadSummary discoverAndLoad(std::string const& directory);
+	THX_API LoadSummary discoverAndLoad(std::string const& directory);
 
 	// Dry-runs the requirement check that load() would perform against the
 	// framework's internal ServiceManager.
-	Result<void, Error> checkRequirements(Span<const ServiceRequirement> reqs);
+	THX_API Result<void, Error> checkRequirements(Span<const ServiceRequirement> reqs);
 
 	// --- Queries -----------------------------------------------------------
-	std::vector<PluginInfo>   plugins();
-	std::vector<PluginInfo>   plugins(State state);
-	std::optional<PluginInfo> pluginInfo(std::string const& path);
-	bool                      is(State state, std::string const& path);
-	bool                      isDiscovered(std::string const& path);
-	bool                      isOpened    (std::string const& path);
-	bool                      isLoaded    (std::string const& path);
+	THX_API std::vector<PluginInfo>   plugins();
+	THX_API std::vector<PluginInfo>   plugins(State state);
+	THX_API std::optional<PluginInfo> pluginInfo(std::string const& path);
+	THX_API bool                      is(State state, std::string const& path);
+	THX_API bool                      isDiscovered(std::string const& path);
+	THX_API bool                      isOpened    (std::string const& path);
+	THX_API bool                      isLoaded    (std::string const& path);
 
 	// --- Garbage queue -----------------------------------------------------
 	// Drains / queries the framework-owned deferred-dlclose queue.
-	std::size_t collectGarbage() noexcept;
-	std::size_t pendingGarbage() noexcept;
+	THX_API std::size_t collectGarbage() noexcept;
+	THX_API std::size_t pendingGarbage() noexcept;
 
 } // namespace thx::plugin

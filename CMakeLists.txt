@@ -53,6 +53,7 @@ find_package(Threads REQUIRED)
 add_library(${PROJECT_NAME} STATIC
     # Public headers — top-level (cross-cutting types and umbrella)
     include/thx/thorax.h
+    include/thx/thx_api.h
     include/thx/lifecycle.h
     include/thx/string_view.h
     include/thx/span.h
@@ -114,8 +115,15 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
 # Force C++17
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
 
-# Enable FPIC
-set_target_properties(${PROJECT_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+# Visibility: hide everything by default; only THX_API-decorated symbols cross
+# the boundary. Inert while the library is STATIC; live once it becomes SHARED.
+# THX_BUILDING flips THX_API to dllexport on Windows.
+target_compile_definitions(${PROJECT_NAME} PRIVATE THX_BUILDING)
+set_target_properties(${PROJECT_NAME} PROPERTIES
+    CXX_VISIBILITY_PRESET     hidden
+    VISIBILITY_INLINES_HIDDEN ON
+    POSITION_INDEPENDENT_CODE ON
+)
 
 # Set default warnings
 thx_set_warnings(${PROJECT_NAME})

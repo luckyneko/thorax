@@ -10,6 +10,7 @@
 
 #include "thx/service/iservice.h"
 #include "thx/service/service_manager.h"  // ServiceFactory, ServiceInfo
+#include "thx/thx_api.h"
 #include "thx/version_type.h"
 
 #include <memory>
@@ -28,10 +29,10 @@ namespace thx::service
 	// Public consumers should call the template wrappers below, not these.
 	namespace detail
 	{
-		bool                      registerServiceImpl(ServiceID id, Version version, ServiceFactory factory);
-		bool                      unregisterServiceImpl(ServiceID id);
-		std::shared_ptr<IService> getServiceImpl(ServiceID id);
-		std::vector<ServiceInfo>  listServicesImpl();
+		THX_API bool                      registerServiceImpl(ServiceID id, Version version, ServiceFactory factory);
+		THX_API bool                      unregisterServiceImpl(ServiceID id);
+		THX_API std::shared_ptr<IService> getServiceImpl(ServiceID id);
+		THX_API std::vector<ServiceInfo>  listServicesImpl();
 	}
 
 	// --- Facade -----------------------------------------------------------

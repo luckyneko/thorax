@@ -9,6 +9,7 @@
 #pragma once
 
 #include "thx/result.h"
+#include "thx/thx_api.h"
 #include "thx/version_type.h"
 
 #include <string>
@@ -77,7 +78,7 @@ namespace thx::plugin
 	//                               required field missing, or a value has
 	//                               the wrong type. The message names the
 	//                               specific problem.
-	Result<PluginManifest, Error> parseManifest(std::string const& jsonPath);
+	THX_API Result<PluginManifest, Error> parseManifest(std::string const& jsonPath);
 
 	// Serialises a manifest to a JSON string matching the schema parseManifest
 	// reads. Round-trippable: writing the returned string to a file and
@@ -87,6 +88,6 @@ namespace thx::plugin
 	//
 	// Used by the `thx_emit_manifest` build-time tool and by tests; out-of-tree
 	// consumers can use it directly if they want to write manifests by hand.
-	std::string serialiseManifest(PluginManifest const& manifest);
+	THX_API std::string serialiseManifest(PluginManifest const& manifest);
 
 } // namespace thx::plugin

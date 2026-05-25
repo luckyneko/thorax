@@ -9,6 +9,7 @@
 #pragma once
 
 #include "library.h"
+#include "thx/thx_api.h"
 
 #include <cstddef>
 #include <mutex>
@@ -30,7 +31,7 @@ namespace thx::plugin
 	// shared_ptr deleter.
 	//
 	// Thread-safe.
-	class PluginGarbage
+	class THX_API PluginGarbage
 	{
 	public:
 		PluginGarbage()  = default;

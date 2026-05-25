@@ -9,12 +9,20 @@
 #pragma once
 
 #include "thx/service/service_id.h"
+#include "thx/thx_api.h"
 #include "thx/version_type.h"
 
 namespace thx::service
 {
 	// Base interface for all services registered with the ServiceManager.
 	// Concrete services inherit this and add their own API on top.
+	// NOTE: THX_API on abstract interfaces is deferred to commit a2 (the shared
+	// lib flip). Adding default visibility here while libthorax is STATIC breaks
+	// dynamic_pointer_cast across the plugin DSO boundary: with RTLD_LOCAL each
+	// DSO has its own typeinfo address, and libc++ only falls back to string
+	// comparison when at least one side has the non-unique flag (which hidden
+	// visibility sets). Marking IService default-visible removes that fallback
+	// and the cast silently returns nullptr.
 	class IService
 	{
 	public:

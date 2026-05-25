@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "thx/thx_api.h"
+
 #include <string>
 
 // Process-wide lifecycle hooks for the framework.
@@ -22,7 +24,7 @@ namespace thx
 	// Records an optional human-readable name on the framework's internal state.
 	// Returns true if this call set the name, false if a previous initialise()
 	// already did.
-	bool initialise(std::string debugName = "thorax");
+	THX_API bool initialise(std::string debugName = "thorax");
 
 	// Drains the deferred-close queue (equivalent to thx::plugin::collectGarbage())
 	// and clears the debug name. Does NOT destroy the framework's internal state;
@@ -30,6 +32,6 @@ namespace thx
 	//
 	// Safety: callers MUST release any shared_ptr<IService> references into
 	// unloaded DSOs before invoking this.
-	void shutdown() noexcept;
+	THX_API void shutdown() noexcept;
 
 } // namespace thx
