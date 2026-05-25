@@ -30,11 +30,21 @@ namespace
 {
 	int runEmit(std::string const& dso, std::string const& outPath)
 	{
-		// Quote both arguments so paths containing spaces survive system().
+		// Quote each argument so paths containing spaces survive system().
 		std::ostringstream cmd;
+#ifdef _WIN32
+		// cmd.exe strips the outermost pair of quotes from its command string
+		// when the first and last characters are both quotes. With three quoted
+		// tokens that mangles the command, so wrap the whole thing in an extra
+		// set of quotes — cmd strips those and parses what's left correctly.
+		cmd << '"';
+#endif
 		cmd << '"' << THX_EMIT_MANIFEST_PATH << '"'
 		    << ' ' << '"' << dso << '"'
 		    << ' ' << '"' << outPath << '"';
+#ifdef _WIN32
+		cmd << '"';
+#endif
 		return std::system(cmd.str().c_str());
 	}
 
