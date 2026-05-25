@@ -121,6 +121,15 @@ if(THORAX_SANITIZE)
     endif()
 endif()
 
+# Framework tools.
+# thx_emit_manifest is used by thx_plugin_auto_manifest at build time to
+# derive *.thx.json sidecars from a plugin's IPlugin::provides() /
+# required() / name() / version(). Always built — even out-of-tree consumers
+# that import Thorax expect it to be present for the auto-manifest helper.
+add_executable(thx_emit_manifest src/tools/emit_manifest.cpp)
+target_link_libraries(thx_emit_manifest PRIVATE ${PROJECT_NAME})
+thx_set_warnings(thx_emit_manifest)
+
 # Examples
 if(THORAX_BUILD_EXAMPLES)
     add_subdirectory(examples)
@@ -243,6 +252,7 @@ if(THORAX_BUILD_TESTING)
         test/test_abi_types.cpp
         test/test_library.cpp
         test/test_manifest.cpp
+        test/test_emit_manifest.cpp
         test/test_plugin_manager.cpp
         test/test_diagnostics.cpp
         test/test_iplugin.cpp
@@ -261,6 +271,7 @@ if(THORAX_BUILD_TESTING)
         THX_MOCK_REQUIRES_NEWER_PLUGIN_PATH="$<TARGET_FILE:mock_plugin_requires_newer>"
         THX_MOCK_BAILS_AFTER_REGISTER_PLUGIN_PATH="$<TARGET_FILE:mock_plugin_bails_after_register>"
         THX_MOCK_FORGETS_UNLOAD_PLUGIN_PATH="$<TARGET_FILE:mock_plugin_forgets_unload>"
+        THX_EMIT_MANIFEST_PATH="$<TARGET_FILE:thx_emit_manifest>"
     )
     add_dependencies(test-${PROJECT_NAME}
         mock_plugin
@@ -270,6 +281,7 @@ if(THORAX_BUILD_TESTING)
         mock_plugin_requires_newer
         mock_plugin_bails_after_register
         mock_plugin_forgets_unload
+        thx_emit_manifest
     )
 
     if(THORAX_BUILD_PLUGINS)
