@@ -198,7 +198,20 @@ Every thorax plugin ships paired with a `<basename>.thx.json` sidecar that decla
 
 Any divergence rolls back the registration and returns `ErrorCode::ManifestMismatch` with a diagnostic naming the field. Strict on all four; no warn-only mode. Catches stale manifests at the first load attempt rather than letting the cache rot.
 
-**CMake helper.** [`cmake/thx_plugin_manifest.cmake`](cmake/thx_plugin_manifest.cmake) provides `thx_plugin_manifest(target NAME ... VERSION ... [PROVIDES ...] [REQUIRES ...])` which emits the sidecar next to the DSO via `file(GENERATE)`. All 11 in-tree plugins (mock plugins, in-tree logging/io, example plugins) use this rather than hand-written JSON. `REQUIRES` entries are `"id:version"` strings parsed into JSON objects.
+**CMake helpers.** Two paths, both shipped in `cmake/`:
+
+- [`thx_plugin_auto_manifest(target)`](cmake/thx_plugin_auto_manifest.cmake) — **recommended.** Wires a POST_BUILD command that invokes the [`thx_emit_manifest`](src/tools/emit_manifest.cpp) tool to derive the sidecar directly from the built DSO's `IPlugin::provides()` / `required()` / `name()` / `version()`. The plugin's IPlugin class is the single source of truth; zero metadata duplication in the build system. 10 of the 11 in-tree plugins use this.
+- [`thx_plugin_manifest(target NAME ... VERSION ... [PROVIDES ...] [REQUIRES ...])`](cmake/thx_plugin_manifest.cmake) — fallback for plugins that can't be introspected at build time (e.g., the `mock_plugin_bad_abi` test plugin, which intentionally reports a wrong ABI version and so can't be opened by the tool). Emits a hand-authored sidecar via `file(GENERATE)`. `REQUIRES` entries are `"id:version"` strings parsed into JSON objects.
+
+The auto-derived path means a typical in-tree plugin's CMakeLists is just:
+```cmake
+add_library(my_plugin SHARED src/plugin.cpp)
+target_link_libraries(my_plugin PRIVATE Thorax::thorax)
+thx_plugin_auto_manifest(my_plugin)
+```
+The manifest is built from the C++ code by construction — the `ManifestMismatch` failure mode for fields other than `provides` becomes structurally impossible.
+
+**Tool.** [`thx_emit_manifest <dso> [output]`](src/tools/emit_manifest.cpp) is also usable as a standalone utility: pass a DSO and optionally an output path; default is `<basename>.thx.json` next to the DSO. The tool dlopens the DSO via `PluginHandle`, instantiates the IPlugin, reads the four metadata fields (no `onLoad` — const methods only), serialises to JSON, destroys the plugin. The tool is built unconditionally alongside the library.
 
 ### Errors & logging
 
