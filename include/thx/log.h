@@ -68,11 +68,12 @@ namespace thx
 
 	// Implement this interface and call setLogSink() to intercept all library
 	// diagnostics — including ServiceManager and PluginManager messages.
-	// See note on IService re: THX_API and dynamic_cast across DSOs in STATIC mode.
-	class ILogSink
+	class THX_API ILogSink
 	{
 	public:
-		virtual ~ILogSink() = default;
+		// Out-of-line in src/abi.cpp so libthorax owns ILogSink's vtable and
+		// typeinfo. See abi.cpp for the cross-DSO rationale.
+		virtual ~ILogSink();
 		virtual void write(LogRecord const&) = 0;
 	};
 

@@ -62,13 +62,6 @@ namespace
 		}
 	};
 
-	// A distinct service type used to verify dynamic_cast behaviour.
-	struct OtherService : thx::service::IService
-	{
-		thx::service::ServiceID id() const override { return thx::service::ServiceID("thx.test.Other"); }
-		thx::Version version() const override { return thx::Version{1, 0, 0}; }
-	};
-
 	constexpr auto kServiceA = thx::service::ServiceID("thx.test.ServiceA");
 	constexpr auto kServiceB = thx::service::ServiceID("thx.test.ServiceB");
 	constexpr auto kV100 = thx::Version{1, 0, 0};
@@ -107,13 +100,11 @@ TEST_CASE("ServiceManager - getService returns nullptr for unknown ID", "[servic
 	REQUIRE(sm.getService<TestService>(kServiceA) == nullptr);
 }
 
-TEST_CASE("ServiceManager - getService returns nullptr for wrong type", "[service_manager]")
-{
-	thx::service::ServiceManager sm;
-	reg(sm, "thx.test.ServiceA", kV100);
-
-	REQUIRE(sm.getService<OtherService>(kServiceA) == nullptr);
-}
+// Note: there is no "wrong type" test. getService<T>(id) uses static_pointer_cast
+// because dynamic_pointer_cast doesn't reliably work across DSO boundaries on
+// macOS — see service_manager.inl. The framework's contract is that the
+// ServiceID determines the registered type; callers who pass a mismatched T
+// invoke undefined behaviour.
 
 TEST_CASE("ServiceManager - unregister removes a service", "[service_manager]")
 {

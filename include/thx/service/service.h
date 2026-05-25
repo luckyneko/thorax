@@ -14,6 +14,7 @@
 #include "thx/version_type.h"
 
 #include <memory>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -62,7 +63,11 @@ namespace thx::service
 	template <typename T>
 	inline std::shared_ptr<T> getService(ServiceID id)
 	{
-		return std::dynamic_pointer_cast<T>(detail::getServiceImpl(std::move(id)));
+		static_assert(std::is_base_of_v<IService, T>,
+		    "getService<T>: T must derive from thx::service::IService");
+		// See note in service_manager.inl re: static vs dynamic cast across DSOs.
+		auto base = detail::getServiceImpl(std::move(id));
+		return base ? std::static_pointer_cast<T>(std::move(base)) : nullptr;
 	}
 
 	template <typename T>

@@ -50,7 +50,7 @@ configure_file(
 
 # Static Library Target
 find_package(Threads REQUIRED)
-add_library(${PROJECT_NAME} STATIC
+add_library(${PROJECT_NAME} SHARED
     # Public headers — top-level (cross-cutting types and umbrella)
     include/thx/thorax.h
     include/thx/thx_api.h
@@ -87,6 +87,7 @@ add_library(${PROJECT_NAME} STATIC
     src/plugin/plugin_manager.h
 
     # Source
+    src/abi.cpp
     src/thorax.cpp
     src/log.cpp
     src/library.cpp
@@ -123,6 +124,10 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
     CXX_VISIBILITY_PRESET     hidden
     VISIBILITY_INLINES_HIDDEN ON
     POSITION_INDEPENDENT_CODE ON
+    VERSION                   ${PROJECT_VERSION}
+    SOVERSION                 ${PROJECT_VERSION_MAJOR}
+    # macOS: install_name uses @rpath so consumers locate the lib via RPATH.
+    MACOSX_RPATH              ON
 )
 
 # Set default warnings

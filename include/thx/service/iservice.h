@@ -16,17 +16,16 @@ namespace thx::service
 {
 	// Base interface for all services registered with the ServiceManager.
 	// Concrete services inherit this and add their own API on top.
-	// NOTE: THX_API on abstract interfaces is deferred to commit a2 (the shared
-	// lib flip). Adding default visibility here while libthorax is STATIC breaks
-	// dynamic_pointer_cast across the plugin DSO boundary: with RTLD_LOCAL each
-	// DSO has its own typeinfo address, and libc++ only falls back to string
-	// comparison when at least one side has the non-unique flag (which hidden
-	// visibility sets). Marking IService default-visible removes that fallback
-	// and the cast silently returns nullptr.
-	class IService
+	// THX_API at class scope exports IService's typeinfo and vtable. Required
+	// for dynamic_pointer_cast<T>(shared_ptr<IService>) to work across the
+	// plugin-DSO boundary: with one libthorax shared library, IService's
+	// typeinfo lives at a single address and address-comparison succeeds.
+	class THX_API IService
 	{
 	public:
-		virtual ~IService() = default;
+		// Out-of-line in src/abi.cpp so libthorax owns IService's vtable and
+		// typeinfo. See abi.cpp for the cross-DSO rationale.
+		virtual ~IService();
 
 		virtual ServiceID id() const = 0;
 		virtual Version version() const = 0;

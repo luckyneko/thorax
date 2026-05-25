@@ -36,11 +36,12 @@ namespace thx::plugin
 	// at the next load() or via thx::plugin::collectGarbage(). Don't drain
 	// while service references are still alive: their destructors live in
 	// plugin code and need the DSO mapped to run.
-	// See note on IService re: THX_API and dynamic_cast across DSOs in STATIC mode.
-	class IPlugin
+	class THX_API IPlugin
 	{
 	public:
-		virtual ~IPlugin() = default;
+		// Out-of-line in src/abi.cpp so libthorax owns IPlugin's vtable and
+		// typeinfo. See abi.cpp for the cross-DSO rationale.
+		virtual ~IPlugin();
 
 		// Human-readable plugin name. Used for diagnostics.
 		virtual StringView name() const = 0;

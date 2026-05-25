@@ -34,6 +34,15 @@ target_link_libraries(test-${PROJECT_NAME} mock_plugin_headers Catch2::Catch2Wit
 # Library, etc.). Add the library's private include dir so existing #include
 # paths keep resolving.
 target_include_directories(test-${PROJECT_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/src)
+# Hosts loading shared-lib thorax plugins should use hidden visibility so
+# user-defined service-interface typeinfo gets the libc++abi non-unique flag.
+# Both the host and the plugin then mark the typeinfo non-unique; equality
+# falls back to name comparison rather than failing on address mismatch
+# (each DSO ends up with its own typeinfo address under RTLD_LOCAL).
+set_target_properties(test-${PROJECT_NAME} PROPERTIES
+    CXX_VISIBILITY_PRESET     hidden
+    VISIBILITY_INLINES_HIDDEN ON
+)
 thx_set_warnings(test-${PROJECT_NAME})
 target_compile_definitions(test-${PROJECT_NAME} PRIVATE
     THX_MOCK_PLUGIN_PATH="$<TARGET_FILE:mock_plugin>"

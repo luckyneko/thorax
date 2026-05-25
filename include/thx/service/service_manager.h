@@ -14,6 +14,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <type_traits>
 #include <shared_mutex>
 #include <unordered_map>
 #include <unordered_set>
