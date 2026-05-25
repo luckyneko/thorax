@@ -314,3 +314,89 @@ TEST_CASE("parseManifest - empty file fails", "[manifest]")
 	REQUIRE_FALSE(r);
 	REQUIRE(r.error().code == thx::ErrorCode::MalformedManifest);
 }
+
+// ---------------------------------------------------------------------------
+// serialiseManifest
+// ---------------------------------------------------------------------------
+
+namespace
+{
+	// Write `contents` to a temp file and return the path. Used to round-trip
+	// serialised output through parseManifest.
+	std::string writeTempJson(std::string const& tag, std::string const& contents)
+	{
+		namespace fs = std::filesystem;
+		static int counter = 0;
+		auto p = fs::temp_directory_path()
+		    / ("thx_test_serialise_" + tag + "_" + std::to_string(++counter) + ".thx.json");
+		std::ofstream f(p);
+		f << contents;
+		return p.string();
+	}
+}
+
+TEST_CASE("serialiseManifest - empty provides and requires", "[manifest][serialise]")
+{
+	thx::plugin::PluginManifest m;
+	m.schema  = 1;
+	m.name    = "thx.test.Empty";
+	m.version = thx::Version{1, 2, 3};
+	auto json = thx::plugin::serialiseManifest(m);
+
+	REQUIRE(json.find("\"schema\":   1") != std::string::npos);
+	REQUIRE(json.find("\"name\":     \"thx.test.Empty\"") != std::string::npos);
+	REQUIRE(json.find("\"version\":  \"1.2.3\"") != std::string::npos);
+	REQUIRE(json.find("\"provides\": []") != std::string::npos);
+	REQUIRE(json.find("\"requires\": []") != std::string::npos);
+	REQUIRE(json.back() == '\n');
+}
+
+TEST_CASE("serialiseManifest - round-trip preserves all fields", "[manifest][serialise]")
+{
+	thx::plugin::PluginManifest original;
+	original.schema  = 1;
+	original.name    = "thx.cameras.AcmeCameraDriver";
+	original.version = thx::Version{1, 2, 0};
+	original.provides = {"thx.cameras.ICameraDriver", "thx.bus.IUsbDevice"};
+	original.requirements = {
+	    {"thx.io.ILogService",   thx::Version{1, 0, 0}},
+	    {"thx.gpu.IShaderCache", thx::Version{2, 5, 1}},
+	};
+
+	auto json = thx::plugin::serialiseManifest(original);
+	auto path = writeTempJson("roundtrip", json);
+
+	auto parsed = thx::plugin::parseManifest(path);
+	REQUIRE(parsed);
+	auto const& r = parsed.value();
+
+	REQUIRE(r.schema  == original.schema);
+	REQUIRE(r.name    == original.name);
+	REQUIRE(r.version == original.version);
+	REQUIRE(r.provides == original.provides);
+	REQUIRE(r.requirements.size() == original.requirements.size());
+	for (std::size_t i = 0; i < r.requirements.size(); ++i)
+	{
+		REQUIRE(r.requirements[i].id      == original.requirements[i].id);
+		REQUIRE(r.requirements[i].version == original.requirements[i].version);
+	}
+}
+
+TEST_CASE("serialiseManifest - escapes special characters in strings",
+          "[manifest][serialise]")
+{
+	thx::plugin::PluginManifest m;
+	m.schema  = 1;
+	m.name    = "thx.test.with\"quote";
+	m.version = thx::Version{1, 0, 0};
+	m.provides = {"thx.path.with\\slash"};
+
+	auto json = thx::plugin::serialiseManifest(m);
+	auto path = writeTempJson("escapes", json);
+
+	auto parsed = thx::plugin::parseManifest(path);
+	REQUIRE(parsed);
+	REQUIRE(parsed.value().name == "thx.test.with\"quote");
+	REQUIRE(parsed.value().provides.size() == 1);
+	REQUIRE(parsed.value().provides[0] == "thx.path.with\\slash");
+}

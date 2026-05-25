@@ -17,46 +17,24 @@
 //
 // Mechanism: dlopens the DSO via PluginHandle, instantiates the IPlugin,
 // reads name() / version() / required() / provides() (all const, no side
-// effects by contract — onLoad() is NOT called), serialises to JSON,
-// destroys the IPlugin, exits. The DSO is queued to the process-wide
-// PluginGarbage on PluginHandle teardown and reclaimed by the OS at exit.
+// effects by contract — onLoad() is NOT called), and asks the library to
+// serialise the data via thx::plugin::serialiseManifest. The IPlugin is
+// destroyed before the file is written; the DSO is queued to PluginGarbage
+// on PluginHandle teardown and reclaimed by the OS at exit.
 
 #include "thx/library.h"
 #include "thx/plugin/iplugin.h"
+#include "thx/plugin/manifest.h"
 #include "thx/plugin/plugin_handle.h"
-#include "thx/to_string.h"
 
 #include <cstdio>
-#include <cstdlib>
 #include <fstream>
-#include <sstream>
 #include <string>
 #include <string_view>
 #include <utility>
 
 namespace
 {
-
-std::string escapeJsonString(std::string_view s)
-{
-	std::string out;
-	out.reserve(s.size() + 2);
-	for (char c : s)
-	{
-		switch (c)
-		{
-			case '"':  out += "\\\""; break;
-			case '\\': out += "\\\\"; break;
-			case '\n': out += "\\n";  break;
-			case '\r': out += "\\r";  break;
-			case '\t': out += "\\t";  break;
-			case '\b': out += "\\b";  break;
-			case '\f': out += "\\f";  break;
-			default:   out += c;
-		}
-	}
-	return out;
-}
 
 std::string manifestPathForDso(std::string const& dsoPath)
 {
@@ -67,51 +45,27 @@ std::string manifestPathForDso(std::string const& dsoPath)
 	return dsoPath + ".thx.json";
 }
 
-// Build the manifest JSON for `plugin`. Pure function — does not touch
-// the filesystem.
-std::string buildManifestJson(thx::plugin::IPlugin const& plugin)
+// Build a PluginManifest from a live IPlugin. Mirrors what discover() would
+// produce if the manifest had been hand-authored to match the IPlugin's
+// declarations.
+thx::plugin::PluginManifest manifestFromPlugin(thx::plugin::IPlugin const& plugin)
 {
+	thx::plugin::PluginManifest m;
+	m.schema  = 1;
+	m.name    = std::string(static_cast<std::string_view>(plugin.name()));
+	m.version = plugin.version();
+
 	auto provides = plugin.provides();
-	auto reqs     = plugin.required();
+	m.provides.reserve(provides.size());
+	for (std::size_t i = 0; i < provides.size(); ++i)
+		m.provides.emplace_back(provides[i].name());
 
-	std::ostringstream out;
-	out << "{\n";
-	out << "  \"schema\":   1,\n";
-	out << "  \"name\":     \""
-	    << escapeJsonString(static_cast<std::string_view>(plugin.name()))
-	    << "\",\n";
-	out << "  \"version\":  \"" << thx::toString(plugin.version()) << "\",\n";
+	auto reqs = plugin.required();
+	m.requirements.reserve(reqs.size());
+	for (std::size_t i = 0; i < reqs.size(); ++i)
+		m.requirements.push_back({std::string(reqs[i].id.name()), reqs[i].version});
 
-	out << "  \"provides\": [";
-	if (provides.size() > 0)
-	{
-		out << "\n";
-		for (std::size_t i = 0; i < provides.size(); ++i)
-		{
-			out << "    \"" << escapeJsonString(provides[i].name()) << "\"";
-			if (i + 1 < provides.size()) out << ",";
-			out << "\n";
-		}
-		out << "  ";
-	}
-	out << "],\n";
-
-	out << "  \"requires\": [";
-	if (reqs.size() > 0)
-	{
-		out << "\n";
-		for (std::size_t i = 0; i < reqs.size(); ++i)
-		{
-			out << "    {\"id\": \"" << escapeJsonString(reqs[i].id.name())
-			    << "\", \"version\": \"" << thx::toString(reqs[i].version) << "\"}";
-			if (i + 1 < reqs.size()) out << ",";
-			out << "\n";
-		}
-		out << "  ";
-	}
-	out << "]\n";
-	out << "}\n";
-	return out.str();
+	return m;
 }
 
 int emit(std::string const& dsoPath, std::string const& outPath)
@@ -125,7 +79,7 @@ int emit(std::string const& dsoPath, std::string const& outPath)
 	}
 
 	auto handle  = std::move(handleResult.value());
-	auto* create = handle.createFn();
+	auto* create  = handle.createFn();
 	auto* destroy = handle.destroyFn();
 
 	auto* plugin = create();
@@ -136,7 +90,7 @@ int emit(std::string const& dsoPath, std::string const& outPath)
 		return 1;
 	}
 
-	std::string json = buildManifestJson(*plugin);
+	std::string json = thx::plugin::serialiseManifest(manifestFromPlugin(*plugin));
 
 	// Tear the plugin down before writing — the destroy must run while the
 	// DSO is still mapped, and we have no further need of the IPlugin.

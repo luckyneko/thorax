@@ -79,4 +79,14 @@ namespace thx::plugin
 	//                               specific problem.
 	Result<PluginManifest, Error> parseManifest(std::string const& jsonPath);
 
+	// Serialises a manifest to a JSON string matching the schema parseManifest
+	// reads. Round-trippable: writing the returned string to a file and
+	// calling parseManifest on that file yields a manifest equal to `m`
+	// (assuming `m.schema == 1`). The output is human-readable (indented,
+	// one entry per line) and ends with a trailing newline.
+	//
+	// Used by the `thx_emit_manifest` build-time tool and by tests; out-of-tree
+	// consumers can use it directly if they want to write manifests by hand.
+	std::string serialiseManifest(PluginManifest const& manifest);
+
 } // namespace thx::plugin

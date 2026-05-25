@@ -7,12 +7,14 @@
  */
 
 #include "thx/plugin/manifest.h"
+#include "thx/to_string.h"
 
 #include <cctype>
 #include <cstdint>
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <utility>
 
 namespace thx::plugin
@@ -415,6 +417,71 @@ Result<PluginManifest, Error> parseManifest(std::string const& jsonPath)
 
 	Reader r(contents.data(), contents.data() + contents.size());
 	return parseDocument(r, jsonPath);
+}
+
+namespace
+{
+	// JSON-string escape for the subset of escapes parseString() understands.
+	std::string escapeJsonString(std::string_view s)
+	{
+		std::string out;
+		out.reserve(s.size() + 2);
+		for (char c : s)
+		{
+			switch (c)
+			{
+				case '"':  out += "\\\""; break;
+				case '\\': out += "\\\\"; break;
+				case '\n': out += "\\n";  break;
+				case '\r': out += "\\r";  break;
+				case '\t': out += "\\t";  break;
+				case '\b': out += "\\b";  break;
+				case '\f': out += "\\f";  break;
+				default:   out += c;
+			}
+		}
+		return out;
+	}
+} // namespace
+
+std::string serialiseManifest(PluginManifest const& m)
+{
+	std::ostringstream out;
+	out << "{\n";
+	out << "  \"schema\":   " << m.schema << ",\n";
+	out << "  \"name\":     \"" << escapeJsonString(m.name) << "\",\n";
+	out << "  \"version\":  \"" << thx::toString(m.version) << "\",\n";
+
+	out << "  \"provides\": [";
+	if (!m.provides.empty())
+	{
+		out << "\n";
+		for (std::size_t i = 0; i < m.provides.size(); ++i)
+		{
+			out << "    \"" << escapeJsonString(m.provides[i]) << "\"";
+			if (i + 1 < m.provides.size()) out << ",";
+			out << "\n";
+		}
+		out << "  ";
+	}
+	out << "],\n";
+
+	out << "  \"requires\": [";
+	if (!m.requirements.empty())
+	{
+		out << "\n";
+		for (std::size_t i = 0; i < m.requirements.size(); ++i)
+		{
+			out << "    {\"id\": \"" << escapeJsonString(m.requirements[i].id)
+			    << "\", \"version\": \"" << thx::toString(m.requirements[i].version) << "\"}";
+			if (i + 1 < m.requirements.size()) out << ",";
+			out << "\n";
+		}
+		out << "  ";
+	}
+	out << "]\n";
+	out << "}\n";
+	return out.str();
 }
 
 } // namespace thx::plugin
