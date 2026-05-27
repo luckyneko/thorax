@@ -11,7 +11,7 @@
 #include "plugin/plugin_garbage.h"
 #include "plugin/plugin_manager.h"
 #include "service/service_manager.h"
-#include "thx/thx_api.h"
+#include "thx_internal_api.h"
 
 #include <string>
 
@@ -32,7 +32,7 @@ namespace thx
 	// individual manager classes no longer expose their own instance()
 	// accessors. Tests that need isolated state continue to construct local
 	// ServiceManager / PluginManager instances directly.
-	class THX_API Registry
+	class THX_INTERNAL_API Registry
 	{
 	public:
 		Registry(Registry const&)            = delete;
@@ -74,27 +74,9 @@ namespace thx
 		std::string                   m_debugName;
 	};
 
-	// Free-function lifecycle for the Registry singleton.
-	//
-	// initialise() records an optional human-readable name on the Registry.
-	// The Registry itself is lazily constructed by Registry::instance() on
-	// first use — calling initialise() is not required to use the framework.
-	//
-	// Returns true if this call set the debug name (i.e. it was empty before),
-	// false if a previous initialise() already set one.
-	THX_API bool initialise(std::string debugName);
-
-	// shutdown() drains the deferred-close queue. It does NOT destroy the
-	// Registry — the singleton persists until program exit. Safe to call
-	// multiple times; equivalent to thx::plugin::collectGarbage() followed by
-	// clearing the debug name.
-	//
-	// Safety: callers MUST release any shared_ptr<IService> references into
-	// unloaded DSOs before calling shutdown(). See plugin_garbage.h.
-	THX_API void shutdown() noexcept;
-
-	// Shorthand for Registry::instance(). Exists so callers don't have to type
-	// the class name; behaves identically.
-	THX_API Registry& registry() noexcept;
+	// thx::initialise / thx::shutdown are declared in <thx/lifecycle.h>
+	// (public). registry() is internal — used only by the in-tree facade
+	// .cpp files and the test binary.
+	THX_INTERNAL_API Registry& registry() noexcept;
 
 } // namespace thx

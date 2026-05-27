@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "thx/thx_api.h"
+#include "thx_internal_api.h"
 
 // Thread-local override hook for the thx::service::* facades.
 //
@@ -31,12 +31,12 @@ namespace thx::service
 namespace thx::service::detail
 {
 	// Returns the active override if PluginManager has set one, otherwise null.
-	THX_API ServiceManager* activeServiceManager() noexcept;
+	THX_INTERNAL_API ServiceManager* activeServiceManager() noexcept;
 
 	// RAII scope helper used by PluginManager to install m_sm as the active
 	// override around plugin onLoad/onUnload calls. Restores the previous
 	// override (which is normally null) on destruction.
-	class THX_API ActiveServiceManagerScope
+	class THX_INTERNAL_API ActiveServiceManagerScope
 	{
 	public:
 		explicit ActiveServiceManagerScope(ServiceManager& sm) noexcept;

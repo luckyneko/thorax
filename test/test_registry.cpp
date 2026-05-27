@@ -7,6 +7,7 @@
  */
 
 #include <catch2/catch_all.hpp>
+#include <thx/lifecycle.h>
 #include <thx/plugin/plugin.h>
 #include <plugin/plugin_garbage.h>
 #include <plugin/plugin_manager.h>

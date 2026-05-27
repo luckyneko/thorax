@@ -11,7 +11,7 @@
 #include "library.h"
 #include "thx/plugin/platform.h"
 #include "thx/result.h"
-#include "thx/thx_api.h"
+#include "thx_internal_api.h"
 
 #include <string>
 
@@ -33,7 +33,7 @@ namespace thx::plugin
 	// for the keep-alive contract). Failure paths in open() — symbol missing,
 	// ABI mismatch — close the Library synchronously, since no plugin code
 	// has had a chance to hand out references yet.
-	class THX_API PluginHandle
+	class THX_INTERNAL_API PluginHandle
 	{
 	public:
 		PluginHandle() = default;

@@ -7,8 +7,12 @@
  */
 
 #include "thx/plugin/plugin.h"
+#include "plugin/plugin_handle.h"
 #include "plugin/plugin_manager.h"
 #include "registry.h"
+
+#include <string_view>
+#include <utility>
 
 namespace thx::plugin
 {
@@ -56,6 +60,44 @@ Result<void, Error> reload(std::string const& path)
 LoadSummary discoverAndLoad(std::string const& directory, Recursive recursive)
 {
 	return thx::Registry::instance().pluginManager().discoverAndLoad(directory, recursive);
+}
+
+Result<PluginManifest, Error> inspect(std::string const& dsoPath)
+{
+	// Manifestless inspection: open the DSO, instantiate the IPlugin, read
+	// its metadata, tear the IPlugin down, queue the DSO for deferred close.
+	// No PluginManager state involvement.
+	auto handleResult = PluginHandle::open(dsoPath);
+	if (!handleResult)
+		return Result<PluginManifest, Error>::err(std::move(handleResult.error()));
+
+	auto handle  = std::move(handleResult.value());
+	auto* destroy = handle.destroyFn();
+	IPlugin* raw = handle.createFn()();
+	if (!raw)
+		return Result<PluginManifest, Error>::err({ErrorCode::FactoryFailed,
+		    "thx_create_plugin returned null for: " + dsoPath});
+
+	PluginManifest manifest;
+	manifest.schema  = 1;
+	manifest.name    = std::string(static_cast<std::string_view>(raw->name()));
+	manifest.version = raw->version();
+
+	auto provides = raw->provides();
+	manifest.provides.reserve(provides.size());
+	for (std::size_t i = 0; i < provides.size(); ++i)
+		manifest.provides.emplace_back(provides[i].name());
+
+	auto reqs = raw->required();
+	manifest.requirements.reserve(reqs.size());
+	for (std::size_t i = 0; i < reqs.size(); ++i)
+		manifest.requirements.push_back({std::string(reqs[i].id.name()), reqs[i].version});
+
+	destroy(raw);
+	// ~PluginHandle queues the underlying Library into PluginGarbage; the
+	// DSO unmaps at the next collectGarbage() (or program exit). No need
+	// to drain here — inspect is a one-shot, not part of any sequence.
+	return Result<PluginManifest, Error>::ok(std::move(manifest));
 }
 
 Result<void, Error> checkRequirements(Span<const ServiceRequirement> reqs)

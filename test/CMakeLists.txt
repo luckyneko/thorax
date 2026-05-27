@@ -45,6 +45,10 @@ set_target_properties(test-${PROJECT_NAME} PROPERTIES
 )
 thx_set_warnings(test-${PROJECT_NAME})
 target_compile_definitions(test-${PROJECT_NAME} PRIVATE
+    # THX_TESTING must match the library's compile definition so the
+    # THX_INTERNAL_API expansion is consistent between the library's
+    # class definitions and the test binary's view of them.
+    THX_TESTING
     THX_MOCK_PLUGIN_PATH="$<TARGET_FILE:mock_plugin>"
     THX_MOCK_BAD_ABI_PLUGIN_PATH="$<TARGET_FILE:mock_plugin_bad_abi>"
     THX_MOCK_MULTI_PLUGIN_PATH="$<TARGET_FILE:mock_plugin_multi>"

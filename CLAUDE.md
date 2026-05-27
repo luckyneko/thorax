@@ -211,7 +211,7 @@ Any divergence rolls back the registration and returns `ErrorCode::ManifestMisma
 
 **CMake helpers.** Two paths, both shipped in `cmake/`:
 
-- [`thx_plugin_auto_manifest(target)`](cmake/thx_plugin_auto_manifest.cmake) — **recommended.** Wires a POST_BUILD command that invokes the [`thx_emit_manifest`](src/tools/emit_manifest.cpp) tool to derive the sidecar directly from the built DSO's `IPlugin::provides()` / `required()` / `name()` / `version()`. The plugin's IPlugin class is the single source of truth; zero metadata duplication in the build system. 10 of the 11 in-tree plugins use this.
+- [`thx_plugin_auto_manifest(target)`](cmake/thx_plugin_auto_manifest.cmake) — **recommended.** Wires a POST_BUILD command that invokes the [`thx_emit_manifest`](tools/thx_emit_manifest/emit_manifest.cpp) tool to derive the sidecar directly from the built DSO's `IPlugin::provides()` / `required()` / `name()` / `version()`. The plugin's IPlugin class is the single source of truth; zero metadata duplication in the build system. 10 of the 11 in-tree plugins use this.
 - [`thx_plugin_manifest(target NAME ... VERSION ... [PROVIDES ...] [REQUIRES ...])`](cmake/thx_plugin_manifest.cmake) — fallback for plugins that can't be introspected at build time (e.g., the `mock_plugin_bad_abi` test plugin, which intentionally reports a wrong ABI version and so can't be opened by the tool). Emits a hand-authored sidecar via `file(GENERATE)`. `REQUIRES` entries are `"id:version"` strings parsed into JSON objects.
 
 The auto-derived path means a typical in-tree plugin's CMakeLists is just:
@@ -222,7 +222,7 @@ thx_plugin_auto_manifest(my_plugin)
 ```
 The manifest is built from the C++ code by construction — the `ManifestMismatch` failure mode for fields other than `provides` becomes structurally impossible.
 
-**Tool.** [`thx_emit_manifest <dso> [output]`](src/tools/emit_manifest.cpp) is also usable as a standalone utility: pass a DSO and optionally an output path; default is `<basename>.thx.json` next to the DSO. The tool dlopens the DSO via `PluginHandle`, instantiates the IPlugin, reads the four metadata fields (no `onLoad` — const methods only), serialises to JSON, destroys the plugin. The tool is built unconditionally alongside the library.
+**Tool.** [`thx_emit_manifest <dso> [output]`](tools/thx_emit_manifest/emit_manifest.cpp) is also usable as a standalone utility: pass a DSO and optionally an output path; default is `<basename>.thx.json` next to the DSO. The tool is a regular external consumer of libthorax's public API — it calls `thx::plugin::inspect(dsoPath)` (which opens the DSO, instantiates the IPlugin, reads name/version/required/provides, tears it down) and then `thx::plugin::serialiseManifest()`. It doesn't link any internal headers. Built unconditionally alongside the library.
 
 ### Errors & logging
 
@@ -245,7 +245,11 @@ thx::assertThat(condition, "message");   // logs at Error if false; std::abort()
 
 ## Layout & conventions
 
-**Public vs private headers.** The library is built with hidden visibility; only `THX_API`-decorated symbols cross the `libthorax` boundary. Public headers live under `include/thx/` and are installed; private headers live in `src/` and are not. In-tree consumers (the test binary, the `thx_emit_manifest` tool) reach private headers via `target_include_directories(... PRIVATE ${CMAKE_SOURCE_DIR}/src)`.
+**Public vs private headers.** The library is built with hidden visibility; only decorated symbols cross the `libthorax` boundary. Public headers live under `include/thx/` and are installed; private headers live in `src/` and are not. The in-tree test binary reaches private headers via `target_include_directories(... PRIVATE ${CMAKE_SOURCE_DIR}/src)`; the `thx_emit_manifest` tool is a regular external consumer of the public API.
+
+**Two export macros.**
+- `THX_API` (in [include/thx/thx_api.h](include/thx/thx_api.h)) — part of the stable wire ABI. Always emits a visibility attribute.
+- `THX_INTERNAL_API` (in [src/thx_internal_api.h](src/thx_internal_api.h)) — exposed so the in-tree test binary can link against internal classes (`Registry`, `ServiceManager`, `PluginManager`, `Library`, `PluginHandle`, `PluginGarbage`, `ActiveServiceManagerScope`). Gated on `THX_TESTING`. When `THORAX_BUILD_TESTING=ON`, both the library and the test binary define `THX_TESTING` and internals are exported; when OFF, internals stay hidden in the `.so`'s export table. Production builds export ~50 symbols; dev builds ~108.
 
 ```
 include/thx/             public — installed

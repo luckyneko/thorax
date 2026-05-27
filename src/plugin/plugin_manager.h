@@ -17,7 +17,7 @@
 #include "thx/result.h"
 #include "thx/service/service_id.h"
 #include "service/service_manager.h"
-#include "thx/thx_api.h"
+#include "thx_internal_api.h"
 #include "thx/log.h"
 
 #include <cstddef>
@@ -48,7 +48,7 @@ namespace thx::plugin
 	// Opened-but-not-Loaded entries have their DSOs released to the garbage
 	// queue. The destructor does NOT call collectGarbage(); call it explicitly
 	// when no service references into those DSOs remain.
-	class THX_API PluginManager
+	class THX_INTERNAL_API PluginManager
 	{
 	public:
 		explicit PluginManager(thx::service::ServiceManager& sm);

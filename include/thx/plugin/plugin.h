@@ -131,6 +131,24 @@ namespace thx::plugin
 	// cannot detect this — it's a discipline contract documented here.
 	THX_API Result<void, Error> reload(std::string const& path);
 
+	// Inspect a plugin DSO without requiring a sidecar manifest. Opens the
+	// DSO, ABI-checks it, instantiates the IPlugin, reads its name /
+	// version / required() / provides(), tears the IPlugin down, and
+	// queues the DSO for deferred close. The plugin is NOT loaded — no
+	// onLoad is called, no services are registered, no state is tracked.
+	//
+	// Use case: build-time tooling that derives a sidecar manifest from a
+	// freshly-built plugin DSO (thx_emit_manifest). Production code should
+	// stick to discover()/load(), which require a paired sidecar as the
+	// marker that the DSO is intended as a plugin.
+	//
+	// Returns the PluginManifest the plugin would advertise. Errors:
+	//   OpenFailed       — dlopen / LoadLibrary rejected the DSO.
+	//   SymbolNotFound   — missing one of the thx_* C exports.
+	//   VersionMismatch  — incompatible thx_abi_version.
+	//   FactoryFailed    — thx_create_plugin returned null.
+	THX_API Result<PluginManifest, Error> inspect(std::string const& dsoPath);
+
 	// --- Aggregate ---------------------------------------------------------
 	THX_API LoadSummary discoverAndLoad(std::string const& directory, Recursive recursive = Recursive::No);
 

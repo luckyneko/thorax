@@ -9,7 +9,7 @@
 #pragma once
 
 #include "thx/result.h"
-#include "thx/thx_api.h"
+#include "thx_internal_api.h"
 
 #include <filesystem>
 #include <string>
@@ -46,7 +46,7 @@ namespace thx
 	//   BarFn bar = nullptr;
 	//   lib.open(path).bind("foo", foo).bind("bar", bar);
 	//   if (!lib) { logError(lib.error()); return; }
-	class THX_API Library
+	class THX_INTERNAL_API Library
 	{
 	public:
 		// Symbol-resolution policy for open().

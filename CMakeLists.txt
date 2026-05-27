@@ -120,7 +120,15 @@ target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
 # Visibility: hide everything by default; only THX_API-decorated symbols cross
 # the boundary. Inert while the library is STATIC; live once it becomes SHARED.
 # THX_BUILDING flips THX_API to dllexport on Windows.
-target_compile_definitions(${PROJECT_NAME} PRIVATE THX_BUILDING)
+# THX_TESTING enables THX_INTERNAL_API expansion — internal classes get
+# default visibility so the in-tree test binary can link against them.
+# Defined here on the library target AND on the test target (below) so the
+# class definitions match between TUs. Off in production builds — internal
+# classes stay hidden in the .so's export table.
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+    THX_BUILDING
+    $<$<BOOL:${THORAX_BUILD_TESTING}>:THX_TESTING>
+)
 set_target_properties(${PROJECT_NAME} PROPERTIES
     CXX_VISIBILITY_PRESET     hidden
     VISIBILITY_INLINES_HIDDEN ON
