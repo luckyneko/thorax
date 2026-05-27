@@ -57,28 +57,13 @@ Both `thx_plugin_auto_manifest` and `thx_plugin_manifest` now take an optional `
 
 Added `ErrorCode::OpenFailed` for catch-all `dlopen`/`LoadLibrary` failures (permissions, missing transitive deps, malformed DSOs, etc.). The platform error text remains in the `message` field. `FileNotFound` is now reserved for paths that genuinely don't exist on disk — `parseManifest` (which opens via `ifstream`) and `PluginManager::resolveCanonical` (which uses `std::filesystem::canonical`) keep using it.
 
-### Cross-DSO `dynamic_cast` on user service interfaces doesn't work
+### ~~Cross-DSO `dynamic_cast` on user service interfaces doesn't work~~ — doc applied
 
-**What:** User-defined service interfaces live in user headers, not in libthorax. Their typeinfo doesn't coalesce across DSOs on macOS (two-level namespace doesn't merge weak symbols across separately-linked binaries), and `-fvisibility=hidden` doesn't trigger libc++abi's name-comparison fallback (the `*`-prefix marker is narrower than expected). `getService<T>` was switched to `static_pointer_cast` — sound because the `ServiceID` discriminates the type at lookup, but the "wrong T returns nullptr" defensive net is gone (now UB).
+CLAUDE.md "Service identity & lookup" documents the `static_cast` trade-off and the framework contract that the `ServiceID` determines the type. Reach for the registered-type-name-string compare option (option 3 in the original entry) only if someone actually reports a type-confusion bug from a hand-built ServiceID.
 
-**Fix options:**
-1. Document the trade-off in CLAUDE.md under "Service identity & lookup." (Minimum.)
-2. Ship a convention/macro for anchoring service interfaces (an out-of-line virtual destructor in a TU that both host and plugin link against — i.e., a separately-built interfaces shared lib). Lets `dynamic_pointer_cast` work for users who want the safety.
-3. Store the registered type's name string at registration time and compare on `getService<T>` to reject mismatches — string compare works cross-DSO. Misses derived-type queries (e.g., querying as a base) but catches outright type confusion.
+### ~~`ActiveServiceManagerScope` is a thread-local back channel~~ — doc applied
 
-**Recommendation:** (1) now, (3) when someone gets bitten.
-
-### `ActiveServiceManagerScope` is a thread-local back channel
-
-**What:** `IPlugin::onLoad()` no longer takes `ServiceManager&`. The thread-local override in `src/service/active_service_manager.h` is how `PluginManager` redirects the facade's registrations to its `m_sm` during the load hook. Works correctly and tests pass, but it's hidden state instead of an explicit parameter — exactly the kind of code-smell we'd reject in a review.
-
-**Why it's there:** local-PluginManager / local-ServiceManager test isolation. Without the override, the local pattern can't work since plugins use facades that go through the global Registry by default.
-
-**Fix options:**
-1. Accept it. The override window is tightly scoped to onLoad/onUnload. Document the rationale in CLAUDE.md.
-2. Make `PluginManager` Registry-only (no constructor taking ServiceManager&). Tests use the global Registry and clean up between cases. Removes the thread-local but loses local-instance test isolation.
-
-**Recommendation:** (1). The trade-off is favourable: tests stay clean, plugin API stays parameter-free.
+CLAUDE.md "Active ServiceManager scope" documents why the thread-local override exists (preserves local-PluginManager / local-ServiceManager test isolation when plugins use facades), and what the lifetime window is (the onLoad / onUnload call only). The smell is acknowledged; the trade-off is favourable enough to keep.
 
 ---
 
