@@ -45,13 +45,9 @@ Stress test in `test_plugin_manager.cpp` ([threading] tag) exercises concurrent 
 
 ## Priority 1 — known bugs and trade-offs from the shared-lib flip
 
-### Manifest sidecars not installed alongside in-tree plugins
+### ~~Manifest sidecars not installed alongside in-tree plugins~~ — applied
 
-**What:** `install(TARGETS plugin_logging plugin_io ...)` installs the DSOs but not the `.thx.json` sidecars `thx_plugin_auto_manifest` emits. `discover()` against the install prefix won't find them.
-
-**Fix:** `thx_plugin_auto_manifest(target)` should also register an `install(FILES ...)` rule for the sidecar, conditional on `THORAX_INSTALL`. Or extend the CMake helper to take an install destination.
-
-(Previously noted under "Auto-derived manifests" follow-ups; promoted here because it's a real bug, not a deferred feature.)
+Both `thx_plugin_auto_manifest` and `thx_plugin_manifest` now take an optional `DESTINATION` argument; if passed, the sidecar is registered for `install(FILES …)` at that path. The two in-tree plugins (plugin_logging, plugin_io) opt in with `DESTINATION ${CMAKE_INSTALL_LIBDIR}/thorax/plugins`, matching where their DSOs install. New ctest step `install.consumer_discover` runs the consumer binary against the install prefix's plugins dir and verifies `discover()` finds both plugins paired with their installed DSOs.
 
 ### ~~`Version::pack()` silently truncates components~~ — applied
 

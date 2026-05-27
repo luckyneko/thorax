@@ -13,6 +13,7 @@
 #                "thx.bus.IUsbDevice"
 #       REQUIRES "thx.io.ILogService:1.0.0"
 #                "thx.gpu.IShaderCache:2.5.1"
+#       [DESTINATION <relative-dir>]   # optional: also install the sidecar
 #   )
 #
 # REQUIRES entries use "id:version" syntax (parsed into {id, version} objects
@@ -21,11 +22,14 @@
 # The file is written via file(GENERATE) so the OUTPUT path can use
 # $<TARGET_FILE_DIR:...> / $<TARGET_FILE_BASE_NAME:...> generator expressions
 # and resolve to wherever CMake actually puts the DSO.
+#
+# If DESTINATION is given, the sidecar is added to install(FILES) at that
+# path. Plugins not meant for installation just omit DESTINATION.
 
 function(thx_plugin_manifest target)
     cmake_parse_arguments(ARG
         ""                                  # options
-        "NAME;VERSION"                      # one-value
+        "NAME;VERSION;DESTINATION"          # one-value
         "PROVIDES;REQUIRES"                 # multi-value
         ${ARGN}
     )
@@ -81,8 +85,15 @@ function(thx_plugin_manifest target)
 
     # OUTPUT path mirrors the DSO basename including any `lib` prefix CMake
     # adds on Unix (so the file pairs as e.g. `libmock_plugin.thx.json`).
+    set(_manifest_path
+        "$<TARGET_FILE_DIR:${target}>/$<TARGET_FILE_PREFIX:${target}>$<TARGET_FILE_BASE_NAME:${target}>.thx.json"
+    )
     file(GENERATE
-        OUTPUT  "$<TARGET_FILE_DIR:${target}>/$<TARGET_FILE_PREFIX:${target}>$<TARGET_FILE_BASE_NAME:${target}>.thx.json"
+        OUTPUT  "${_manifest_path}"
         CONTENT "${_content}"
     )
+
+    if(ARG_DESTINATION)
+        install(FILES "${_manifest_path}" DESTINATION "${ARG_DESTINATION}")
+    endif()
 endfunction()

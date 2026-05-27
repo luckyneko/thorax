@@ -122,5 +122,23 @@ if(THORAX_INSTALL AND NOT CMAKE_CROSSCOMPILING)
     )
     set_tests_properties(install.consumer_build PROPERTIES
         FIXTURES_REQUIRED consumer_configured
+        FIXTURES_SETUP    consumer_built
+    )
+
+    # Run the plugin-aware consumer against the install prefix's plugins
+    # dir. Verifies the sidecar install path: discover() should find both
+    # in-tree plugins paired with their installed DSOs.
+    set(_consumer_plugins_exe
+        "${CMAKE_BINARY_DIR}/test_consumer_build/consumer_plugins")
+    if(WIN32)
+        set(_consumer_plugins_exe
+            "${CMAKE_BINARY_DIR}/test_consumer_build/${THORAX_TEST_CONFIG}/consumer_plugins.exe")
+    endif()
+    add_test(NAME install.consumer_discover
+        COMMAND ${_consumer_plugins_exe}
+                "${THORAX_TEST_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/thorax/plugins"
+    )
+    set_tests_properties(install.consumer_discover PROPERTIES
+        FIXTURES_REQUIRED consumer_built
     )
 endif()

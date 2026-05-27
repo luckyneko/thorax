@@ -1,3 +1,4 @@
+include(GNUInstallDirs)
 include(thx_warnings)
 include(thx_plugin_auto_manifest)
 
@@ -11,4 +12,6 @@ target_include_directories(plugin_logging PUBLIC
 )
 thx_set_warnings(plugin_logging)
 target_compile_options(plugin_logging PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fvisibility=hidden>)
-thx_plugin_auto_manifest(plugin_logging)
+thx_plugin_auto_manifest(plugin_logging
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/thorax/plugins
+)
