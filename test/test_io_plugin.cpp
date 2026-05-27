@@ -37,7 +37,7 @@ struct Fixture
 
 	explicit Fixture() { REQUIRE(loader.load(THX_IO_PLUGIN_PATH)); }
 
-	std::shared_ptr<IIOService> service()
+	thx::service::ServiceHandle<IIOService> service()
 	{
 		return sm.getService<IIOService>();
 	}

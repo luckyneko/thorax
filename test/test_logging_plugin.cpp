@@ -58,7 +58,7 @@ struct Fixture
 		REQUIRE(loader.load(THX_LOGGING_PLUGIN_PATH));
 	}
 
-	std::shared_ptr<ILoggingService> service()
+	thx::service::ServiceHandle<ILoggingService> service()
 	{
 		return sm.getService<ILoggingService>();
 	}

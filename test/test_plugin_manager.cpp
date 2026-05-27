@@ -231,7 +231,7 @@ TEST_CASE("PluginManager - service survives unload until collectGarbage",
 	thx::plugin::collectGarbage();
 
 	thx::service::ServiceManager sm;
-	std::shared_ptr<thx_mock::MockService> svc;
+	thx::service::ServiceHandle<thx_mock::MockService> svc;
 	{
 		thx::plugin::PluginManager loader(sm);
 		REQUIRE(loader.load(THX_MOCK_PLUGIN_PATH));

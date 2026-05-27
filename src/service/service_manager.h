@@ -86,14 +86,14 @@ namespace thx::service
 			return registerService<T>(makeServiceFactory(std::forward<Callable>(callable)));
 		}
 
-		// Looks up a service by ID and casts it to T.
-		// Returns nullptr if the service is not registered or the cast fails.
+		// Looks up a service by ID and returns a strong handle to it.
+		// Returns an empty ServiceHandle if the service is not registered.
 		template <typename T>
-		std::shared_ptr<T> getService(ServiceID id) const;
+		ServiceHandle<T> getService(ServiceID id) const;
 
 		// Type-deducing overload. Requires T to provide T::staticId().
 		template <typename T>
-		std::shared_ptr<T> getService() const;
+		ServiceHandle<T> getService() const;
 
 		// Removes the service entry. IService::onDestroy() is called outside
 		// the registry lock so the service may safely call ServiceManager
@@ -113,7 +113,7 @@ namespace thx::service
 
 	private:
 		mutable std::shared_mutex m_mutex;
-		std::unordered_map<ServiceID, std::shared_ptr<IService>> m_services;
+		std::unordered_map<ServiceID, ServiceHandle<IService>> m_services;
 		// IDs reserved by an in-flight registerService. The factory and
 		// onConstruct callback run without the registry lock held; the ID is
 		// kept here so concurrent registers see it as taken and bail out.

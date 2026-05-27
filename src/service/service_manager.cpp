@@ -74,7 +74,7 @@ bool ServiceManager::registerService(ServiceID id, Version version, ServiceFacto
 		m_reserved.erase(id);
 	};
 
-	std::shared_ptr<IService> service;
+	ServiceHandle<IService> service;
 	try
 	{
 		IService* raw = factory.invoke(factory.ctx);
@@ -85,10 +85,10 @@ bool ServiceManager::registerService(ServiceID id, Version version, ServiceFacto
 			    std::string("registerService: factory returned null for '") + id.name() + "'");
 			return false;
 		}
-		// Wrap the raw pointer in shared_ptr. The default deleter calls
-		// `delete raw` which, via IService's virtual destructor, runs the
-		// concrete service's destructor — regardless of which DSO allocated it.
-		service = std::shared_ptr<IService>(raw);
+		// Wrap the raw pointer; ServiceHandle's ctor retains, bringing the
+		// intrusive refcount from 0 to 1. Virtual destructor on IService
+		// handles polymorphic destruction when the last handle drops.
+		service = ServiceHandle<IService>(raw);
 
 		// Verify the service reports the version the caller claimed. Mismatch is
 		// a programming error: refuse the registration so Release builds notice
@@ -130,7 +130,7 @@ bool ServiceManager::registerService(ServiceID id, Version version, ServiceFacto
 
 bool ServiceManager::unregisterService(ServiceID id)
 {
-	std::shared_ptr<IService> to_destroy;
+	ServiceHandle<IService> to_destroy;
 
 	{
 		std::unique_lock lock(m_mutex);
@@ -148,7 +148,9 @@ bool ServiceManager::unregisterService(ServiceID id)
 	}
 
 	// onDestroy runs without the registry lock so the service may safely call
-	// ServiceManager methods during shutdown.
+	// ServiceManager methods during shutdown. The handle (which still holds a
+	// strong reference) is destroyed at scope exit; external callers holding
+	// their own handles keep the service alive past that point.
 	if (to_destroy)
 		to_destroy->onDestroy();
 	return true;

@@ -12,14 +12,26 @@
 #include "thx/thx_api.h"
 #include "thx/version_type.h"
 
+#include <atomic>
+#include <cstdint>
+
 namespace thx::service
 {
+	template <typename T> class ServiceHandle;
+
 	// Base interface for all services registered with the ServiceManager.
 	// Concrete services inherit this and add their own API on top.
+	//
 	// THX_API at class scope exports IService's typeinfo and vtable. Required
-	// for dynamic_pointer_cast<T>(shared_ptr<IService>) to work across the
-	// plugin-DSO boundary: with one libthorax shared library, IService's
-	// typeinfo lives at a single address and address-comparison succeeds.
+	// for the typeinfo to live at one address across the plugin-DSO boundary.
+	//
+	// Lifetime: managed by an intrusive atomic refcount (`m_thxRefcount`) and
+	// the ServiceHandle<T> smart pointer. ServiceHandle is the public means of
+	// holding a strong reference; the refcount field exists so we can avoid
+	// std::shared_ptr's implementation-defined control block crossing DSO
+	// boundaries. Atomic ops on `std::atomic<uint32_t>` for a trivial type
+	// compile to plain hardware instructions and have a stable ABI across
+	// every compiler we support.
 	class THX_API IService
 	{
 	public:
@@ -39,15 +51,38 @@ namespace thx::service
 		virtual bool onConstruct() { return true; }
 
 		// Called by ServiceManager when the service is unregistered, after the
-		// entry has been removed from the map but while at least one shared_ptr
-		// to the service is still alive (the registry's own handle). The
-		// underlying object is destroyed when the last shared_ptr drops, which
-		// may be later than onDestroy() if any external caller is still holding
-		// one. Treat onDestroy() as "the service is leaving the registry" — not
-		// "the service is about to be deleted."
+		// entry has been removed from the map but while at least one strong
+		// ServiceHandle to the service is still alive (the registry's own
+		// handle). The underlying object is destroyed when the last handle
+		// drops, which may be later than onDestroy() if any external caller is
+		// still holding one. Treat onDestroy() as "the service is leaving the
+		// registry" — not "the service is about to be deleted."
 		//
 		// The registry lock is NOT held here, so ServiceManager may be called.
 		virtual void onDestroy() {}
+
+	private:
+		template <typename> friend class ServiceHandle;
+
+		// Intrusive strong refcount. Initial value is 0; the first
+		// ServiceHandle wrapping a freshly-allocated IService brings it to 1.
+		// std::atomic<uint32_t> for a trivial T is layout-equivalent to a
+		// plain uint32_t — the atomic ops emit hardware instructions, not
+		// stdlib-internal data structures, so this is ABI-stable across DSOs.
+		mutable std::atomic<std::uint32_t> m_thxRefcount{0};
+
+		// Inline so the refcount mutation happens in the caller's TU. Relaxed
+		// retain (we already hold a reference); acquire/release on the final
+		// decrement so observers see all prior writes.
+		void thxRetain() const noexcept
+		{
+			m_thxRefcount.fetch_add(1, std::memory_order_relaxed);
+		}
+		void thxRelease() const noexcept
+		{
+			if (m_thxRefcount.fetch_sub(1, std::memory_order_acq_rel) == 1)
+				delete this;
+		}
 	};
 
 	// CRTP base that wires the IService virtual interface to static metadata on

@@ -54,9 +54,13 @@ bool unregisterServiceImpl(ServiceID id)
 	return targetSM().unregisterService(std::move(id));
 }
 
-std::shared_ptr<IService> getServiceImpl(ServiceID id)
+IService* acquireServiceImpl(ServiceID id)
 {
-	return targetSM().getService<IService>(std::move(id));
+	// targetSM().getService<IService> returns a ServiceHandle<IService> whose
+	// ctor already incremented the refcount. detach() hands the raw pointer
+	// out without releasing — caller's ServiceHandle::adopt completes the
+	// hand-off.
+	return targetSM().getService<IService>(std::move(id)).detach();
 }
 
 std::vector<ServiceInfo> listServicesImpl()
