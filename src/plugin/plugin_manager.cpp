@@ -573,6 +573,25 @@ Result<void, Error> PluginManager::unload(std::string const& path)
 	return Result<void, Error>::ok();
 }
 
+Result<void, Error> PluginManager::reload(std::string const& path)
+{
+	std::lock_guard<std::recursive_mutex> lock(m_mutex);
+
+	if (auto r = unload(path); !r)
+		return r;
+
+	// Synchronously drain so the next load() picks up the fresh DSO. The
+	// caller's contract (documented on the public surface) is that all
+	// ServiceHandles into this plugin have been released — collect() will
+	// then actually unmap the DSO. If the caller violated the contract,
+	// outstanding handles still hold a refcount on the service, so the
+	// underlying objects live; but the DSO is unmapped immediately and
+	// any later handle release will segfault.
+	thx::Registry::instance().pluginGarbage().collect();
+
+	return load(path);
+}
+
 LoadSummary PluginManager::discoverAndLoad(std::string const& directory, Recursive recursive)
 {
 	std::lock_guard<std::recursive_mutex> lock(m_mutex);

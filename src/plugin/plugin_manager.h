@@ -118,6 +118,16 @@ namespace thx::plugin
 		// Loaded.
 		Result<void, Error> unload(std::string const& path);
 
+		// unload() + collectGarbage() + load(). Convenience for the common
+		// reload pattern.
+		//
+		// PRECONDITION: caller has released every ServiceHandle it obtained
+		// from this plugin's services BEFORE calling reload. The collect
+		// runs synchronously and dlclose's the DSO; any outstanding handles
+		// will segfault on release once their refcount hits zero (the
+		// service destructor lives in unmapped code).
+		Result<void, Error> reload(std::string const& path);
+
 		// --- Aggregate ----------------------------------------------------
 
 		// Discovers all plugins in `directory` and loads each one.

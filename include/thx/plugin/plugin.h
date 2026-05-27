@@ -115,6 +115,22 @@ namespace thx::plugin
 	THX_API Result<void, Error> load(std::string const& path);
 	THX_API Result<void, Error> unload(std::string const& path);
 
+	// Unload then load again. Equivalent to:
+	//
+	//     unload(path);
+	//     collectGarbage();          // drain the DSO mapping
+	//     load(path);
+	//
+	// Returns NotLoaded if `path` isn't currently Loaded.
+	//
+	// **Precondition**: the caller MUST have released every ServiceHandle
+	// it obtained from this plugin's services BEFORE calling reload. The
+	// drain runs synchronously and will dlclose the DSO; any handles still
+	// pointing at services in that DSO will segfault when they're released
+	// (the service's destructor lives in unmapped code). The framework
+	// cannot detect this — it's a discipline contract documented here.
+	THX_API Result<void, Error> reload(std::string const& path);
+
 	// --- Aggregate ---------------------------------------------------------
 	THX_API LoadSummary discoverAndLoad(std::string const& directory, Recursive recursive = Recursive::No);
 

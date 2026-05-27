@@ -156,9 +156,9 @@ Convenience APIs that have a clear shape but no current consumer. Add when someo
 
 Wiring it through PluginManager.open / PluginManager.load is a separate ergonomic decision; left as a follow-up if a real consumer wants fail-fast loading through the framework's loader rather than via PluginHandle directly.
 
-### `reload(path)` convenience
+### ~~`reload(path)` convenience~~ — applied
 
-A host doing reload today must unload → drop all service refs → drain garbage → load. A single method that documents the keep-alive contract in its preconditions is friendlier than expecting users to chain the primitives.
+`PluginManager::reload(path)` + facade `thx::plugin::reload(path)`. Equivalent to `unload(path)` → `collectGarbage()` → `load(path)`, with the keep-alive precondition documented on the method's contract: callers MUST release every `ServiceHandle` into this plugin's services BEFORE calling reload, since the drain runs synchronously and dlclose's the DSO.
 
 ### ~~`plugins_providing("thx.cameras.ICameraDriver")` shortcut~~ — applied
 

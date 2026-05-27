@@ -1289,3 +1289,40 @@ TEST_CASE("PluginManager::discover - Recursive::Yes walks subdirectories",
 
 	fs::remove_all(root);
 }
+
+TEST_CASE("PluginManager::reload - unloads and reloads the plugin",
+          "[plugin_manager]")
+{
+	thx::service::ServiceManager sm;
+	thx::plugin::PluginManager   loader(sm);
+
+	REQUIRE(loader.load(THX_MOCK_PLUGIN_PATH));
+	{
+		auto svc = sm.getService<thx_mock::MockService>();
+		REQUIRE(svc != nullptr);
+		REQUIRE(svc->ping() == 42);
+		// Drop the handle BEFORE reload so the garbage drain can dlclose.
+	}
+
+	REQUIRE(loader.reload(THX_MOCK_PLUGIN_PATH));
+	REQUIRE(loader.isLoaded(THX_MOCK_PLUGIN_PATH));
+
+	auto svc2 = sm.getService<thx_mock::MockService>();
+	REQUIRE(svc2 != nullptr);
+	REQUIRE(svc2->ping() == 42);
+
+	svc2.reset();
+	loader.unload(THX_MOCK_PLUGIN_PATH);
+	thx::plugin::collectGarbage();
+}
+
+TEST_CASE("PluginManager::reload - not-loaded returns NotLoaded",
+          "[plugin_manager]")
+{
+	thx::service::ServiceManager sm;
+	thx::plugin::PluginManager   loader(sm);
+
+	auto r = loader.reload(THX_MOCK_PLUGIN_PATH);
+	REQUIRE_FALSE(r);
+	REQUIRE(r.error().code == thx::ErrorCode::NotLoaded);
+}

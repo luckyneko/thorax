@@ -48,6 +48,11 @@ Result<void, Error> unload(std::string const& path)
 	return thx::Registry::instance().pluginManager().unload(path);
 }
 
+Result<void, Error> reload(std::string const& path)
+{
+	return thx::Registry::instance().pluginManager().reload(path);
+}
+
 LoadSummary discoverAndLoad(std::string const& directory, Recursive recursive)
 {
 	return thx::Registry::instance().pluginManager().discoverAndLoad(directory, recursive);
