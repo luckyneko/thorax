@@ -22,6 +22,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -34,8 +35,12 @@ namespace thx::plugin
 	// PluginManager; callers only see value-typed PluginInfo snapshots and
 	// Result<void, Error> outcomes.
 	//
-	// Thread safety: not thread-safe. Protect concurrent calls externally if
-	// needed. (The deferred-dlclose garbage queue used internally is thread-safe.)
+	// Thread safety: every public method takes a recursive mutex covering the
+	// three lifecycle maps. Reentrant calls from inside a plugin's onLoad /
+	// onUnload (e.g., a plugin that loads a sibling) work because the lock is
+	// recursive. The lock is coarse — concurrent loads of independent plugins
+	// serialize — but plugin loading is off the hot path so this is fine. The
+	// deferred-dlclose garbage queue is independently thread-safe.
 	//
 	// Destruction: any plugins still Loaded when the PluginManager is destroyed
 	// are unloaded automatically (services unregistered, DSO handles deferred);
@@ -177,6 +182,7 @@ namespace thx::plugin
 		};
 
 		thx::service::ServiceManager& m_sm;
+		mutable std::recursive_mutex                     m_mutex;
 		std::unordered_map<std::string, DiscoveredEntry> m_discovered;
 		std::unordered_map<std::string, OpenedEntry>     m_opened;
 		std::unordered_map<std::string, LoadedEntry>     m_plugins;

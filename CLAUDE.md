@@ -156,7 +156,7 @@ All state lives inside the manager — there are no move-only handle types cross
 
 **Idempotency rules:** `open` on `Opened`/`Loaded`, `load` on `Loaded`, and `close` on any non-`Opened` state are ok-no-ops. There is no `AlreadyLoaded` error. `unload` on non-`Loaded` returns `NotLoaded`; `forget` on `Opened`/`Loaded` returns `InUse`.
 
-**Thread safety:** not thread-safe — serialise externally if needed. The garbage queue itself is thread-safe.
+**Thread safety:** every public method takes a coarse `recursive_mutex` covering the three lifecycle maps. Concurrent reads (`plugins()` / `pluginInfo()` / `is()`) and writes (`load` / `unload` / `open` / `close` / `discover` / `forget`) serialise. Reentrant calls from inside `onLoad`/`onUnload` (e.g., a plugin that loads a sibling) work because the lock is recursive. The garbage queue is independently thread-safe.
 
 **DSO keep-alive (Milestone 8b).** The deferred-close queue lives in [thx::plugin::PluginGarbage](src/plugin/plugin_garbage.h) — owned by the process-wide `Registry`, accessible via `thx::registry().pluginGarbage()`. The class wraps a mutex + `vector<Library>` with `schedule(Library)`, `collect()`, and `pending()` members. `PluginHandle::close()` moves its `Library` into the queue instead of letting `~Library` run `dlclose`/`FreeLibrary` synchronously. This indirection is what makes it safe for callers to hold `shared_ptr<IService>` handles across `unload()`: the service's destructor and its `shared_ptr` control block both live in plugin code, so the DSO must stay mapped until every reference into it has been released. The queue drains on two occasions:
 

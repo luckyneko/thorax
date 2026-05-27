@@ -322,6 +322,7 @@ PluginManager::finalizeLoad(OpenedEntry opened, std::string const& canonical)
 
 Result<void, Error> PluginManager::discover(std::string const& directory)
 {
+	std::lock_guard<std::recursive_mutex> lock(m_mutex);
 	std::error_code ec;
 	auto iter = std::filesystem::directory_iterator(directory, ec);
 	if (ec)
@@ -381,6 +382,7 @@ Result<void, Error> PluginManager::discover(std::string const& directory)
 
 Result<void, Error> PluginManager::forget(std::string const& path)
 {
+	std::lock_guard<std::recursive_mutex> lock(m_mutex);
 	auto canonical = resolveCanonical(path);
 	auto const& key = canonical.empty() ? path : canonical;
 
@@ -399,6 +401,7 @@ Result<void, Error> PluginManager::forget(std::string const& path)
 
 Result<void, Error> PluginManager::open(std::string const& path)
 {
+	std::lock_guard<std::recursive_mutex> lock(m_mutex);
 	auto canonical = resolveCanonical(path);
 	if (canonical.empty())
 		return Result<void, Error>::err({ErrorCode::FileNotFound,
@@ -433,6 +436,7 @@ Result<void, Error> PluginManager::open(std::string const& path)
 
 Result<void, Error> PluginManager::close(std::string const& path)
 {
+	std::lock_guard<std::recursive_mutex> lock(m_mutex);
 	auto canonical = resolveCanonical(path);
 	auto const& key = canonical.empty() ? path : canonical;
 
@@ -454,6 +458,7 @@ Result<void, Error> PluginManager::close(std::string const& path)
 
 std::size_t PluginManager::closeAllOpened()
 {
+	std::lock_guard<std::recursive_mutex> lock(m_mutex);
 	std::size_t count = m_opened.size();
 	for (auto& [path, entry] : m_opened)
 		m_discovered.emplace(path, DiscoveredEntry{std::move(entry.manifest)});
@@ -463,6 +468,7 @@ std::size_t PluginManager::closeAllOpened()
 
 Result<void, Error> PluginManager::load(std::string const& path)
 {
+	std::lock_guard<std::recursive_mutex> lock(m_mutex);
 	auto canonical = resolveCanonical(path);
 	if (canonical.empty())
 		return Result<void, Error>::err({ErrorCode::FileNotFound,
@@ -514,6 +520,7 @@ Result<void, Error> PluginManager::load(std::string const& path)
 
 Result<void, Error> PluginManager::unload(std::string const& path)
 {
+	std::lock_guard<std::recursive_mutex> lock(m_mutex);
 	auto canonical = resolveCanonical(path);
 	auto const& key = canonical.empty() ? path : canonical;
 
@@ -540,6 +547,7 @@ Result<void, Error> PluginManager::unload(std::string const& path)
 
 LoadSummary PluginManager::discoverAndLoad(std::string const& directory)
 {
+	std::lock_guard<std::recursive_mutex> lock(m_mutex);
 	LoadSummary summary;
 	if (auto r = discover(directory); !r)
 	{
@@ -635,6 +643,7 @@ PluginInfo PluginManager::infoFromLoaded(std::string const& path,
 
 std::vector<PluginInfo> PluginManager::plugins() const
 {
+	std::lock_guard<std::recursive_mutex> lock(m_mutex);
 	std::vector<PluginInfo> result;
 	result.reserve(m_discovered.size() + m_opened.size() + m_plugins.size());
 	for (auto const& [path, entry] : m_discovered)
@@ -648,6 +657,7 @@ std::vector<PluginInfo> PluginManager::plugins() const
 
 std::vector<PluginInfo> PluginManager::plugins(State state) const
 {
+	std::lock_guard<std::recursive_mutex> lock(m_mutex);
 	std::vector<PluginInfo> result;
 	switch (state)
 	{
@@ -672,6 +682,7 @@ std::vector<PluginInfo> PluginManager::plugins(State state) const
 
 std::optional<PluginInfo> PluginManager::pluginInfo(std::string const& path) const
 {
+	std::lock_guard<std::recursive_mutex> lock(m_mutex);
 	auto canonical = resolveCanonical(path);
 	auto const& key = canonical.empty() ? path : canonical;
 
@@ -686,6 +697,7 @@ std::optional<PluginInfo> PluginManager::pluginInfo(std::string const& path) con
 
 bool PluginManager::is(State state, std::string const& path) const
 {
+	std::lock_guard<std::recursive_mutex> lock(m_mutex);
 	auto canonical = resolveCanonical(path);
 	auto const& key = canonical.empty() ? path : canonical;
 

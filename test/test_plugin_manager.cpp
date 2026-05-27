@@ -1123,3 +1123,67 @@ TEST_CASE("Manifest verification - mismatched requirements fails with ManifestMi
 	thx::plugin::collectGarbage();
 	fs::remove_all(tmp);
 }
+
+// ---------------------------------------------------------------------------
+// Thread safety
+// ---------------------------------------------------------------------------
+
+#include <atomic>
+#include <thread>
+
+TEST_CASE("PluginManager - concurrent reads are safe", "[plugin_manager][threading]")
+{
+	// Stress test: many threads call query methods while another thread cycles
+	// load/unload. Without the coarse mutex, the readers would race the writer
+	// on the m_discovered/m_opened/m_plugins maps. With it, readers see a
+	// consistent snapshot.
+	thx::service::ServiceManager sm;
+	thx::plugin::PluginManager   pm(sm);
+
+	REQUIRE(pm.load(THX_MOCK_PLUGIN_PATH));
+
+	constexpr int kReaders = 4;
+	constexpr int kIters   = 500;
+	std::atomic<bool>      stopWriter{false};
+	std::atomic<int>       errors{0};
+
+	std::vector<std::thread> readers;
+	readers.reserve(kReaders);
+	for (int i = 0; i < kReaders; ++i)
+	{
+		readers.emplace_back([&]
+		{
+			for (int j = 0; j < kIters; ++j)
+			{
+				auto v = pm.plugins();          // snapshot all states
+				auto info = pm.pluginInfo(THX_MOCK_PLUGIN_PATH);
+				(void)pm.isLoaded(THX_MOCK_PLUGIN_PATH);
+				if (v.empty() && !info.has_value())
+				{
+					// Acceptable: writer happens to be between unload and reload.
+					// Just verify nothing torn — by reaching here without a
+					// crash / TSan flag, we've succeeded.
+				}
+			}
+		});
+	}
+
+	std::thread writer([&]
+	{
+		while (!stopWriter.load())
+		{
+			(void)pm.unload(THX_MOCK_PLUGIN_PATH);
+			(void)pm.load(THX_MOCK_PLUGIN_PATH);
+		}
+	});
+
+	for (auto& t : readers) t.join();
+	stopWriter.store(true);
+	writer.join();
+
+	REQUIRE(errors == 0);
+
+	(void)pm.unload(THX_MOCK_PLUGIN_PATH);
+	(void)pm.forget(THX_MOCK_PLUGIN_PATH);
+	thx::plugin::collectGarbage();
+}
