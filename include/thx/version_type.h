@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "thx/log.h"
+
 #include <cstdint>
 
 namespace thx
@@ -25,7 +27,9 @@ namespace thx
 	//   bits 16..23 → minor  (0..255)
 	//   bits  0..15 → patch  (0..65535)
 	//
-	// Components above their bit range are truncated on pack().
+	// Components above their bit range trip an assertion in pack(); aborts in
+	// Debug, logs at Error in Release. Silent truncation would let an
+	// incompatible ABI version round-trip to a compatible-looking one.
 	struct Version
 	{
 		uint32_t major{0};
@@ -49,9 +53,14 @@ namespace thx
 		{
 		}
 
-		// Pack to the wire encoding (see comment on the struct).
-		constexpr uint32_t pack() const noexcept
+		// Pack to the wire encoding (see comment on the struct). Not constexpr
+		// because the overflow check goes through the logging facade; pack()
+		// is exclusively used at runtime (thx_abi_version() exports), so the
+		// constexpr was theoretical anyway.
+		uint32_t pack() const noexcept
 		{
+			thx::assertThat(major <= 0xFFu && minor <= 0xFFu && patch <= 0xFFFFu,
+			    "Version::pack: component out of wire-encoding range (major/minor: 8 bits, patch: 16)");
 			return ((major & 0xFFu) << 24)
 			     | ((minor & 0xFFu) << 16)
 			     |  (patch & 0xFFFFu);

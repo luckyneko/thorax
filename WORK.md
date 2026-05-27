@@ -53,11 +53,9 @@ Stress test in `test_plugin_manager.cpp` ([threading] tag) exercises concurrent 
 
 (Previously noted under "Auto-derived manifests" follow-ups; promoted here because it's a real bug, not a deferred feature.)
 
-### `Version::pack()` silently truncates components
+### ~~`Version::pack()` silently truncates components~~ — applied
 
-**What:** `major & 0xFFu`, `minor & 0xFFu`, `patch & 0xFFFFu`. Future v256.0.0 packs to 0.0.0 and the ABI-version check silently accepts incompatible plugins.
-
-**Fix:** `assertThat(major <= 0xFF && minor <= 0xFF && patch <= 0xFFFF, ...)` in `pack()`. Documented behaviour today but the failure mode is invisible — the assert surfaces it.
+`pack()` now asserts that each component fits its wire-encoding width (major/minor: 8 bits, patch: 16) before packing. Aborts in Debug, logs at Error in Release. Dropped `constexpr` on `pack()` — the only consumers are the `thx_abi_version()` exports emitted by `THX_DEFINE_*_PLUGIN`, which run at runtime.
 
 ### `PluginHandle::open` returns `FileNotFound` for any open failure
 
