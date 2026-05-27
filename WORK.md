@@ -114,11 +114,13 @@ Things we've explicitly decided not to ship in v1 but expect to revisit.
 
 Defensive items. None are bugs today; each one closes a class of future surprise.
 
-### `~PluginManager` doesn't drain `PluginGarbage`
+### ~~`~PluginManager` doesn't drain `PluginGarbage`~~ — documented trade-off
 
-By design (documented), but the failure mode is subtle. Architectural rule: in production there's exactly *one* PluginManager (the Registry-owned one) and exactly one PluginGarbage — they're peers at the process level, both owned by Registry. The local-PluginManager test pattern is a workaround for test isolation and shouldn't be read as the canonical design.
+Not a bug — the framework can't safely auto-drain in `~PluginManager` because it has no way to know whether outstanding `ServiceHandle`s into those DSOs remain. Auto-collect with live handles would `dlclose` mapped DSOs and segfault on subsequent handle release (the service's destructor lives in unmapped code).
 
-With one PM, the "leak through static-destruction" path is narrow: only the test pattern triggers it, and ASan won't flag it (the queue holds the resource). Either have `~PluginManager` collect at teardown when it's a non-Registry instance, or eventually retire the local-PM test pattern (make PluginManager constructor private to Registry). The latter is the cleaner long-term move but requires reworking the test-isolation story (the [ActiveServiceManagerScope](src/service/active_service_manager.h) thread-local already gets us most of the way).
+The "leak" only manifests when a test constructs a local `PluginManager`, loads plugins, then lets the PM go out of scope without calling `collectGarbage()`. ASan doesn't flag it (the queue holds the resource); the DSOs sit in the global queue until program exit. CLAUDE.md "DSO keep-alive" now documents the test pattern explicitly — tests that load plugins should drain at teardown like the `[lifetime]` cases already do.
+
+Retiring the local-PluginManager test pattern entirely (making the constructor private to Registry, tests use cleanup-based isolation against the global) is the architectural option if the issue ever becomes acute. Not currently justified.
 
 ### ~~`Result<void, E>::error()` is UB when ok~~ — applied
 

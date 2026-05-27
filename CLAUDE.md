@@ -169,7 +169,9 @@ The class lives separately from `PluginManager` because the queue has to outlive
 
 **Hard rule:** every `ServiceHandle<IService>` into a DSO must be released before the next drain. Because `open()` drains first, this means: if you have unloaded a plugin and are still holding service references, do **not** call `open()` (or `load(path)`) until those references have been dropped. Tests that exercise this contract live in [test/test_plugin_manager.cpp](test/test_plugin_manager.cpp) under the `[lifetime]` tag.
 
-`PluginManager::~PluginManager` calls `onUnload` for every still-loaded plugin and clears its entries, but does **not** drain `PluginGarbage`. Drain explicitly when no service references into those DSOs remain.
+`PluginManager::~PluginManager` calls `onUnload` for every still-loaded plugin and clears its entries, but does **not** drain `PluginGarbage`. The framework can't auto-drain: it has no way to know whether outstanding `ServiceHandle`s into those DSOs remain, and calling `dlclose` while a handle is still alive segfaults on the handle's eventual release (the service's destructor lives in unmapped code). Drain explicitly when no service references into those DSOs remain.
+
+**Test-pattern note.** Tests that construct a local `PluginManager(sm)` are a workaround for per-test isolation; they aren't the canonical design. In production there is exactly one `PluginManager` (Registry-owned). When a local PM goes out of scope, its plugins' DSOs are scheduled into the process-wide `PluginGarbage` and sit there until the next `collectGarbage()` (or program exit). Tests that load plugins should call `thx::plugin::collectGarbage()` at teardown — the `[lifetime]` tests in `test_plugin_manager.cpp` model the pattern. The accumulation is bounded by program exit and ASan won't flag it (the queue holds the resource), but it's better hygiene to drain explicitly.
 
 ### Sidecar manifests
 
