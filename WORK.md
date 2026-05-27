@@ -88,6 +88,18 @@ Things we've explicitly decided not to ship in v1 but expect to revisit.
 - **Manifest install rule.** The in-tree `plugin_logging` / `plugin_io` are installed (via `install(TARGETS ...)`) but their `.thx.json` sidecars are not. A consumer running `discover()` on the install prefix wouldn't find them. Pre-existing bug, not introduced by Phase 5b. Worth fixing when someone actually needs `discover()` to work post-install.
 - **Runtime verification simplification (deferred).** With the manifest derived from `IPlugin` by construction, three of the four load-time checks (name/version/requires) catch *distribution-time* drift only (stale `.thx.json` shipped without its DSO, or vice versa). They're cheap; keeping them is defensible. Drop or downgrade to debug-only if the cost ever shows up.
 
+### Log subsystem refactor
+
+**What:** the log surface (`ILogSink`, `setLogSink(std::shared_ptr<ILogSink>)`, `log(level, msg, location)`, `LogRecord`) hasn't had the same ABI-hardening pass as the service layer. Specific issues:
+
+- `setLogSink` takes `std::shared_ptr<ILogSink>` — same `shared_ptr` control-block-crosses-DSO concern that drove P0 #2's ServiceHandle pattern.
+- One global sink slot, replaced wholesale by `setLogSink`. No layering, no per-plugin override, no filtering.
+- `LogRecord` is value-typed and carries `std::string` — fine on its own, but it's part of the cross-DSO call to `ILogSink::write`.
+
+**Direction (sketch):** introduce a `LogSinkHandle` with intrusive refcount mirroring `ServiceHandle`. Probably also fanout: register sinks rather than replace the singleton, so a host and the framework can both observe records. Filtering at the sink level (per-sink min level). Maybe scoped sinks (push/pop) for tests that want to capture without affecting other tests.
+
+**Status:** explicitly deferred — needs design before code. The current surface works for v1; the refactor is forward-looking. Trigger: when a real consumer needs per-plugin or per-component filtering, or hits the stdlib-mismatch concern in practice.
+
 ### Manifest `tags` array
 
 **What:** an explicit `"tags": ["camera", "experimental"]` array on the manifest, queryable independently of `provides`. Lets a host filter "all camera plugins" across interface kinds — useful when "camera" spans multiple service interfaces (driver + tuning + capture).
@@ -102,15 +114,11 @@ Things we've explicitly decided not to ship in v1 but expect to revisit.
 
 Defensive items. None are bugs today; each one closes a class of future surprise.
 
-### Log sink ABI uses `std::shared_ptr`
-
-`thx::setLogSink` takes `std::shared_ptr<ILogSink>`. The setter is exported, so the shared_ptr's control block crosses the libthorax boundary — same theoretical issue as the now-fixed service-layer ABI. Mitigation: a host calls setLogSink at most a handful of times (typically once), and the sink isn't fanned out across plugins, so a stdlib mismatch is unlikely to actually corrupt anything observable.
-
-**Fix:** mirror the `ServiceHandle` pattern — give `ILogSink` an intrusive refcount + `LogSinkHandle`. Or use raw `ILogSink*` with a documented lifetime contract (caller keeps the sink alive until restoreDefaultLogSink). Smaller refactor than P0 #2 was; defer until someone actually cares.
-
 ### `~PluginManager` doesn't drain `PluginGarbage`
 
-By design (documented), but the failure mode is subtle: a host that destroys a *local* PluginManager (tests do) leaves Library entries in the Registry singleton's queue until static-destruction time. ASan won't flag it (queue holds the resource). Either have `~PluginManager` collect, or expose a PluginManager constructor that takes its own PluginGarbage instance for test isolation.
+By design (documented), but the failure mode is subtle. Architectural rule: in production there's exactly *one* PluginManager (the Registry-owned one) and exactly one PluginGarbage — they're peers at the process level, both owned by Registry. The local-PluginManager test pattern is a workaround for test isolation and shouldn't be read as the canonical design.
+
+With one PM, the "leak through static-destruction" path is narrow: only the test pattern triggers it, and ASan won't flag it (the queue holds the resource). Either have `~PluginManager` collect at teardown when it's a non-Registry instance, or eventually retire the local-PM test pattern (make PluginManager constructor private to Registry). The latter is the cleaner long-term move but requires reworking the test-isolation story (the [ActiveServiceManagerScope](src/service/active_service_manager.h) thread-local already gets us most of the way).
 
 ### `Result<void, E>::error()` is UB when ok
 
