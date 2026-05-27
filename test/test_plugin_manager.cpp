@@ -1191,3 +1191,35 @@ TEST_CASE("PluginManager - concurrent reads are safe", "[plugin_manager][threadi
 	(void)pm.forget(THX_MOCK_PLUGIN_PATH);
 	thx::plugin::collectGarbage();
 }
+
+TEST_CASE("PluginManager::discoverAndLoad - second call reports alreadyLoaded",
+          "[plugin_manager][discover][integration]")
+{
+	namespace fs = std::filesystem;
+
+	auto tmp = fs::temp_directory_path() / "thx_test_discover_already_loaded";
+	fs::remove_all(tmp);
+	fs::create_directories(tmp);
+	auto dst = copyPluginWithSidecar(THX_MOCK_PLUGIN_PATH, tmp);
+
+	thx::service::ServiceManager sm;
+	thx::plugin::PluginManager   loader(sm);
+
+	auto first = loader.discoverAndLoad(tmp.string());
+	REQUIRE(first.loaded.size() == 1);
+	REQUIRE(first.alreadyLoaded.empty());
+	REQUIRE(first.failed.empty());
+
+	// Second call: nothing new on disk, plugin already loaded. Summary
+	// should still surface the plugin — in both `loaded` (it's currently
+	// loaded) and `alreadyLoaded` (it wasn't freshly loaded by this call).
+	auto second = loader.discoverAndLoad(tmp.string());
+	REQUIRE(second.loaded.size() == 1);
+	REQUIRE(second.alreadyLoaded.size() == 1);
+	REQUIRE(second.alreadyLoaded[0] == second.loaded[0]);
+	REQUIRE(second.failed.empty());
+
+	loader.unload(dst.string());
+	thx::plugin::collectGarbage();
+	fs::remove_all(tmp);
+}

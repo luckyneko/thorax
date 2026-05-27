@@ -561,16 +561,56 @@ LoadSummary PluginManager::discoverAndLoad(std::string const& directory)
 		return summary;
 	}
 
-	// Snapshot the paths first — load() moves entries between maps as it
-	// runs, so iterating m_discovered directly would invalidate.
+	// After discover() runs, every plugin in `directory` is either in
+	// m_discovered (newly-seen) or in m_plugins / m_opened (already past
+	// discovery from a previous call). Re-enumerate the directory so the
+	// summary can report already-loaded plugins separately from the
+	// freshly-loaded ones — the WORK.md case where discoverAndLoad is
+	// called twice and the second call should still surface "yes these
+	// plugins are present and loaded" rather than appearing to find nothing.
+	std::error_code ec;
+	auto iter = std::filesystem::directory_iterator(directory, ec);
+	if (ec)
+		return summary;
+
+	constexpr std::string_view kSidecarSuffix = ".thx.json";
+
 	std::vector<std::string> paths;
-	paths.reserve(m_discovered.size());
-	for (auto const& [p, _] : m_discovered)
-		paths.push_back(p);
-	std::sort(paths.begin(), paths.end()); // deterministic load order
+	for (auto const& entry : iter)
+	{
+		auto const& filename = entry.path().filename().string();
+		if (filename.size() <= kSidecarSuffix.size()
+		    || filename.compare(filename.size() - kSidecarSuffix.size(),
+		                        kSidecarSuffix.size(), kSidecarSuffix) != 0)
+			continue;
+
+		auto manifestPath = entry.path().string();
+		std::string dsoPath = manifestPath.substr(
+		    0, manifestPath.size() - kSidecarSuffix.size())
+		    + LIBRARY_EXTENSION;
+		if (!std::filesystem::exists(dsoPath))
+			continue;
+
+		auto canonical = resolveCanonical(dsoPath);
+		if (canonical.empty())
+			continue;
+
+		paths.push_back(std::move(canonical));
+	}
+	std::sort(paths.begin(), paths.end()); // deterministic order
 
 	for (auto const& p : paths)
 	{
+		if (m_plugins.count(p))
+		{
+			// Already loaded before this call. Idempotent — no work to do —
+			// but report it so callers can distinguish "no plugins" from
+			// "plugins present and still loaded".
+			summary.loaded.push_back(p);
+			summary.alreadyLoaded.push_back(p);
+			continue;
+		}
+
 		auto r = load(p);
 		if (r)
 		{

@@ -77,11 +77,22 @@ namespace thx::plugin
 		std::vector<std::string>         services;
 	};
 
-	// Outcome of a discoverAndLoad call: which paths loaded successfully and
-	// which failed (with their associated Error). Either list may be empty.
+	// Outcome of a discoverAndLoad call.
+	//
+	// `loaded`        — every path currently in Loaded state after the call.
+	//                   Includes both newly-loaded paths and paths that were
+	//                   already Loaded before the call (load() is idempotent).
+	// `alreadyLoaded` — subset of `loaded` whose entries existed in Loaded
+	//                   state before the call. Empty on the first call;
+	//                   non-empty when a second discoverAndLoad sees the same
+	//                   plugins still loaded.
+	// `failed`        — paths whose load() returned an error, paired with it.
+	//
+	// Any of the three lists may be empty.
 	struct LoadSummary
 	{
 		std::vector<std::string>                   loaded;
+		std::vector<std::string>                   alreadyLoaded;
 		std::vector<std::pair<std::string, Error>> failed;
 	};
 

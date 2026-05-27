@@ -166,9 +166,9 @@ A host doing reload today must unload → drop all service refs → drain garbag
 
 Currently single-directory. A consumer with `plugins/cameras/`, `plugins/codecs/` etc. has to call `discover` per subdir.
 
-### `LoadSummary` distinguishes already-loaded from freshly-loaded
+### ~~`LoadSummary` distinguishes already-loaded from freshly-loaded~~ — applied
 
-`load()` returns ok-noop for already-Loaded paths, so `discoverAndLoad` reports them in `loaded` on the second call. Either document or split into `freshlyLoaded`/`alreadyLoaded`.
+`LoadSummary` now has an `alreadyLoaded` subset of `loaded`. `discoverAndLoad` re-enumerates the directory on every call so the summary reports all plugins present in the directory, partitioning them into freshly-loaded vs already-loaded. Test in `test_plugin_manager.cpp` covers the second-call case.
 
 ---
 
