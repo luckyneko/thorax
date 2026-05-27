@@ -14,6 +14,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <type_traits>
 
 namespace thx::service
 {
@@ -127,7 +128,13 @@ namespace thx::service
 		// final prevents downstream types from changing the identity of an
 		// already-defined service interface.
 		ServiceID id() const final { return Derived::staticId(); }
-		Version version() const final { return Derived::staticVersion(); }
+		Version version() const final
+		{
+			static_assert(std::is_same_v<decltype(Derived::staticVersion()), Version>,
+			    "Service<Derived>: Derived must define "
+			    "`static constexpr thx::Version staticVersion()`");
+			return Derived::staticVersion();
+		}
 	};
 
 } // namespace thx::service

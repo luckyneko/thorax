@@ -102,4 +102,9 @@ namespace thx
 		std::size_t  m_size;
 	};
 
+	// ABI lock-down — StringView crosses plugin boundaries; pin the layout
+	// we promised the docs (single ptr + size_t, no padding under standard ABIs).
+	static_assert(sizeof(StringView) == sizeof(const char*) + sizeof(std::size_t),
+	    "StringView must have layout { const char* data, size_t size } for the documented ABI");
+
 } // namespace thx

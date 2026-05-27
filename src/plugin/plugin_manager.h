@@ -26,6 +26,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace thx::plugin
@@ -199,6 +200,10 @@ namespace thx::plugin
 		std::unordered_map<std::string, DiscoveredEntry> m_discovered;
 		std::unordered_map<std::string, OpenedEntry>     m_opened;
 		std::unordered_map<std::string, LoadedEntry>     m_plugins;
+		// Sidecar paths we've already warned about for having no paired DSO.
+		// discover() only warns on first observation per path; rescans skip
+		// silently so a known-broken pair doesn't spam logs.
+		std::unordered_set<std::string>                  m_warnedMissingDso;
 
 		static std::string resolveCanonical(std::string const& path);
 

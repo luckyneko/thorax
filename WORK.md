@@ -174,14 +174,21 @@ Currently single-directory. A consumer with `plugins/cameras/`, `plugins/codecs/
 
 ## Priority 5 — minor code quality
 
-One-line items. Group into a single commit when convenient.
+~~All items below~~ — applied (one swept commit).
 
-- `static_assert(sizeof(Span<int>) == sizeof(void*) + sizeof(std::size_t))` in `span.h`; same for `StringView`. Locks down the documented ABI shape.
-- `static_assert(std::is_invocable_r_v<Version, decltype(&Derived::staticVersion)>, ...)` inside `Service<Derived>`. Replaces the deep template error with a one-line diagnostic.
-- `discover()` re-warns about missing sidecars on every rescan. Demote to `Info` after first observation, or dedupe via a "warned" set keyed on path.
-- `Result<T>::map` is `const&` only. Add `&&` overload for move-only `T`.
-- `service/service.h` and `plugin/plugin.h` facades include `registry.h` transitively pulling everything. Forward-declare manager types in the facades; move `#include "registry.h"` into the `.cpp` consumers. Saves ~no compile time today; pays off as the framework grows.
-- `Library::sym` sets `m_error` on failure as a side effect that `bind()` relies on. Either move the error-set into `bind()` explicitly, or document that `sym` is the canonical place for the error message.
+- ABI static_asserts on Span and StringView lock down the documented
+  `{ ptr, size_t }` layout.
+- `Service<Derived>::version()` has a static_assert that Derived's
+  staticVersion returns `thx::Version`, giving a one-line diagnostic
+  instead of a deeper template error.
+- `discover()` only warns about missing-DSO sidecars once per path
+  (tracked in `m_warnedMissingDso`); subsequent rescans skip silently.
+- `Result<T>::map` got an `&&` overload that moves the contained value
+  through `f`. Supports move-only `T`.
+- Public-/private-header split (commit `ec78cba`) already removed the
+  facade-pulls-registry.h chain. Marked applied implicitly.
+- `Library::sym` doc-comment now spells out the m_error side effect
+  that `bind()` relies on.
 
 ---
 

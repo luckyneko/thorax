@@ -350,9 +350,14 @@ Result<void, Error> PluginManager::discover(std::string const& directory)
 
 		if (!std::filesystem::exists(dsoPath))
 		{
-			thx::log(LogLevel::Warn,
-			    "discover: sidecar '" + manifestPath
-			    + "' has no paired DSO at '" + dsoPath + "' — skipping");
+			// Warn once per path — rescanning the same broken pair otherwise
+			// spams logs every iteration.
+			if (m_warnedMissingDso.insert(manifestPath).second)
+			{
+				thx::log(LogLevel::Warn,
+				    "discover: sidecar '" + manifestPath
+				    + "' has no paired DSO at '" + dsoPath + "' — skipping");
+			}
 			continue;
 		}
 

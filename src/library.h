@@ -136,6 +136,12 @@ namespace thx
 		// missing or the library isn't open. Most callers should use bind()
 		// instead — it does the type-cast and the validity bookkeeping in
 		// one step.
+		//
+		// Side effect: on lookup failure, sym() updates error() with the
+		// platform diagnostic. bind() relies on this — when a symbol lookup
+		// inside bind() returns null, the bind clears its validity bit but
+		// expects sym() to have already recorded the reason in m_error.
+		// Direct callers of sym() will see the same behaviour.
 		void* sym(char const* name) noexcept;
 
 	private:

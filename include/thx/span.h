@@ -44,4 +44,9 @@ namespace thx
 		std::size_t  m_size;
 	};
 
+	// ABI lock-down — Span<T> crosses plugin boundaries; pin the layout we
+	// promised the docs (single ptr + size_t, no padding under standard ABIs).
+	static_assert(sizeof(Span<int>) == sizeof(int*) + sizeof(std::size_t),
+	    "Span<T> must have layout { T* data, size_t size } for the documented ABI");
+
 } // namespace thx

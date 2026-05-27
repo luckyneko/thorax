@@ -84,6 +84,10 @@ namespace thx
 		//
 		// Example:
 		//   Result<int>::ok(2).map([](int n) { return n * 10; })  // → Result<int>::ok(20)
+		//
+		// Two overloads: const& copies the contained value into f; && moves
+		// it. The rvalue overload supports move-only T (e.g. unique_ptr) and
+		// avoids a copy when the Result is a temporary.
 		template <typename F>
 		auto map(F&& f) const& -> Result<std::decay_t<std::invoke_result_t<F, T const&>>, E>
 		{
@@ -91,6 +95,15 @@ namespace thx
 			if (isErr())
 				return Result<U, E>::err(error());
 			return Result<U, E>::ok(std::forward<F>(f)(value()));
+		}
+
+		template <typename F>
+		auto map(F&& f) && -> Result<std::decay_t<std::invoke_result_t<F, T&&>>, E>
+		{
+			using U = std::decay_t<std::invoke_result_t<F, T&&>>;
+			if (isErr())
+				return Result<U, E>::err(std::move(error()));
+			return Result<U, E>::ok(std::forward<F>(f)(std::move(value())));
 		}
 
 	private:
