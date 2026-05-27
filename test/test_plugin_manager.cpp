@@ -92,11 +92,15 @@ TEST_CASE("PluginHandle - default is empty", "[plugin_handle]")
 	REQUIRE(!bool(h));
 }
 
-TEST_CASE("PluginHandle::open - missing file returns FileNotFound", "[plugin_handle]")
+TEST_CASE("PluginHandle::open - unloadable path returns OpenFailed", "[plugin_handle]")
 {
+	// PluginHandle::open doesn't pre-stat the file; any dlopen/LoadLibrary
+	// failure (including "no such file") surfaces as OpenFailed. The actual
+	// reason is in the error message. PluginManager's resolveCanonical step
+	// is what distinguishes genuinely-missing paths and returns FileNotFound.
 	auto r = thx::plugin::PluginHandle::open("/nonexistent/path/plugin.dylib");
 	REQUIRE(!r);
-	REQUIRE(r.error().code == thx::ErrorCode::FileNotFound);
+	REQUIRE(r.error().code == thx::ErrorCode::OpenFailed);
 }
 
 TEST_CASE("PluginHandle::open - valid mock plugin", "[plugin_handle]")

@@ -20,7 +20,8 @@ namespace thx
 	enum class ErrorCode
 	{
 		Unknown = 0,
-		FileNotFound,
+		FileNotFound,          // path does not exist on disk
+		OpenFailed,            // file exists but the platform loader rejected it (permissions, missing transitive deps, malformed DSO, …)
 		SymbolNotFound,
 		FactoryFailed,
 		NotLoaded,

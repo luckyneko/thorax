@@ -57,11 +57,9 @@ Stress test in `test_plugin_manager.cpp` ([threading] tag) exercises concurrent 
 
 `pack()` now asserts that each component fits its wire-encoding width (major/minor: 8 bits, patch: 16) before packing. Aborts in Debug, logs at Error in Release. Dropped `constexpr` on `pack()` — the only consumers are the `thx_abi_version()` exports emitted by `THX_DEFINE_*_PLUGIN`, which run at runtime.
 
-### `PluginHandle::open` returns `FileNotFound` for any open failure
+### ~~`PluginHandle::open` returns `FileNotFound` for any open failure~~ — applied
 
-**What:** Permissions errors, missing transitive deps, malformed DSOs — all surface as `ErrorCode::FileNotFound` with the real text in `message`. Misleading code; tools that branch on `ErrorCode` will misclassify.
-
-**Fix:** Add `ErrorCode::OpenFailed` (or rename `FileNotFound` to something less specific) and use it in `PluginHandle::open`'s catch-all path. Reserve `FileNotFound` for cases we actually know the file is missing (e.g., the sidecar lookup).
+Added `ErrorCode::OpenFailed` for catch-all `dlopen`/`LoadLibrary` failures (permissions, missing transitive deps, malformed DSOs, etc.). The platform error text remains in the `message` field. `FileNotFound` is now reserved for paths that genuinely don't exist on disk — `parseManifest` (which opens via `ifstream`) and `PluginManager::resolveCanonical` (which uses `std::filesystem::canonical`) keep using it.
 
 ### Cross-DSO `dynamic_cast` on user service interfaces doesn't work
 

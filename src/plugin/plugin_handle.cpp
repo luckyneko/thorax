@@ -62,8 +62,13 @@ Result<PluginHandle, Error> PluginHandle::open(std::string const& path)
 	lib.open(path);
 	if (!lib)
 	{
+		// Catch-all for dlopen / LoadLibrary failures: missing transitive
+		// deps, permissions errors, malformed DSO, etc. The exact reason is
+		// in the platform error string. We don't pre-check existence here —
+		// PluginManager's resolveCanonical step is the layer that reports
+		// FileNotFound for genuinely-missing paths.
 		auto msg = lib.error();
-		return Result<PluginHandle, Error>::err({ErrorCode::FileNotFound,
+		return Result<PluginHandle, Error>::err({ErrorCode::OpenFailed,
 			msg.empty() ? path : msg});
 	}
 
