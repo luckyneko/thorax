@@ -28,11 +28,7 @@ public:
 
 	bool onLoad() override
 	{
-		thx::service::registerService<thx_mock::ServiceA>(
-			[]() -> std::shared_ptr<thx::service::IService>
-			{
-				return std::make_shared<thx_mock::ServiceA>();
-			});
+		thx::service::registerService<thx_mock::ServiceA>();
 		return false; // PluginManager must roll back the ServiceA registration.
 	}
 

@@ -60,8 +60,8 @@ namespace
 
 		bool onLoad() override
 		{
-			bool ok_a = thx::service::registerService<ServiceA>([] { return std::make_shared<ServiceA>(); });
-			bool ok_b = thx::service::registerService<ServiceB>([] { return std::make_shared<ServiceB>(); });
+			bool ok_a = thx::service::registerService<ServiceA>();
+			bool ok_b = thx::service::registerService<ServiceB>();
 			return ok_a && ok_b;
 		}
 

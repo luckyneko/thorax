@@ -66,9 +66,9 @@ struct MinimalService : thx::service::IService
 	thx::Version   version() const override { return thx::Version{1, 0, 0};     }
 };
 
-auto make_minimal = []() -> std::shared_ptr<thx::service::IService>
+auto make_minimal = []() -> thx::service::IService*
 {
-	return std::make_shared<MinimalService>();
+	return new MinimalService();
 };
 
 } // namespace
@@ -195,7 +195,8 @@ TEST_CASE("ServiceManager - null factory logs Error", "[log][service_manager]")
 	SinkGuard g;
 	thx::service::ServiceManager sm;
 
-	sm.registerService(thx::service::ServiceID("test.Null"), thx::Version{1, 0, 0}, nullptr);
+	sm.registerService(thx::service::ServiceID("test.Null"), thx::Version{1, 0, 0},
+	                   thx::service::ServiceFactory{});  // empty factory — invoke is null
 
 	REQUIRE(g.hasLevel(thx::LogLevel::Error));
 }
@@ -228,7 +229,8 @@ TEST_CASE("ServiceManager - errors route to installed sink", "[log][service_mana
 	thx::setLogSink(sink);
 
 	thx::service::ServiceManager sm;
-	sm.registerService(thx::service::ServiceID("test.Static"), thx::Version{1, 0, 0}, nullptr);
+	sm.registerService(thx::service::ServiceID("test.Static"), thx::Version{1, 0, 0},
+	                   thx::service::ServiceFactory{});
 
 	thx::restoreDefaultLogSink();
 

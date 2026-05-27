@@ -40,8 +40,7 @@ TEST_CASE("thx::service:: facades round-trip register / get / unregister",
 
 	REQUIRE(getService<FacadeProbe>() == nullptr);
 
-	REQUIRE(registerService<FacadeProbe>([]
-	    { return std::make_shared<FacadeProbe>(); }));
+	REQUIRE(registerService<FacadeProbe>());
 
 	auto svc = getService<FacadeProbe>();
 	REQUIRE(svc != nullptr);
@@ -57,8 +56,7 @@ TEST_CASE("thx::service::listServices reflects the Registry-owned manager",
 {
 	// Register a single service via the facade and confirm it appears in
 	// the listServices snapshot.
-	REQUIRE(thx::service::registerService<FacadeProbe>([]
-	    { return std::make_shared<FacadeProbe>(); }));
+	REQUIRE(thx::service::registerService<FacadeProbe>());
 
 	bool found = false;
 	for (auto const& info : thx::service::listServices())

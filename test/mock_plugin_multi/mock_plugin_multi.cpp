@@ -31,16 +31,8 @@ public:
 
 	bool onLoad() override
 	{
-		bool a = thx::service::registerService<thx_mock::ServiceA>(
-			[]() -> std::shared_ptr<thx::service::IService>
-			{
-				return std::make_shared<thx_mock::ServiceA>();
-			});
-		bool b = thx::service::registerService<thx_mock::ServiceB>(
-			[]() -> std::shared_ptr<thx::service::IService>
-			{
-				return std::make_shared<thx_mock::ServiceB>();
-			});
+		bool a = thx::service::registerService<thx_mock::ServiceA>();
+		bool b = thx::service::registerService<thx_mock::ServiceB>();
 		return a && b;
 	}
 

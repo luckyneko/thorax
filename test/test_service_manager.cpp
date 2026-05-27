@@ -75,8 +75,8 @@ namespace
 	{
 		return sm.registerService(
 			thx::service::ServiceID(id), ver,
-			[=]()
-			{ return std::make_shared<TestService>(id, ver, constructed, destroyed); });
+			thx::service::makeServiceFactory([=]() -> thx::service::IService*
+			{ return new TestService(id, ver, constructed, destroyed); }));
 	}
 
 } // namespace
@@ -122,11 +122,12 @@ TEST_CASE("ServiceManager - unregister unknown ID returns false", "[service_mana
 	REQUIRE_FALSE(sm.unregisterService(kServiceA));
 }
 
-TEST_CASE("ServiceManager - null factory rejected", "[service_manager]")
+TEST_CASE("ServiceManager - empty factory rejected", "[service_manager]")
 {
 	thx::service::ServiceManager sm;
 
-	REQUIRE_FALSE(sm.registerService(kServiceA, kV100, nullptr));
+	thx::service::ServiceFactory empty{};  // invoke=nullptr, etc.
+	REQUIRE_FALSE(sm.registerService(kServiceA, kV100, empty));
 }
 
 TEST_CASE("ServiceManager - factory returning null rejected", "[service_manager]")
@@ -134,7 +135,7 @@ TEST_CASE("ServiceManager - factory returning null rejected", "[service_manager]
 	thx::service::ServiceManager sm;
 
 	REQUIRE_FALSE(sm.registerService(kServiceA, kV100,
-									  []() -> std::shared_ptr<thx::service::IService>
+									  []() -> thx::service::IService*
 									  { return nullptr; }));
 	REQUIRE(sm.getService<TestService>(kServiceA) == nullptr);
 }
@@ -144,10 +145,10 @@ TEST_CASE("ServiceManager - factory throwing releases the reservation",
 {
 	thx::service::ServiceManager sm;
 
-	// First call: factory throws. The reservation must not leak â€” a follow-up
+	// First call: factory throws. The reservation must not leak — a follow-up
 	// registration with the same ID must succeed.
 	REQUIRE_THROWS(sm.registerService(kServiceA, kV100,
-		[]() -> std::shared_ptr<thx::service::IService>
+		[]() -> thx::service::IService*
 		{
 			throw std::runtime_error("boom");
 		}));
@@ -166,7 +167,8 @@ TEST_CASE("ServiceManager - declared version mismatch rejected",
 	// previously this was assert-only and silently committed in Release).
 	REQUIRE_FALSE(sm.registerService(
 		kServiceA, kV100,
-		[]() { return std::make_shared<TestService>("thx.test.ServiceA", kV200); }));
+		[]() -> thx::service::IService*
+		{ return new TestService("thx.test.ServiceA", kV200); }));
 	REQUIRE(sm.getService<TestService>(kServiceA) == nullptr);
 }
 
@@ -191,17 +193,17 @@ TEST_CASE("ServiceManager - duplicate registration is rejected",
 	int construct_count = 0;
 	bool flag = false;
 
-	REQUIRE(sm.registerService(kServiceA, kV100, [&]()
+	REQUIRE(sm.registerService(kServiceA, kV100, [&]() -> thx::service::IService*
 								{
 		++construct_count;
-		return std::make_shared<TestService>("thx.test.ServiceA", kV100, &flag); }));
+		return new TestService("thx.test.ServiceA", kV100, &flag); }));
 
 	// Second registration with the same ID must be rejected; the factory is
 	// never invoked.
-	REQUIRE_FALSE(sm.registerService(kServiceA, kV100, [&]()
+	REQUIRE_FALSE(sm.registerService(kServiceA, kV100, [&]() -> thx::service::IService*
 									  {
 		++construct_count;
-		return std::make_shared<TestService>("thx.test.ServiceA", kV100); }));
+		return new TestService("thx.test.ServiceA", kV100); }));
 
 	REQUIRE(construct_count == 1);
 	REQUIRE(sm.listServices().size() == 1);
@@ -213,9 +215,9 @@ TEST_CASE("ServiceManager - onConstruct failure aborts registration",
 	thx::service::ServiceManager sm;
 
 	bool aborted = false;
-	sm.registerService(kServiceA, kV100, [&]()
+	sm.registerService(kServiceA, kV100, [&]() -> thx::service::IService*
 						{
-		auto svc = std::make_shared<TestService>("thx.test.ServiceA", kV100);
+		auto* svc = new TestService("thx.test.ServiceA", kV100);
 		svc->m_constructResult = false;
 		aborted = true;
 		return svc; });
@@ -230,9 +232,9 @@ TEST_CASE("ServiceManager - onDestroy called when last registrant unregisters",
 	thx::service::ServiceManager sm;
 	bool destroyed = false;
 
-	sm.registerService(kServiceA, kV100, [&]()
-						{ return std::make_shared<TestService>("thx.test.ServiceA", kV100,
-															   nullptr, &destroyed); });
+	sm.registerService(kServiceA, kV100, [&]() -> thx::service::IService*
+						{ return new TestService("thx.test.ServiceA", kV100,
+												 nullptr, &destroyed); });
 
 	REQUIRE_FALSE(destroyed);
 	sm.unregisterService(kServiceA);
@@ -245,15 +247,16 @@ TEST_CASE("ServiceManager - re-registration after unregister succeeds",
 	thx::service::ServiceManager sm;
 	bool destroyed_first = false;
 
-	REQUIRE(sm.registerService(kServiceA, kV100, [&]()
-								{ return std::make_shared<TestService>("thx.test.ServiceA", kV100,
-																	   nullptr, &destroyed_first); }));
+	REQUIRE(sm.registerService(kServiceA, kV100, [&]() -> thx::service::IService*
+								{ return new TestService("thx.test.ServiceA", kV100,
+														 nullptr, &destroyed_first); }));
 	sm.unregisterService(kServiceA);
 	REQUIRE(destroyed_first);
 
 	// After unregister, the slot is free for a fresh registration.
 	REQUIRE(sm.registerService(kServiceA, kV100,
-								[]() { return std::make_shared<TestService>("thx.test.ServiceA", kV100); }));
+								[]() -> thx::service::IService*
+								{ return new TestService("thx.test.ServiceA", kV100); }));
 }
 
 TEST_CASE("ServiceManager - unregister releases shared_ptr ownership after onDestroy",
@@ -264,10 +267,10 @@ TEST_CASE("ServiceManager - unregister releases shared_ptr ownership after onDes
 
 	{
 		// Outer scope holds no reference after registration.
-		auto factory = [&]()
+		auto factory = [&]() -> thx::service::IService*
 		{
-			return std::make_shared<TestService>("thx.test.ServiceA", kV100,
-												 nullptr, &dtor_called);
+			return new TestService("thx.test.ServiceA", kV100,
+								   nullptr, &dtor_called);
 		};
 		sm.registerService(kServiceA, kV100, std::move(factory));
 	}
@@ -360,8 +363,8 @@ TEST_CASE("ServiceManager - concurrent register and getService is safe",
 		threads.emplace_back([&]()
 							 {
 			if (sm.registerService(kServiceA, kV100,
-			        []() { return std::make_shared<TestService>(
-			                   "thx.test.ServiceA", kV100); }))
+			        []() -> thx::service::IService*
+			        { return new TestService("thx.test.ServiceA", kV100); }))
 				++registered;
 
 			sm.getService<TestService>(kServiceA); });
@@ -416,7 +419,7 @@ TEST_CASE("ServiceManager - type-deducing register and get", "[service_manager][
 
 	REQUIRE(sm.registerService<ICountingService>(
 		[]()
-		{ return std::make_shared<CountingServiceImpl>(); }));
+		{ return new CountingServiceImpl(); }));
 
 	auto svc = sm.getService<ICountingService>();
 	REQUIRE(svc != nullptr);
@@ -429,7 +432,7 @@ TEST_CASE("ServiceManager - type-deducing unregister", "[service_manager][crtp]"
 	thx::service::ServiceManager sm;
 	sm.registerService<ICountingService>(
 		[]()
-		{ return std::make_shared<CountingServiceImpl>(); });
+		{ return new CountingServiceImpl(); });
 
 	REQUIRE(sm.unregisterService<ICountingService>());
 	REQUIRE(sm.getService<ICountingService>() == nullptr);
@@ -440,7 +443,7 @@ TEST_CASE("ServiceManager - id() and version() match static metadata", "[service
 	thx::service::ServiceManager sm;
 	sm.registerService<ICountingService>(
 		[]()
-		{ return std::make_shared<CountingServiceImpl>(); });
+		{ return new CountingServiceImpl(); });
 
 	auto svc = sm.getService<ICountingService>();
 	REQUIRE(svc != nullptr);
@@ -456,7 +459,7 @@ TEST_CASE("ServiceManager - type-deducing and explicit-ID APIs are interchangeab
 	// Register via type-deducing API.
 	sm.registerService<ICountingService>(
 		[]()
-		{ return std::make_shared<CountingServiceImpl>(); });
+		{ return new CountingServiceImpl(); });
 
 	// Retrieve via explicit-ID API â€” same entry.
 	auto svc = sm.getService<ICountingService>(ICountingService::staticId());
@@ -509,7 +512,7 @@ TEST_CASE("ServiceManager - auto-derived ID used for register and get",
 
 	REQUIRE(sm.registerService<thx::test::AutoService>(
 		[]()
-		{ return std::make_shared<thx::test::AutoServiceImpl>(); }));
+		{ return new thx::test::AutoServiceImpl(); }));
 
 	auto svc = sm.getService<thx::test::AutoService>();
 	REQUIRE(svc != nullptr);

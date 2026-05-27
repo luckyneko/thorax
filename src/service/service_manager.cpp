@@ -13,13 +13,36 @@
 namespace thx::service
 {
 
+namespace
+{
+	// Run the factory's destroyCtx exactly once on every exit path. Used as
+	// an RAII guard around the body of registerService.
+	struct FactoryCleanup
+	{
+		ServiceFactory& factory;
+		bool active = true;
+
+		~FactoryCleanup() noexcept
+		{
+			if (active && factory.destroyCtx)
+				factory.destroyCtx(factory.ctx);
+		}
+
+		void disarm() noexcept { active = false; }
+	};
+}
+
 bool ServiceManager::registerService(ServiceID id, Version version, ServiceFactory factory)
 {
-	if (!factory)
+	// Always run destroyCtx, regardless of outcome. Disarmed only if invoke
+	// succeeds and we've made the ctx no longer relevant (which happens once
+	// it returns — the captured state was a one-shot construction).
+	FactoryCleanup cleanup{factory};
+
+	if (!factory.invoke)
 	{
-		// No reservation taken yet — nothing to release here.
 		thx::log(LogLevel::Error,
-		    std::string("registerService: null factory for '") + id.name() + "'");
+		    std::string("registerService: null factory.invoke for '") + id.name() + "'");
 		return false;
 	}
 
@@ -54,14 +77,18 @@ bool ServiceManager::registerService(ServiceID id, Version version, ServiceFacto
 	std::shared_ptr<IService> service;
 	try
 	{
-		service = factory();
-		if (!service)
+		IService* raw = factory.invoke(factory.ctx);
+		if (!raw)
 		{
 			releaseReservation();
 			thx::log(LogLevel::Error,
 			    std::string("registerService: factory returned null for '") + id.name() + "'");
 			return false;
 		}
+		// Wrap the raw pointer in shared_ptr. The default deleter calls
+		// `delete raw` which, via IService's virtual destructor, runs the
+		// concrete service's destructor — regardless of which DSO allocated it.
+		service = std::shared_ptr<IService>(raw);
 
 		// Verify the service reports the version the caller claimed. Mismatch is
 		// a programming error: refuse the registration so Release builds notice

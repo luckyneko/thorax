@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Thorax is a C++17 cross-platform plugin framework. The core is a static library (`libthorax.a` / `thorax.lib`) plus optional in-tree plugins. Plugins are shared libraries (`.dylib`/`.so`/`.dll`) loaded at runtime through `thx::plugin::PluginManager` and registered with the `thx::service::ServiceManager` singleton.
+Thorax is a C++17 cross-platform plugin framework. The core is a shared library (`libthorax.dylib` / `libthorax.so` / `thorax.dll`) plus optional in-tree plugins. Plugins are shared libraries (`.dylib`/`.so`/`.dll`) loaded at runtime through the internal `PluginManager` (reached via the `thx::plugin::*` facade functions) and registered with the internal `ServiceManager` (reached via `thx::service::*` facades). The library is built with hidden visibility; only `THX_API`-decorated symbols cross the boundary. Both managers live behind the public-header facades — neither class appears on the public API surface.
 
 This file is the authoritative description of current architecture, contracts, and conventions. For *why* a piece is shaped the way it is, check git log on the corresponding source file. Outstanding work and deferred features live in [WORK.md](WORK.md).
 
@@ -26,14 +26,14 @@ cmake --build build --parallel
 ctest --test-dir build --output-on-failure
 
 # Run a single test case (Catch2 tag/name match)
-build/test-thorax "ServiceManager registers and retrieves a service"
-build/test-thorax "[plugin_manager]"          # by tag
-build/test-thorax --list-tests
+build/test/test-thorax "ServiceManager registers and retrieves a service"
+build/test/test-thorax "[plugin_manager]"          # by tag
+build/test/test-thorax --list-tests
 ```
 
 CMake options (all default ON when configured as the top-level project, OFF when bundled as a subproject): `THORAX_BUILD_TESTING`, `THORAX_BUILD_EXAMPLES`, `THORAX_BUILD_PLUGINS`, `THORAX_INSTALL`, `THORAX_SANITIZE`.
 
-The test binary is `build/test-thorax`. CTest also runs an `examples.host` integration test and, when `THORAX_INSTALL` is on, an `install.*` smoke test that installs the library into `build/test_install_prefix/` and builds [test/consumer/](test/consumer/) against it via `find_package(Thorax)`.
+The test binary is `build/test/test-thorax`. CTest also runs an `examples.host` integration test and, when `THORAX_INSTALL` is on, an `install.*` smoke test that installs the library into `build/test_install_prefix/` and builds [test/consumer/](test/consumer/) against it via `find_package(Thorax)`.
 
 CI matrix lives in [.github/workflows/](.github/workflows/): macOS (Apple Clang), Linux (GCC 9/12/14, Clang 14/17/18 — Clang 17 runs Debug + ASan/UBSan), Windows (MSVC 2022/2025). GCC 9.1 is the documented minimum (CMake enforces this). Treat warnings as errors on every compiler (`-Werror -Wall -Wextra` / `/WX /W4`), centralised in [cmake/thx_warnings.cmake](cmake/thx_warnings.cmake) via `thx_set_warnings(<target>)`.
 
@@ -51,45 +51,54 @@ A service interface is just `struct IFooService : thx::service::Service<IFooServ
 
 `thx::plugin::IPlugin` ([include/thx/plugin/iplugin.h](include/thx/plugin/iplugin.h)) and `thx::service::IService` ([include/thx/service/iservice.h](include/thx/service/iservice.h)) are distinct concepts:
 
-- **`IPlugin`** is what a DSO produces. Each DSO instantiates exactly one `IPlugin`, which reports a name and version, may declare versioned `required()` service dependencies, and registers any number of services in `onLoad(ServiceManager&)` / unregisters them in `onUnload(ServiceManager&)`. The loader rejects the load if `onLoad` returns false or if any `required()` entry is missing or registered at a too-old version.
-- **`IService`** is what gets registered in `ServiceManager`. Services have their own `id()`, `version()`, and optional `onConstruct()` / `onDestroy()` lifecycle hooks; they have no concept of which DSO they came from.
+- **`IPlugin`** is what a DSO produces. Each DSO instantiates exactly one `IPlugin`, which reports a name and version, may declare versioned `required()` service dependencies, and registers any number of services in `onLoad()` / unregisters them in `onUnload()` — both take no parameters; plugin code uses the `thx::service::*` facade functions. The loader rejects the load if `onLoad` returns false or if any `required()` entry is missing or registered at a too-old version.
+- **`IService`** is what gets registered. Services have their own `id()`, `version()`, and optional `onConstruct()` / `onDestroy()` lifecycle hooks; they have no concept of which DSO they came from.
 
 The common one-service-per-DSO case is handled by `thx::plugin::ServicePluginShim<T>` (same header), which the `THX_DEFINE_SERVICE_PLUGIN(ServiceType)` macro emits for you.
 
 ### Registry
 
-[thx::Registry](include/thx/registry.h) is the framework's only static singleton. It owns three things by value: `PluginGarbage`, `ServiceManager`, and `PluginManager` — declared in that order so destruction runs `~PluginManager` → `~ServiceManager` → `~PluginGarbage`, which is the only correct order (the manager schedules DSOs into the garbage queue at teardown, so the queue must outlive it). `Registry::instance()` constructs lazily on first call and persists until program exit. Member addresses are stable — callers may take and hold references freely.
+`Registry` ([src/registry.h](src/registry.h), private) is the framework's only static singleton. It owns three things by value: `PluginGarbage`, `ServiceManager`, and `PluginManager` — declared in that order so destruction runs `~PluginManager` → `~ServiceManager` → `~PluginGarbage`, which is the only correct order (the manager schedules DSOs into the garbage queue at teardown, so the queue must outlive it). `Registry::instance()` constructs lazily on first call and persists until program exit.
 
-Access pattern: `thx::registry().serviceManager()` / `.pluginManager()` / `.pluginGarbage()`. The individual manager classes deliberately do **not** expose their own `::instance()` accessors; Registry is the one entry point. Tests that need isolated state continue to construct local `ServiceManager` / `PluginManager` instances directly (the public default constructors are preserved for this).
+Because libthorax is a shared library, *all* DSOs in the process (the host plus every loaded plugin) link against the same libthorax instance and resolve `Registry::instance()` to the same singleton. There is no "host registry vs plugin registry" — they're literally the same memory.
 
-Lifecycle hooks (all free functions in the `thx` namespace, declared in `registry.h`):
+The `Registry` class itself is private (in `src/`); consumers never see it. Public-API access goes through the `thx::*` lifecycle and `thx::service::*` / `thx::plugin::*` facade functions.
 
-- `thx::initialise(debugName)` — records an optional human-readable name on the Registry. Returns `true` if this call set the name, `false` if a previous `initialise()` already did. Calling `initialise()` is *not* required to use the framework; it's purely for diagnostics.
-- `thx::shutdown()` — drains the deferred-close queue (via `PluginGarbage::collect()`) and clears the debug name. Does **not** destroy the Registry — the singleton persists until program exit. Safe to call multiple times. Callers MUST release any `shared_ptr<IService>` references into unloaded DSOs before invoking it.
-- `thx::registry()` — shorthand for `Registry::instance()`.
+Lifecycle hooks (free functions in `thx::`, declared in [include/thx/lifecycle.h](include/thx/lifecycle.h)):
 
-User-facing free-function shims `thx::plugin::collectGarbage()` / `thx::plugin::pendingGarbage()` operate on the Registry-owned queue and remain the recommended entry points for code that just wants to drain.
+- `thx::initialise(debugName)` — records an optional human-readable name. Returns `true` if this call set the name, `false` if a previous `initialise()` already did. Calling `initialise()` is *not* required.
+- `thx::shutdown()` — drains the deferred-close queue and clears the debug name. Does **not** destroy the Registry — the singleton persists until program exit. Safe to call multiple times. Callers MUST release any `shared_ptr<IService>` references into unloaded DSOs before invoking it.
 
 ### Free-function facades
 
-Two "system-level" headers — `thx/<layer>/<layer>.h` — reduce the verbosity of `thx::registry().xxxManager().method(...)` for typical host code:
+Two "system-level" headers — `thx/<layer>/<layer>.h` — are the only way for consumers to reach the registry:
 
-- [thx/service/service.h](include/thx/service/service.h) — inline `thx::service::registerService<T>`, `unregisterService<T>`, `getService<T>`, `listServices`. Same names as the matching `ServiceManager` methods.
-- [thx/plugin/plugin.h](include/thx/plugin/plugin.h) — inline `thx::plugin::discover`, `forget`, `open`, `close`, `closeAllOpened`, `load`, `unload`, `discoverAndLoad`, `checkRequirements`, `plugins`/`plugins(State)`/`pluginInfo`/`is`/`isDiscovered`/`isOpened`/`isLoaded`, and `collectGarbage`/`pendingGarbage`. Same names as the matching `PluginManager` methods.
+- [thx/service/service.h](include/thx/service/service.h) — `thx::service::registerService<T>`, `unregisterService<T>`, `getService<T>`, `listServices`. The templates forward to `thx::service::detail::*Impl` exports defined in [src/service/service.cpp](src/service/service.cpp).
+- [thx/plugin/plugin.h](include/thx/plugin/plugin.h) — `thx::plugin::discover`, `forget`, `open`, `close`, `closeAllOpened`, `load`, `unload`, `discoverAndLoad`, `checkRequirements`, `plugins`/`plugins(State)`/`pluginInfo`/`is`/`isDiscovered`/`isOpened`/`isLoaded`, `collectGarbage`/`pendingGarbage`. Out-of-line in [src/plugin/plugin.cpp](src/plugin/plugin.cpp).
 
-Each facade is a one-liner forwarding to the Registry-owned manager. Code that already holds a `ServiceManager&` or `PluginManager&` (e.g. inside `IPlugin::onLoad`, or tests using a local instance) should keep calling the member functions directly — the facades exist for the everywhere-else case where there's no manager reference in scope. The example host (`examples/host/main.cpp`) uses the facades and is the canonical demonstration.
+Plugin code calls the facade from inside `IPlugin::onLoad` / `onUnload`. While those hooks are running, the facade routes service operations through the active `PluginManager`'s `m_sm` (see "Active ServiceManager scope" below) rather than directly through the Registry. In production these are the same object; in tests with a local `PluginManager(local_sm)`, they're not.
 
-**`#include` policy.** Service authors writing an interface type `IFooService : thx::service::Service<IFooService>` should `#include "thx/service/iservice.h"` — the CRTP base `Service<>` is paired with `IService` there. Host code calling the facade functions includes `thx/service/service.h` and `thx/plugin/plugin.h`. The umbrella `thx/thorax.h` brings in everything.
+**`#include` policy.** Service authors writing an interface type `IFooService : thx::service::Service<IFooService>` should `#include "thx/service/iservice.h"` — the CRTP base `Service<>` is paired with `IService` there. Host code calling the facade functions includes `thx/service/service.h` and `thx/plugin/plugin.h`. The umbrella `thx/thorax.h` brings in everything public.
+
+### Active ServiceManager scope
+
+The thread-local `thx::service::detail::ActiveServiceManagerScope` (in private header [src/service/active_service_manager.h](src/service/active_service_manager.h)) is how `PluginManager` redirects facade-based service registration during plugin load/unload. The scope swaps a `ServiceManager*` into a thread-local slot for its lifetime; the facade's `detail::*Impl` functions check the slot before falling through to `Registry::instance().serviceManager()`.
+
+`PluginManager::load` opens an `ActiveServiceManagerScope(m_sm)` around `plugin->onLoad()`; `unload` and `~PluginManager` do the same around `onUnload`. In production this is `Registry`'s own ServiceManager (identity). In tests that construct a local `PluginManager(local_sm)`, the override directs the plugin's registrations into `local_sm` — preserving the per-test-case isolation the test suite relies on.
+
+Outside the load/unload window the override is null and the facade dispatches through Registry. Plugin code that calls the facade *after* `onLoad` returns (e.g. from a service method) will register against the global Registry, not whatever `PluginManager` loaded the plugin. This is rarely what you want and is mostly relevant for tests.
 
 ### ServiceManager
 
-[thx::service::ServiceManager](include/thx/service/service_manager.h) is owned by the process-wide [thx::Registry](include/thx/registry.h); reach for it via `thx::registry().serviceManager()`. The class is also default-constructible, and tests routinely use a local instance. Reads use `std::shared_lock` so concurrent `getService<T>()` calls never block each other; `registerService`/`unregisterService` take exclusive locks.
+`ServiceManager` ([src/service/service_manager.h](src/service/service_manager.h), private) is owned by the process-wide Registry. Consumers reach it through `thx::service::*` facades, not directly. The class is also default-constructible, and tests routinely build local instances in conjunction with a local `PluginManager` (see "Active ServiceManager scope" above). Reads use `std::shared_lock` so concurrent `getService<T>()` calls never block each other; `registerService`/`unregisterService` take exclusive locks.
 
 **Single-owner semantics:** each `ServiceID` may be registered exactly once. A duplicate `registerService` returns `false` with a `Warn` diagnostic and *does not* invoke the supplied factory. Plugins that want to *contribute* to an existing service (rather than replace it) use the provider pattern exposed by that service — see the logging/io services for the canonical shape (`addBackend` / `addReader`, holding `weak_ptr` to providers).
 
 **Lifecycle hooks:**
-- `IService::onConstruct()` runs *without* the registry lock (Milestone 11). The registry uses a phase-1 reservation pattern so concurrent registrations of the same ID still serialize cleanly, but the factory and `onConstruct` callback may call back into `ServiceManager` without deadlocking.
+- `IService::onConstruct()` runs *without* the registry lock. The registry uses a phase-1 reservation pattern so concurrent registrations of the same ID still serialize cleanly, but the factory and `onConstruct` callback may call back into `ServiceManager` without deadlocking.
 - `IService::onDestroy()` runs (also without the lock) inside `unregisterService`, after the entry has been removed from the map but *while a `shared_ptr` to the service is still alive*. The service object itself is destroyed when the last `shared_ptr` to it goes out of scope, which may be later than `onDestroy()` if any caller is still holding a handle.
+
+**`getService<T>` uses `static_pointer_cast`, not `dynamic_pointer_cast`.** The `ServiceID` is the type discriminator at lookup time; the cast is just a pointer adjustment. This avoids the cross-DSO typeinfo-coalescing problem (user service interfaces live in user headers, not libthorax, and their typeinfo doesn't merge across plugin DSOs on macOS's two-level namespace). Trade-off: callers who pass a hand-built `ServiceID` that disagrees with `T` invoke undefined behaviour rather than getting a graceful `nullptr`. The framework's contract is "the ID determines the type"; the type-deduced `getService<T>()` overload (no explicit ID) is always safe.
 
 ### Plugin ABI & memory safety
 
@@ -112,11 +121,11 @@ Anything that crosses a virtual boundary on an `IService` API must use ABI-stabl
 
 ### Plugin loader & DSO lifetimes
 
-DSO loading is layered: [thx::Library](include/thx/library.h) is the generic RAII wrapper around `dlopen`/`dlclose` on POSIX and `LoadLibraryEx`/`FreeLibrary` on Windows. It offers a fluent `open(path).bind("symbol", fnPtr).bind(...)` chain — `valid()` / `operator bool()` tells you whether the chain succeeded, `error()` carries the platform diagnostic. [thx::plugin::PluginHandle](include/thx/plugin/plugin_handle.h) sits on top of `Library`, resolving the three `thx_*` exports on `open()` and rejecting an incompatible `thx_abi_version()` before any service is registered. Failure paths in `PluginHandle::open()` close the `Library` synchronously (no plugin code has run yet); successful unloads move the `Library` into `PluginGarbage` for deferred close.
+DSO loading is layered: [thx::Library](src/library.h) is the generic RAII wrapper around `dlopen`/`dlclose` on POSIX and `LoadLibraryEx`/`FreeLibrary` on Windows. It offers a fluent `open(path).bind("symbol", fnPtr).bind(...)` chain — `valid()` / `operator bool()` tells you whether the chain succeeded, `error()` carries the platform diagnostic. [thx::plugin::PluginHandle](src/plugin/plugin_handle.h) sits on top of `Library`, resolving the three `thx_*` exports on `open()` and rejecting an incompatible `thx_abi_version()` before any service is registered. Failure paths in `PluginHandle::open()` close the `Library` synchronously (no plugin code has run yet); successful unloads move the `Library` into `PluginGarbage` for deferred close.
 
 `thx::LIBRARY_EXTENSION` (in `library.h`) is the platform DSO suffix — `.dylib` / `.so` / `.dll` — used by `PluginManager::discover()` and any consumer that scans a directory.
 
-[thx::plugin::PluginManager](include/thx/plugin/plugin_manager.h) tracks every plugin it knows about by canonical path across three lifecycle states:
+[thx::plugin::PluginManager](src/plugin/plugin_manager.h) tracks every plugin it knows about by canonical path across three lifecycle states:
 
 - **Discovered** — filesystem entry has been seen (and, when Phase 5 manifests land, its sidecar parsed). No DSO interaction yet.
 - **Opened** — DSO mapped, `IPlugin` instantiated, ready for load. `onLoad` has NOT been called.
@@ -149,7 +158,7 @@ All state lives inside the manager — there are no move-only handle types cross
 
 **Thread safety:** not thread-safe — serialise externally if needed. The garbage queue itself is thread-safe.
 
-**DSO keep-alive (Milestone 8b).** The deferred-close queue lives in [thx::plugin::PluginGarbage](include/thx/plugin/plugin_garbage.h) — owned by the process-wide `Registry`, accessible via `thx::registry().pluginGarbage()`. The class wraps a mutex + `vector<Library>` with `schedule(Library)`, `collect()`, and `pending()` members. `PluginHandle::close()` moves its `Library` into the queue instead of letting `~Library` run `dlclose`/`FreeLibrary` synchronously. This indirection is what makes it safe for callers to hold `shared_ptr<IService>` handles across `unload()`: the service's destructor and its `shared_ptr` control block both live in plugin code, so the DSO must stay mapped until every reference into it has been released. The queue drains on two occasions:
+**DSO keep-alive (Milestone 8b).** The deferred-close queue lives in [thx::plugin::PluginGarbage](src/plugin/plugin_garbage.h) — owned by the process-wide `Registry`, accessible via `thx::registry().pluginGarbage()`. The class wraps a mutex + `vector<Library>` with `schedule(Library)`, `collect()`, and `pending()` members. `PluginHandle::close()` moves its `Library` into the queue instead of letting `~Library` run `dlclose`/`FreeLibrary` synchronously. This indirection is what makes it safe for callers to hold `shared_ptr<IService>` handles across `unload()`: the service's destructor and its `shared_ptr` control block both live in plugin code, so the DSO must stay mapped until every reference into it has been released. The queue drains on two occasions:
 
 1. Automatically at the start of `PluginManager::open()` (and therefore also `load(path)` when it implicitly opens), so long-running programs don't accumulate mapped-but-unused DSOs. A `discover → open* → load*` batch drains exactly once, at the first `open()`, and never yanks a DSO while another plugin is still being inspected.
 2. On demand via `thx::registry().pluginGarbage().collect()` (or the equivalent free-function shim `thx::plugin::collectGarbage()`). `thx::plugin::pendingGarbage()` exposes the current queue depth.
@@ -234,22 +243,34 @@ thx::assertThat(condition, "message");   // logs at Error if false; std::abort()
 
 ## Layout & conventions
 
+**Public vs private headers.** The library is built with hidden visibility; only `THX_API`-decorated symbols cross the `libthorax` boundary. Public headers live under `include/thx/` and are installed; private headers live in `src/` and are not. In-tree consumers (the test binary, the `thx_emit_manifest` tool) reach private headers via `target_include_directories(... PRIVATE ${CMAKE_SOURCE_DIR}/src)`.
+
 ```
-include/thx/         cross-cutting public headers (thorax umbrella, Library, Registry, Result, Version, log, StringView/Span, to_string)
-include/thx/service/ ServiceManager, Service<>, ServiceID, IService (+ .inl)
-include/thx/plugin/  PluginManager, PluginHandle, PluginGarbage, IPlugin, plugin ABI macros (platform.h)
-include/thx/rtti/    public compile-time helpers (TypeName)
-src/                 cross-cutting .cpp (thorax, log, library, registry)
-src/service/         service-layer .cpp
-src/plugin/          plugin-layer .cpp
-plugins/             in-tree plugins (logging, io). Each is a SHARED lib using THX_DEFINE_SERVICE_PLUGIN (or THX_DEFINE_PLUGIN for the multi-service form)
+include/thx/             public — installed
+├── thorax.h, thx_api.h, lifecycle.h
+├── version_type.h, version.h.in, result.h, log.h
+├── string_view.h, span.h, to_string.h
+├── service/iservice.h, service_id.h, service.h        (Service<>, IService, ServiceID, facades + ServiceFactory/ServiceInfo)
+├── plugin/iplugin.h, platform.h, manifest.h, plugin.h  (IPlugin, ServicePluginShim<>, ABI macros, manifest types, facades)
+└── rtti/type_name.h
+
+src/                     private — not installed
+├── library.h/cpp, registry.h/cpp, log.cpp, thorax.cpp, abi.cpp
+├── service/service_manager.{h,inl,cpp}                 (the ServiceManager class itself)
+├── service/active_service_manager.h, service.cpp        (thread-local SM override + facade impls)
+└── plugin/plugin_handle.{h,cpp}, plugin_garbage.{h,cpp}, plugin_manager.{h,cpp}, plugin.cpp, manifest.cpp
+
+plugins/                 in-tree plugins (logging, io); each is a SHARED lib using THX_DEFINE_SERVICE_PLUGIN (or THX_DEFINE_PLUGIN for the multi-service form)
 plugins/<name>/include/thx/plugins/<name>/<name>_service.h  the shared interface header
-examples/            example host + two example plugins; integration test runs example_host
-test/                Catch2 unit + integration tests. mock_plugin{,_bad_abi,_multi,_bails,_requires_newer}/ are built as SHARED for the loader/IPlugin tests
-test/consumer/       standalone CMake project used by the install smoke test
-cmake/               ThoraxConfig.cmake.in, addcatch2.cmake fetcher, and thx_warnings.cmake (thx_set_warnings(<target>))
-thirdparty/          vendored Catch2 tarball (downloaded on demand by addcatch2.cmake)
+examples/                example host + two example plugins; integration test runs example_host
+test/                    Catch2 unit + integration tests. Each mock plugin lives in its own subdirectory; mock_plugin/CMakeLists.txt also defines a `mock_plugin_headers` INTERFACE library that sibling mocks and the test binary link to share mock_plugin.h
+test/consumer/           standalone CMake project used by the install smoke test
+tools/<name>/            framework tools (currently just thx_emit_manifest)
+cmake/                   ThoraxConfig.cmake.in, addcatch2, thx_warnings, thx_install, thx_plugin_manifest, thx_plugin_auto_manifest
+thirdparty/              vendored Catch2 tarball (downloaded on demand by addcatch2.cmake)
 ```
+
+`abi.cpp` is the anchor file: it defines the out-of-line virtual destructors for `IService`, `IPlugin`, and `ILogSink` so libthorax owns their vtable + typeinfo. Without these key functions the typeinfos would be emitted as weak COMDAT in every consumer and macOS's two-level namespace would leave the addresses distinct across DSOs, breaking `dynamic_cast` from inside the library.
 
 Style is enforced by [.clang-format](.clang-format): Allman braces, **tabs for indent (width 4)**, no column limit, namespace contents indented, pointer-left (`int* p`), access modifiers offset −4. Match the existing files when editing.
 

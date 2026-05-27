@@ -43,24 +43,48 @@ namespace thx::service
 		ServiceManager(ServiceManager const&) = delete;
 		ServiceManager& operator=(ServiceManager const&) = delete;
 
-		// Registers a service by ID, version, and a factory callable.
+		// Registers a service by ID, version, and a factory.
 		//
-		// The factory is invoked exactly once; the resulting shared_ptr is
-		// stored as the sole registered instance. After construction,
-		// IService::onConstruct() is called. If it returns false the service
-		// is discarded and registration fails.
+		// The factory's invoke() is called exactly once; the returned raw
+		// IService* is wrapped in shared_ptr<IService> and stored as the sole
+		// registered instance. The factory's destroyCtx() runs exactly once
+		// regardless of outcome (success, factory-returned-null, ID already
+		// reserved, throw).
+		//
+		// After construction, IService::onConstruct() is called. If it returns
+		// false the service is discarded and registration fails.
 		//
 		// Returns false and logs a diagnostic if:
-		//   - factory is null or returns null
+		//   - factory.invoke is null or returns null
 		//   - onConstruct() returns false
 		//   - the ID is already registered (regardless of version)
 		bool registerService(ServiceID id, Version version, ServiceFactory factory);
 
+		// Convenience overload: accepts any callable returning IService*, wraps
+		// it via makeServiceFactory(). Mostly used by tests; production code
+		// goes through the facade in service.h.
+		template <typename Callable, typename = std::enable_if_t<
+			!std::is_same_v<std::decay_t<Callable>, ServiceFactory>>>
+		bool registerService(ServiceID id, Version version, Callable&& callable)
+		{
+			return registerService(std::move(id), version,
+			    makeServiceFactory(std::forward<Callable>(callable)));
+		}
+
 		// Type-deducing registration. Requires T to provide T::staticId() and
-		// T::staticVersion(). The factory must return a std::shared_ptr<T> (or
-		// any type implicitly convertible to std::shared_ptr<IService>).
+		// T::staticVersion(). Most callers should use the facade in service.h
+		// instead — that hides the ServiceFactory construction entirely.
 		template <typename T>
 		bool registerService(ServiceFactory factory);
+
+		// Type-deducing registration with an arbitrary callable. Wraps the
+		// callable via makeServiceFactory().
+		template <typename T, typename Callable, typename = std::enable_if_t<
+			!std::is_same_v<std::decay_t<Callable>, ServiceFactory>>>
+		bool registerService(Callable&& callable)
+		{
+			return registerService<T>(makeServiceFactory(std::forward<Callable>(callable)));
+		}
 
 		// Looks up a service by ID and casts it to T.
 		// Returns nullptr if the service is not registered or the cast fails.

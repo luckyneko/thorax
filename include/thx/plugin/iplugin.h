@@ -103,11 +103,7 @@ namespace thx::plugin
 
 		bool onLoad() override
 		{
-			return thx::service::registerService<T>(
-			    []() -> std::shared_ptr<thx::service::IService>
-			{
-				return std::make_shared<T>();
-			});
+			return thx::service::registerService<T>();
 		}
 
 		void onUnload() override

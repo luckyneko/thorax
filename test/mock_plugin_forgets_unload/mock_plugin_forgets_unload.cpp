@@ -29,11 +29,7 @@ public:
 
 	bool onLoad() override
 	{
-		return thx::service::registerService<thx_mock::ServiceA>(
-			[]() -> std::shared_ptr<thx::service::IService>
-			{
-				return std::make_shared<thx_mock::ServiceA>();
-			});
+		return thx::service::registerService<thx_mock::ServiceA>();
 	}
 
 	// Intentionally empty: simulate a misbehaved plugin that forgets to
