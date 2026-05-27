@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "thx/log.h"
+
 #include <optional>
 #include <string>
 #include <type_traits>
@@ -115,8 +117,18 @@ namespace thx
 
 		explicit operator bool() const noexcept { return isOk(); }
 
-		E&       error()       { return *m_error; }
-		E const& error() const { return *m_error; }
+		E& error()
+		{
+			thx::assertThat(m_error.has_value(),
+			    "Result<void, E>::error() called on an ok Result");
+			return *m_error;
+		}
+		E const& error() const
+		{
+			thx::assertThat(m_error.has_value(),
+			    "Result<void, E>::error() called on an ok Result");
+			return *m_error;
+		}
 
 	private:
 		std::optional<E> m_error;

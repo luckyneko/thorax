@@ -120,9 +120,9 @@ By design (documented), but the failure mode is subtle. Architectural rule: in p
 
 With one PM, the "leak through static-destruction" path is narrow: only the test pattern triggers it, and ASan won't flag it (the queue holds the resource). Either have `~PluginManager` collect at teardown when it's a non-Registry instance, or eventually retire the local-PM test pattern (make PluginManager constructor private to Registry). The latter is the cleaner long-term move but requires reworking the test-isolation story (the [ActiveServiceManagerScope](src/service/active_service_manager.h) thread-local already gets us most of the way).
 
-### `Result<void, E>::error()` is UB when ok
+### ~~`Result<void, E>::error()` is UB when ok~~ — applied
 
-Dereferences an empty `std::optional`. Standard pattern, but `assert(m_error.has_value())` catches misuse in debug at zero release cost.
+Both `error()` overloads now go through `thx::assertThat(m_error.has_value(), ...)`. Aborts in Debug, logs at Error in Release before the (now-still-UB) optional deref — at least the message surfaces in production logs. Consistent with `assertThat` use elsewhere in the codebase.
 
 ### Manifest JSON parser has no recursion depth limit
 
