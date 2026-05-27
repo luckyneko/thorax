@@ -162,11 +162,22 @@ namespace
 		return true;
 	}
 
+	// Maximum nesting depth for objects/arrays passed to skipValue. The
+	// parser only recurses on unknown fields (the manifest's own schema is
+	// flat), so 32 levels is generously beyond anything legitimate while
+	// still bounding the stack against adversarial input.
+	constexpr int kSkipValueMaxDepth = 32;
+
 	// Skip a JSON value (any type). Used for unknown fields so they don't
 	// abort the parse. Reader points at the start of the value on entry;
-	// on success, points just past it.
-	bool skipValue(Reader& r)
+	// on success, points just past it. Returns false if the nesting depth
+	// exceeds kSkipValueMaxDepth — guards against adversarial input that
+	// could otherwise stack-overflow.
+	bool skipValue(Reader& r, int depth = 0)
 	{
+		if (depth >= kSkipValueMaxDepth)
+			return false;
+
 		r.skipWs();
 		char c = r.peek();
 		if (c == '"')
@@ -186,7 +197,7 @@ namespace
 			if (r.peek() == ']') { r.advance(); return true; }
 			while (true)
 			{
-				if (!skipValue(r)) return false;
+				if (!skipValue(r, depth + 1)) return false;
 				r.skipWs();
 				if (r.peek() == ',') { r.advance(); r.skipWs(); continue; }
 				if (r.peek() == ']') { r.advance(); return true; }
@@ -205,7 +216,7 @@ namespace
 				r.skipWs();
 				if (r.peek() != ':') return false;
 				r.advance();
-				if (!skipValue(r)) return false;
+				if (!skipValue(r, depth + 1)) return false;
 				r.skipWs();
 				if (r.peek() == ',') { r.advance(); r.skipWs(); continue; }
 				if (r.peek() == '}') { r.advance(); return true; }

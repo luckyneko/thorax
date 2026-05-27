@@ -400,3 +400,31 @@ TEST_CASE("serialiseManifest - escapes special characters in strings",
 	REQUIRE(parsed.value().provides.size() == 1);
 	REQUIRE(parsed.value().provides[0] == "thx.path.with\\slash");
 }
+
+// ---------------------------------------------------------------------------
+// Recursion depth limit
+// ---------------------------------------------------------------------------
+
+TEST_CASE("parseManifest - deeply-nested unknown field is rejected", "[manifest]")
+{
+	// Build a manifest whose `extra` field is a deeply-nested JSON array.
+	// 64 levels is well above the documented kSkipValueMaxDepth (32), so the
+	// parser should bail with MalformedManifest rather than stack-overflowing.
+	std::string nested = "[]";
+	for (int i = 0; i < 64; ++i)
+		nested = "[" + nested + "]";
+
+	auto path = writeTempManifest("deep_nest",
+		"{\n"
+		"\t\"schema\":   1,\n"
+		"\t\"name\":     \"thx.test.Deep\",\n"
+		"\t\"version\":  \"1.0.0\",\n"
+		"\t\"provides\": [],\n"
+		"\t\"requires\": [],\n"
+		"\t\"extra\":    " + nested + "\n"
+		"}");
+
+	auto r = thx::plugin::parseManifest(path);
+	REQUIRE_FALSE(r);
+	REQUIRE(r.error().code == thx::ErrorCode::MalformedManifest);
+}

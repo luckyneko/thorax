@@ -124,9 +124,9 @@ With one PM, the "leak through static-destruction" path is narrow: only the test
 
 Both `error()` overloads now go through `thx::assertThat(m_error.has_value(), ...)`. Aborts in Debug, logs at Error in Release before the (now-still-UB) optional deref — at least the message surfaces in production logs. Consistent with `assertThat` use elsewhere in the codebase.
 
-### Manifest JSON parser has no recursion depth limit
+### ~~Manifest JSON parser has no recursion depth limit~~ — applied
 
-`skipValue` recurses on nested objects/arrays. Not exploitable today (we control manifests), but a depth counter (e.g. 32) is a one-line defence if untrusted manifests ever land.
+`skipValue` now takes a `depth` parameter and bails with `MalformedManifest` once nesting exceeds `kSkipValueMaxDepth` (32). New test in `test_manifest.cpp` builds a manifest with a 64-deep unknown-field array and verifies the parser rejects it cleanly. Only `skipValue` recurses (the manifest's own schema is flat), so 32 is well beyond any legitimate input.
 
 ### `ServicePluginShim<T>::provides()` Span lifetime
 
