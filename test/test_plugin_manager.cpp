@@ -1259,3 +1259,33 @@ TEST_CASE("PluginHandle::open - LoadFlags::Strict succeeds on a healthy plugin",
 	    thx::Library::LoadFlags::Strict);
 	REQUIRE(r.isOk());
 }
+
+TEST_CASE("PluginManager::discover - Recursive::Yes walks subdirectories",
+          "[plugin_manager][discover]")
+{
+	namespace fs = std::filesystem;
+
+	auto root = fs::temp_directory_path() / "thx_test_recursive_discover";
+	fs::remove_all(root);
+	fs::create_directories(root / "category_a");
+	fs::create_directories(root / "category_b");
+
+	// Place one copy of the mock plugin in each subdirectory.
+	copyPluginWithSidecar(THX_MOCK_PLUGIN_PATH, root / "category_a");
+	copyPluginWithSidecar(THX_MOCK_PLUGIN_PATH, root / "category_b");
+
+	thx::service::ServiceManager sm;
+	thx::plugin::PluginManager   loader(sm);
+
+	// Non-recursive: top-level dir has no sidecars → nothing discovered.
+	REQUIRE(loader.discover(root.string()));
+	REQUIRE(loader.plugins(thx::plugin::State::Discovered).empty());
+
+	// Recursive: both subdirectory copies should appear. They're the SAME
+	// plugin file (just at different paths) so canonical resolution gives
+	// us two distinct Discovered entries.
+	REQUIRE(loader.discover(root.string(), thx::plugin::Recursive::Yes));
+	REQUIRE(loader.plugins(thx::plugin::State::Discovered).size() == 2);
+
+	fs::remove_all(root);
+}

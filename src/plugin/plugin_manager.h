@@ -64,11 +64,13 @@ namespace thx::plugin
 		// not listed are either no-ops (idempotent) or return an error.
 
 		// Scans `directory` for files matching LIBRARY_EXTENSION and adds each
-		// as a Discovered entry. Idempotent: re-scanning leaves existing
-		// Opened / Loaded entries untouched and silently skips already-known
-		// Discovered paths. Returns FileNotFound if the directory cannot be
-		// iterated.
-		Result<void, Error> discover(std::string const& directory);
+		// as a Discovered entry. With Recursive::Yes, walks subdirectories
+		// too — useful when plugins are organised in per-category folders.
+		// Idempotent: re-scanning leaves existing Opened / Loaded entries
+		// untouched and silently skips already-known Discovered paths.
+		// Returns FileNotFound if the directory cannot be iterated.
+		Result<void, Error> discover(std::string const& directory,
+		                              Recursive recursive = Recursive::No);
 
 		// Removes a Discovered entry. Returns InUse if the path is Opened or
 		// Loaded (caller must close() / unload() first). Idempotent on absence
@@ -120,7 +122,8 @@ namespace thx::plugin
 
 		// Discovers all plugins in `directory` and loads each one.
 		// Returns a summary; individual failures are also logged.
-		LoadSummary discoverAndLoad(std::string const& directory);
+		LoadSummary discoverAndLoad(std::string const& directory,
+		                             Recursive recursive = Recursive::No);
 
 		// Dry-runs the requirement check that load() would perform. Does not
 		// mutate sm.

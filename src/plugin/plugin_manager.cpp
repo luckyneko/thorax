@@ -320,27 +320,30 @@ PluginManager::finalizeLoad(OpenedEntry opened, std::string const& canonical)
 
 // --- Lifecycle ---------------------------------------------------------------
 
-Result<void, Error> PluginManager::discover(std::string const& directory)
+namespace
 {
-	std::lock_guard<std::recursive_mutex> lock(m_mutex);
-	std::error_code ec;
-	auto iter = std::filesystem::directory_iterator(directory, ec);
-	if (ec)
-		return Result<void, Error>::err({ErrorCode::FileNotFound,
-			"Cannot iterate directory '" + directory + "': " + ec.message()});
-
-	// The sidecar manifest is the marker that says "this is a thorax plugin."
-	// Iterate `*.thx.json` files and pair each with its DSO by suffix swap.
-	// Bare DSOs without a manifest are silently ignored — they're not plugins.
 	constexpr std::string_view kSidecarSuffix = ".thx.json";
 
-	for (auto const& entry : iter)
+	// True if `filename` ends with the sidecar suffix.
+	bool hasSidecarSuffix(std::string const& filename) noexcept
+	{
+		return filename.size() > kSidecarSuffix.size()
+		    && filename.compare(filename.size() - kSidecarSuffix.size(),
+		                        kSidecarSuffix.size(), kSidecarSuffix) == 0;
+	}
+} // namespace
+
+Result<void, Error> PluginManager::discover(std::string const& directory, Recursive recursive)
+{
+	std::lock_guard<std::recursive_mutex> lock(m_mutex);
+
+	// Per-entry handler — shared between the recursive and non-recursive
+	// iterator paths. Returns nothing; logs and continues on failure modes.
+	auto handle = [&](std::filesystem::directory_entry const& entry)
 	{
 		auto const& filename = entry.path().filename().string();
-		if (filename.size() <= kSidecarSuffix.size()
-		    || filename.compare(filename.size() - kSidecarSuffix.size(),
-		                        kSidecarSuffix.size(), kSidecarSuffix) != 0)
-			continue;
+		if (!hasSidecarSuffix(filename))
+			return;
 
 		// Compute the paired DSO path: strip .thx.json, add LIBRARY_EXTENSION.
 		auto manifestPath = entry.path().string();
@@ -358,18 +361,18 @@ Result<void, Error> PluginManager::discover(std::string const& directory)
 				    "discover: sidecar '" + manifestPath
 				    + "' has no paired DSO at '" + dsoPath + "' — skipping");
 			}
-			continue;
+			return;
 		}
 
 		auto canonical = resolveCanonical(dsoPath);
 		if (canonical.empty())
-			continue; // file vanished between exists() and canonicalize; skip silently
+			return; // file vanished between exists() and canonicalize; skip silently
 
 		// Don't disturb entries that are already Opened or Loaded — those
 		// states supersede Discovered.
 		if (m_plugins.count(canonical) || m_opened.count(canonical)
 		    || m_discovered.count(canonical))
-			continue;
+			return;
 
 		auto parsed = parseManifest(manifestPath);
 		if (!parsed)
@@ -377,10 +380,30 @@ Result<void, Error> PluginManager::discover(std::string const& directory)
 			thx::log(LogLevel::Error,
 			    "discover: failed to parse '" + manifestPath
 			    + "': " + parsed.error().message);
-			continue;
+			return;
 		}
 
 		m_discovered.emplace(canonical, DiscoveredEntry{std::move(parsed.value())});
+	};
+
+	std::error_code ec;
+	if (recursive == Recursive::Yes)
+	{
+		std::filesystem::recursive_directory_iterator iter(directory, ec);
+		if (ec)
+			return Result<void, Error>::err({ErrorCode::FileNotFound,
+				"Cannot iterate directory '" + directory + "': " + ec.message()});
+		for (auto const& entry : iter)
+			handle(entry);
+	}
+	else
+	{
+		std::filesystem::directory_iterator iter(directory, ec);
+		if (ec)
+			return Result<void, Error>::err({ErrorCode::FileNotFound,
+				"Cannot iterate directory '" + directory + "': " + ec.message()});
+		for (auto const& entry : iter)
+			handle(entry);
 	}
 	return Result<void, Error>::ok();
 }
@@ -550,11 +573,11 @@ Result<void, Error> PluginManager::unload(std::string const& path)
 	return Result<void, Error>::ok();
 }
 
-LoadSummary PluginManager::discoverAndLoad(std::string const& directory)
+LoadSummary PluginManager::discoverAndLoad(std::string const& directory, Recursive recursive)
 {
 	std::lock_guard<std::recursive_mutex> lock(m_mutex);
 	LoadSummary summary;
-	if (auto r = discover(directory); !r)
+	if (auto r = discover(directory, recursive); !r)
 	{
 		thx::log(LogLevel::Warn,
 		    "discoverAndLoad: discover failed for '" + directory + "': " + r.error().message);
@@ -568,34 +591,44 @@ LoadSummary PluginManager::discoverAndLoad(std::string const& directory)
 	// freshly-loaded ones — the WORK.md case where discoverAndLoad is
 	// called twice and the second call should still surface "yes these
 	// plugins are present and loaded" rather than appearing to find nothing.
+
+	auto enumerate = [&](auto&& iter) {
+		std::vector<std::string> out;
+		for (auto const& entry : iter)
+		{
+			auto const& filename = entry.path().filename().string();
+			if (!hasSidecarSuffix(filename))
+				continue;
+
+			auto manifestPath = entry.path().string();
+			std::string dsoPath = manifestPath.substr(
+			    0, manifestPath.size() - kSidecarSuffix.size())
+			    + LIBRARY_EXTENSION;
+			if (!std::filesystem::exists(dsoPath))
+				continue;
+
+			auto canonical = resolveCanonical(dsoPath);
+			if (canonical.empty())
+				continue;
+
+			out.push_back(std::move(canonical));
+		}
+		return out;
+	};
+
 	std::error_code ec;
-	auto iter = std::filesystem::directory_iterator(directory, ec);
-	if (ec)
-		return summary;
-
-	constexpr std::string_view kSidecarSuffix = ".thx.json";
-
 	std::vector<std::string> paths;
-	for (auto const& entry : iter)
+	if (recursive == Recursive::Yes)
 	{
-		auto const& filename = entry.path().filename().string();
-		if (filename.size() <= kSidecarSuffix.size()
-		    || filename.compare(filename.size() - kSidecarSuffix.size(),
-		                        kSidecarSuffix.size(), kSidecarSuffix) != 0)
-			continue;
-
-		auto manifestPath = entry.path().string();
-		std::string dsoPath = manifestPath.substr(
-		    0, manifestPath.size() - kSidecarSuffix.size())
-		    + LIBRARY_EXTENSION;
-		if (!std::filesystem::exists(dsoPath))
-			continue;
-
-		auto canonical = resolveCanonical(dsoPath);
-		if (canonical.empty())
-			continue;
-
-		paths.push_back(std::move(canonical));
+		std::filesystem::recursive_directory_iterator iter(directory, ec);
+		if (ec) return summary;
+		paths = enumerate(iter);
+	}
+	else
+	{
+		std::filesystem::directory_iterator iter(directory, ec);
+		if (ec) return summary;
+		paths = enumerate(iter);
 	}
 	std::sort(paths.begin(), paths.end()); // deterministic order
 

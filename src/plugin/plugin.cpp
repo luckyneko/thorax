@@ -13,9 +13,9 @@
 namespace thx::plugin
 {
 
-Result<void, Error> discover(std::string const& directory)
+Result<void, Error> discover(std::string const& directory, Recursive recursive)
 {
-	return thx::Registry::instance().pluginManager().discover(directory);
+	return thx::Registry::instance().pluginManager().discover(directory, recursive);
 }
 
 Result<void, Error> forget(std::string const& path)
@@ -48,9 +48,9 @@ Result<void, Error> unload(std::string const& path)
 	return thx::Registry::instance().pluginManager().unload(path);
 }
 
-LoadSummary discoverAndLoad(std::string const& directory)
+LoadSummary discoverAndLoad(std::string const& directory, Recursive recursive)
 {
-	return thx::Registry::instance().pluginManager().discoverAndLoad(directory);
+	return thx::Registry::instance().pluginManager().discoverAndLoad(directory, recursive);
 }
 
 Result<void, Error> checkRequirements(Span<const ServiceRequirement> reqs)

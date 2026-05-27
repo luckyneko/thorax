@@ -164,9 +164,9 @@ A host doing reload today must unload → drop all service refs → drain garbag
 
 `PluginManager::pluginsProviding(std::string const&)` + facade `thx::plugin::pluginsProviding(...)` return all plugins (any state) whose manifest `provides` contains the given service id. Manifest data is read at discover() — no DSO interaction.
 
-### Recursive `discover(dir)`
+### ~~Recursive `discover(dir)`~~ — applied
 
-Currently single-directory. A consumer with `plugins/cameras/`, `plugins/codecs/` etc. has to call `discover` per subdir.
+`discover()` and `discoverAndLoad()` now take an optional `Recursive` enum (`No` default, `Yes` walks subdirectories). Implementation factors per-entry handling into a lambda that both `directory_iterator` and `recursive_directory_iterator` feed. Default behaviour unchanged.
 
 ### ~~`LoadSummary` distinguishes already-loaded from freshly-loaded~~ — applied
 

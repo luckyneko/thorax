@@ -28,6 +28,13 @@
 
 namespace thx::plugin
 {
+	// Whether discover() / discoverAndLoad() should walk subdirectories.
+	enum class Recursive
+	{
+		No,
+		Yes,
+	};
+
 	// Lifecycle state of a plugin tracked by the framework.
 	//
 	// Discovered — filesystem entry has been seen and its sidecar parsed. No
@@ -100,7 +107,7 @@ namespace thx::plugin
 	// All take a path by value or reference; all return Result<void, Error>.
 	// Documented behaviour matches the previous PluginManager methods.
 
-	THX_API Result<void, Error> discover(std::string const& directory);
+	THX_API Result<void, Error> discover(std::string const& directory, Recursive recursive = Recursive::No);
 	THX_API Result<void, Error> forget(std::string const& path);
 	THX_API Result<void, Error> open(std::string const& path);
 	THX_API Result<void, Error> close(std::string const& path);
@@ -109,7 +116,7 @@ namespace thx::plugin
 	THX_API Result<void, Error> unload(std::string const& path);
 
 	// --- Aggregate ---------------------------------------------------------
-	THX_API LoadSummary discoverAndLoad(std::string const& directory);
+	THX_API LoadSummary discoverAndLoad(std::string const& directory, Recursive recursive = Recursive::No);
 
 	// Dry-runs the requirement check that load() would perform against the
 	// framework's internal ServiceManager.
