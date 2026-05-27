@@ -124,6 +124,13 @@ namespace thx::plugin
 	THX_API bool                      isOpened    (std::string const& path);
 	THX_API bool                      isLoaded    (std::string const& path);
 
+	// Returns plugins (any state) whose manifest `provides` list contains
+	// the given service id. Useful for picking out e.g. all camera drivers
+	// without dlopen-ing anything: the manifest is read at discover() time.
+	// Match is by ServiceID name (the string form), since manifest-derived
+	// service ids are stored as strings.
+	THX_API std::vector<PluginInfo>   pluginsProviding(std::string const& serviceId);
+
 	// --- Garbage queue -----------------------------------------------------
 	// Drains / queries the framework-owned deferred-dlclose queue.
 	THX_API std::size_t collectGarbage() noexcept;

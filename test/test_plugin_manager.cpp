@@ -1223,3 +1223,29 @@ TEST_CASE("PluginManager::discoverAndLoad - second call reports alreadyLoaded",
 	thx::plugin::collectGarbage();
 	fs::remove_all(tmp);
 }
+
+TEST_CASE("PluginManager::pluginsProviding - filters by manifest provides",
+          "[plugin_manager][discover]")
+{
+	namespace fs = std::filesystem;
+
+	auto tmp = fs::temp_directory_path() / "thx_test_plugins_providing";
+	fs::remove_all(tmp);
+	fs::create_directories(tmp);
+	auto dst = copyPluginWithSidecar(THX_MOCK_PLUGIN_PATH, tmp);
+
+	thx::service::ServiceManager sm;
+	thx::plugin::PluginManager   loader(sm);
+
+	REQUIRE(loader.discover(tmp.string()));
+
+	// mock_plugin provides thx_mock.MockService.
+	auto matches = loader.pluginsProviding("thx_mock.MockService");
+	REQUIRE(matches.size() == 1);
+	REQUIRE(matches[0].state == thx::plugin::State::Discovered);
+
+	// Bogus ID matches nothing.
+	REQUIRE(loader.pluginsProviding("nope.NotAService").empty());
+
+	fs::remove_all(tmp);
+}

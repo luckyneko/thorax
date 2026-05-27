@@ -146,6 +146,10 @@ namespace thx::plugin
 		bool isOpened    (std::string const& path) const { return is(State::Opened,     path); }
 		bool isLoaded    (std::string const& path) const { return is(State::Loaded,     path); }
 
+		// Filter: plugins (any state) whose manifest `provides` contains
+		// `serviceId`. Manifest data is read at discover(); no DSO interaction.
+		std::vector<PluginInfo> pluginsProviding(std::string const& serviceId) const;
+
 	private:
 		// Each entry carries its PluginManifest through every state transition
 		// so callers can query the static declaration regardless of where the

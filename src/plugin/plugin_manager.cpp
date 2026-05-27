@@ -755,4 +755,31 @@ bool PluginManager::is(State state, std::string const& path) const
 	return false;
 }
 
+std::vector<PluginInfo> PluginManager::pluginsProviding(std::string const& serviceId) const
+{
+	std::lock_guard<std::recursive_mutex> lock(m_mutex);
+	std::vector<PluginInfo> result;
+
+	auto matches = [&](std::vector<std::string> const& provides) -> bool {
+		for (auto const& p : provides)
+			if (p == serviceId)
+				return true;
+		return false;
+	};
+
+	// Iterate the manifest's `provides` list — which is populated for
+	// Discovered, Opened, and Loaded entries (manifest is read at
+	// discover() time). No DSO interaction.
+	for (auto const& [path, entry] : m_discovered)
+		if (matches(entry.manifest.provides))
+			result.push_back(infoFromDiscovered(path, entry));
+	for (auto const& [path, entry] : m_opened)
+		if (matches(entry.manifest.provides))
+			result.push_back(infoFromOpened(path, entry));
+	for (auto const& [path, entry] : m_plugins)
+		if (matches(entry.manifest.provides))
+			result.push_back(infoFromLoaded(path, entry));
+	return result;
+}
+
 } // namespace thx::plugin

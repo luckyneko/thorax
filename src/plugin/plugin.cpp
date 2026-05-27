@@ -94,6 +94,11 @@ bool isLoaded(std::string const& path)
 	return thx::Registry::instance().pluginManager().isLoaded(path);
 }
 
+std::vector<PluginInfo> pluginsProviding(std::string const& serviceId)
+{
+	return thx::Registry::instance().pluginManager().pluginsProviding(serviceId);
+}
+
 std::size_t collectGarbage() noexcept
 {
 	return thx::Registry::instance().pluginGarbage().collect();

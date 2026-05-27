@@ -158,9 +158,9 @@ Currently `RTLD_LAZY`: unresolved symbols surface at call time. A `LoadFlags::St
 
 A host doing reload today must unload → drop all service refs → drain garbage → load. A single method that documents the keep-alive contract in its preconditions is friendlier than expecting users to chain the primitives.
 
-### `plugins_providing("thx.cameras.ICameraDriver")` shortcut
+### ~~`plugins_providing("thx.cameras.ICameraDriver")` shortcut~~ — applied
 
-`plugins(State::Discovered)` then filter-by-`provides` works; a one-liner that maps to the manifest's `provides` array is cheap to add.
+`PluginManager::pluginsProviding(std::string const&)` + facade `thx::plugin::pluginsProviding(...)` return all plugins (any state) whose manifest `provides` contains the given service id. Manifest data is read at discover() — no DSO interaction.
 
 ### Recursive `discover(dir)`
 
