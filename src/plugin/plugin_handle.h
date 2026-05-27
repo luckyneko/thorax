@@ -56,7 +56,13 @@ namespace thx::plugin
 		// Opens the DSO at path and resolves thx_create_plugin /
 		// thx_destroy_plugin / thx_abi_version. Returns Err if the file is
 		// missing, the ABI version is incompatible, or any symbol is absent.
-		static Result<PluginHandle, Error> open(std::string const& path);
+		//
+		// `flags` is forwarded to Library::open — pass LoadFlags::Strict for
+		// fail-fast loading when a plugin has missing transitive deps. Default
+		// is Lazy.
+		static Result<PluginHandle, Error> open(
+		    std::string const& path,
+		    Library::LoadFlags flags = Library::LoadFlags::Lazy);
 
 	private:
 		void close() noexcept;

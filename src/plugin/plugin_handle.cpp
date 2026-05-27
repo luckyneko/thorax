@@ -56,10 +56,11 @@ void PluginHandle::close() noexcept
 	m_destroyFn = nullptr;
 }
 
-Result<PluginHandle, Error> PluginHandle::open(std::string const& path)
+Result<PluginHandle, Error> PluginHandle::open(std::string const& path,
+                                                Library::LoadFlags flags)
 {
 	Library lib;
-	lib.open(path);
+	lib.open(path, flags);
 	if (!lib)
 	{
 		// Catch-all for dlopen / LoadLibrary failures: missing transitive

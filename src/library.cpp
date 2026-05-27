@@ -24,8 +24,10 @@ namespace
 {
 
 #if defined(_WIN32)
-	void* nativeOpen(char const* path) noexcept
+	void* nativeOpen(char const* path, Library::LoadFlags /*flags*/) noexcept
 	{
+		// LoadLibrary doesn't expose a Lazy/Now split — symbol resolution
+		// happens at load time regardless. Strict and Lazy converge here.
 		return LoadLibraryExA(path, nullptr, 0);
 	}
 	void nativeClose(void* handle) noexcept
@@ -44,9 +46,10 @@ namespace
 		return buf;
 	}
 #else
-	void* nativeOpen(char const* path) noexcept
+	void* nativeOpen(char const* path, Library::LoadFlags flags) noexcept
 	{
-		return dlopen(path, RTLD_LAZY | RTLD_LOCAL);
+		int mode = (flags == Library::LoadFlags::Strict) ? RTLD_NOW : RTLD_LAZY;
+		return dlopen(path, mode | RTLD_LOCAL);
 	}
 	void nativeClose(void* handle) noexcept
 	{
@@ -95,7 +98,7 @@ Library& Library::operator=(Library&& other) noexcept
 	return *this;
 }
 
-Library& Library::open(std::filesystem::path const& path)
+Library& Library::open(std::filesystem::path const& path, LoadFlags flags)
 {
 	if (m_handle)
 		close();
@@ -103,7 +106,7 @@ Library& Library::open(std::filesystem::path const& path)
 	m_path  = path.string();
 	m_error.clear();
 
-	m_handle = nativeOpen(m_path.c_str());
+	m_handle = nativeOpen(m_path.c_str(), flags);
 	if (!m_handle)
 	{
 		m_valid = false;

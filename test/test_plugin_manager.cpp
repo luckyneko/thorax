@@ -1249,3 +1249,13 @@ TEST_CASE("PluginManager::pluginsProviding - filters by manifest provides",
 
 	fs::remove_all(tmp);
 }
+
+TEST_CASE("PluginHandle::open - LoadFlags::Strict succeeds on a healthy plugin",
+          "[plugin_handle]")
+{
+	// Strict (RTLD_NOW on POSIX) resolves every symbol at load time. A
+	// well-formed plugin has no unresolved symbols and so opens fine.
+	auto r = thx::plugin::PluginHandle::open(THX_MOCK_PLUGIN_PATH,
+	    thx::Library::LoadFlags::Strict);
+	REQUIRE(r.isOk());
+}

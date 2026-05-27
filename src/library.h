@@ -49,6 +49,22 @@ namespace thx
 	class THX_API Library
 	{
 	public:
+		// Symbol-resolution policy for open().
+		//
+		// Lazy   — defer resolution to first symbol use (POSIX: RTLD_LAZY,
+		//          Windows: default LoadLibrary behaviour). Cheaper open;
+		//          unresolved symbols surface at the first call into them.
+		// Strict — resolve everything at open time (POSIX: RTLD_NOW; Windows:
+		//          treated the same as Lazy because LoadLibrary doesn't have
+		//          a Now/Lazy split — the dynamic linker resolves
+		//          dependencies on open). Strict hosts get fail-fast errors
+		//          when a plugin has missing dependencies.
+		enum class LoadFlags
+		{
+			Lazy,
+			Strict,
+		};
+
 		Library() noexcept = default;
 		~Library();
 
@@ -61,7 +77,8 @@ namespace thx
 		// Opens the DSO at path. If the Library is already holding an open
 		// handle, closes it first. After the call, valid() reflects success
 		// and error() carries any platform diagnostic.
-		Library& open(std::filesystem::path const& path);
+		Library& open(std::filesystem::path const& path,
+		              LoadFlags flags = LoadFlags::Lazy);
 
 		// Closes the DSO if open. Idempotent and noexcept; calls dlclose /
 		// FreeLibrary synchronously.

@@ -150,9 +150,11 @@ Before/after diff is O(N) on registry size per load. Currently fine; becomes O(N
 
 Convenience APIs that have a clear shape but no current consumer. Add when someone asks.
 
-### `RTLD_NOW` option on `Library::open`
+### ~~`RTLD_NOW` option on `Library::open`~~ — applied
 
-Currently `RTLD_LAZY`: unresolved symbols surface at call time. A `LoadFlags::Strict` option would let hosts that prefer fail-fast catch broken plugins at load.
+`Library::open` now takes an optional `LoadFlags` (`Lazy` / `Strict`). Strict maps to `RTLD_NOW | RTLD_LOCAL` on POSIX; on Windows the LoadLibrary path doesn't have a lazy/now split, so Strict and Lazy converge there. `PluginHandle::open` accepts and forwards the flag. PluginManager still defaults to Lazy — direct PluginHandle/Library users opt into Strict.
+
+Wiring it through PluginManager.open / PluginManager.load is a separate ergonomic decision; left as a follow-up if a real consumer wants fail-fast loading through the framework's loader rather than via PluginHandle directly.
 
 ### `reload(path)` convenience
 
