@@ -128,9 +128,9 @@ Both `error()` overloads now go through `thx::assertThat(m_error.has_value(), ..
 
 `skipValue` now takes a `depth` parameter and bails with `MalformedManifest` once nesting exceeds `kSkipValueMaxDepth` (32). New test in `test_manifest.cpp` builds a manifest with a 64-deep unknown-field array and verifies the parser rejects it cleanly. Only `skipValue` recurses (the manifest's own schema is flat), so 32 is well beyond any legitimate input.
 
-### `ServicePluginShim<T>::provides()` Span lifetime
+### ~~`ServicePluginShim<T>::provides()` Span lifetime~~ — applied
 
-Returns a Span over a function-static array in the DSO. PluginManager copies into `std::vector<ServiceID>` (whose `m_name` pointers still live in the DSO) and the destruction order in `LoadedEntry` keeps everything safe — but the invariant is implicit. Add a comment on `provides()` that the Span must not outlive `IPlugin`, and document the `LoadedEntry` field ordering rationale next to its declaration.
+Comment on `provides()` in `iplugin.h` documents that the returned Span points at DSO static storage and must not outlive the IPlugin. `LoadedEntry` in `plugin_manager.h` got an expanded field-order comment spelling out the destruction sequence (plugin → serviceIds → handle → manifest) and the invariant that keeps everything safe.
 
 ---
 

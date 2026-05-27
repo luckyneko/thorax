@@ -113,7 +113,13 @@ namespace thx::plugin
 
 		Span<const thx::service::ServiceID> provides() const override
 		{
-			// Static storage so the Span's pointer remains valid across calls.
+			// Static storage so the Span's pointer remains valid across calls
+			// — but the storage lives in the plugin's DSO. The returned Span
+			// must NOT outlive the IPlugin instance: once the DSO is unloaded
+			// and unmapped, the array's address is invalid. PluginManager
+			// only holds the Span transiently (it deep-copies the IDs into
+			// std::vector<ServiceID> before the DSO can be unmapped — see the
+			// LoadedEntry destruction order in plugin_manager.h).
 			static const thx::service::ServiceID kProvides[] = { T::staticId() };
 			return { kProvides, 1 };
 		}

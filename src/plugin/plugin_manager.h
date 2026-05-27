@@ -153,9 +153,22 @@ namespace thx::plugin
 		// (see Phase 5 Commit 3).
 
 		// Loaded entry: owns the DSO + IPlugin plus the service IDs it
-		// registered. Declaration order matters — `plugin` is destroyed before
-		// `handle`, so the IPlugin destructor (which lives in DSO code) runs
-		// before the DSO is dlclose()d.
+		// registered.
+		//
+		// Declaration order matters — fields destruct in reverse:
+		//   `plugin` (shared_ptr<IPlugin>) → IPlugin dtor runs in DSO code.
+		//   `serviceIds` (vector<ServiceID>) → ServiceID is trivial, but each
+		//     `m_name` pointer may point into DSO static storage (the
+		//     `kProvides` array in ServicePluginShim<T>::provides() lives in
+		//     the plugin DSO). Destructing serviceIds while the DSO is still
+		//     mapped is harmless; the vector just deallocates its own backing
+		//     storage. Reading any ServiceID's name() after this point would
+		//     be UB — nothing in PluginManager does that.
+		//   `handle` (PluginHandle) → schedules the DSO to the deferred-close
+		//     queue (PluginGarbage), so dlclose runs later, not here.
+		//   `manifest` → plain value, no DSO dependency.
+		// The key invariant: the IPlugin destructor (plugin) runs before the
+		// DSO is queued for close (handle).
 		struct LoadedEntry
 		{
 			PluginManifest                       manifest;
