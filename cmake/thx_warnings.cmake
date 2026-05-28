@@ -11,15 +11,20 @@ function(thx_set_warnings target)
         string(REGEX REPLACE "/W[0-4]" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}" PARENT_SCOPE)
     endif()
 
+    # C4251 (STL member needs dll-interface): benign for thorax. The THX_API
+    # classes carrying STL members (Registry, ServiceManager, PluginManager,
+    # Library, PluginGarbage) live in src/ headers that are never installed;
+    # they are exported only so the in-tree test binary can link against the
+    # same libthorax it loads, so both sides always share one CRT. Suppress it.
     if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.24")
         set_target_properties(${target} PROPERTIES COMPILE_WARNING_AS_ERROR ON)
         target_compile_options(${target} PRIVATE
-            $<$<CXX_COMPILER_ID:MSVC>:/W4>
+            $<$<CXX_COMPILER_ID:MSVC>:/W4;/wd4251>
             $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall;-Wextra>
         )
     else()
         target_compile_options(${target} PRIVATE
-            $<$<CXX_COMPILER_ID:MSVC>:/WX;/W4>
+            $<$<CXX_COMPILER_ID:MSVC>:/WX;/W4;/wd4251>
             $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Werror;-Wall;-Wextra>
         )
     endif()
