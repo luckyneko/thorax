@@ -141,4 +141,14 @@ if(THORAX_INSTALL AND NOT CMAKE_CROSSCOMPILING)
     set_tests_properties(install.consumer_discover PROPERTIES
         FIXTURES_REQUIRED consumer_built
     )
+    # On Windows the consumer exe links thorax.dll, which installs to the
+    # prefix's bin/. There is no rpath, so put that dir on PATH for the run.
+    # The ENVIRONMENT property is itself a ';'-separated list, so the ';' that
+    # separate Windows PATH entries must be escaped to survive as one value.
+    if(WIN32)
+        string(REPLACE ";" "\\;" _thx_escaped_path "$ENV{PATH}")
+        set_tests_properties(install.consumer_discover PROPERTIES
+            ENVIRONMENT "PATH=${THORAX_TEST_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}\\;${_thx_escaped_path}"
+        )
+    endif()
 endif()

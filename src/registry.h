@@ -56,9 +56,10 @@ namespace thx
 		Registry();
 
 		// Allow the free-function lifecycle hooks to mutate state without
-		// exposing it on the public surface.
-		friend bool initialise(std::string debugName);
-		friend void shutdown() noexcept;
+		// exposing it on the public surface. THX_API must match the linkage of
+		// the out-of-line declarations below (MSVC C2375 otherwise).
+		friend THX_API bool initialise(std::string debugName);
+		friend THX_API void shutdown() noexcept;
 
 		// Declaration (= initialisation) order matters in two ways:
 		//   - m_pluginGarbage must be initialised first so it outlives both

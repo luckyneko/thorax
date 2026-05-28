@@ -18,6 +18,18 @@ endif()
 project(thorax LANGUAGES CXX VERSION 0.0.1)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
+
+# Windows has no rpath: a DLL's dependencies are resolved from the directory of
+# the loading executable (and PATH). Co-locate every runtime artifact — the
+# library, the test binary, the thx_emit_manifest tool, and all plugin DSOs —
+# in one directory so each finds thorax.dll without manual PATH munging. This
+# is what lets the thx_emit_manifest POST_BUILD step (which dlopens a freshly
+# built plugin that links thorax.dll) run during the build. Unix relies on
+# rpath instead and keeps its per-target layout.
+if(WIN32 AND NOT_SUBPROJECT)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+endif()
+
 include(thx_warnings)
 include(thx_plugin_manifest)
 include(thx_plugin_auto_manifest)
