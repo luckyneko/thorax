@@ -1,5 +1,7 @@
-# thorax [![CI](https://github.com/luckyneko/thorax/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/luckyneko/thorax/actions/workflows/ci.yml)&nbsp; ![Release](https://img.shields.io/github/v/release/luckyneko/thorax?include_prereleases)&nbsp; ![License](https://img.shields.io/badge/license-MIT-blue)
+# thorax [![CI](https://github.com/luckyneko/thorax/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/luckyneko/thorax/actions/workflows/ci.yml)&nbsp; [![Docs](https://github.com/luckyneko/thorax/actions/workflows/docs.yml/badge.svg?branch=master)](https://luckyneko.github.io/thorax/)&nbsp; ![Release](https://img.shields.io/github/v/release/luckyneko/thorax?include_prereleases)&nbsp; ![License](https://img.shields.io/badge/license-MIT-blue)
 C++17 cross-platform plugin framework — the backbone of an app.
+
+API reference (Doxygen, regenerated from `master` on push): **<https://luckyneko.github.io/thorax/>**
 
 thorax is a small core shared library (`libthorax.dylib` / `.so` / `thorax.dll`) plus any number of plugins. Plugins are shared libraries loaded at runtime; each registers one or more **services** that the host — and other plugins — resolve by interface. The library is built with hidden visibility, so only a tiny, ABI-stable surface crosses the boundary, and every plugin ships a JSON sidecar manifest describing what it provides and requires.
 

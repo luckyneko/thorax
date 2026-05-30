@@ -1,0 +1,53 @@
+# Doxygen configuration for the thorax public API reference.
+# Built and published to https://luckyneko.github.io/thorax/ by
+# .github/workflows/docs.yml. Options not set here take Doxygen's defaults.
+
+PROJECT_NAME           = "thorax"
+PROJECT_BRIEF          = "C++17 cross-platform plugin framework"
+PROJECT_NUMBER         = 0.0.1
+
+# Public API only: include/ holds the installed headers. src/ is private and
+# deliberately excluded. README.md becomes the landing page.
+INPUT                  = include README.md
+RECURSIVE              = YES
+USE_MDFILE_AS_MAINPAGE = README.md
+OUTPUT_DIRECTORY       = build/docs
+
+# The public headers currently use plain // comments, which Doxygen does not
+# attach as documentation, so EXTRACT_ALL keeps every entity visible by
+# signature. As headers gain /// doc-comments, this can stay on (it does no
+# harm) or HIDE_UNDOCUMENTED_MEMBERS can be flipped for a stricter reference.
+EXTRACT_ALL               = YES
+EXTRACT_STATIC            = YES
+EXTRACT_PRIVATE           = NO
+HIDE_UNDOCUMENTED_MEMBERS = NO
+JAVADOC_AUTOBRIEF         = YES
+BUILTIN_STL_SUPPORT       = YES
+
+# THX_API / THX_PLUGIN_API / THX_INTERNAL_API decorate public declarations with
+# visibility/linkage attributes; Doxygen must see them as empty to parse the
+# signatures cleanly. EXPAND_ONLY_PREDEF leaves the export-macro *definitions*
+# (THX_DEFINE_SERVICE_PLUGIN / THX_DEFINE_PLUGIN) intact for documentation
+# rather than expanding them away.
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = YES
+EXPAND_ONLY_PREDEF     = YES
+INCLUDE_PATH           = include
+PREDEFINED             = THX_API= \
+                         THX_PLUGIN_API= \
+                         THX_INTERNAL_API=
+
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+SOURCE_BROWSER         = YES
+INLINE_SOURCES         = NO
+REFERENCED_BY_RELATION = YES
+REFERENCES_RELATION    = YES
+
+# Inheritance / collaboration diagrams (Service<Derived> / IService, IPlugin,
+# ILogSink, ...). Requires graphviz, which the docs workflow installs.
+HAVE_DOT               = YES
+
+QUIET                  = YES
+WARN_IF_UNDOCUMENTED   = NO
+WARN_AS_ERROR          = NO

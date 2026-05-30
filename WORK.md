@@ -34,9 +34,9 @@ With the manifest auto-derived from `IPlugin` (`thx_plugin_auto_manifest`), thre
 
 `Library::open` and `PluginHandle::open` already accept `LoadFlags` (Lazy/Strict; Strict → `RTLD_NOW | RTLD_LOCAL` on POSIX). `PluginManager` always passes Lazy. Wire Strict through `PluginManager::open`/`load` if a consumer wants fail-fast loading via the framework loader rather than `PluginHandle` directly.
 
-### Doxygen API-reference site + Docs badge
+### Doxygen doc-comments for the public headers
 
-Mirror the sibling `multi` project: a Doxygen config over the public headers (`include/thx/`) published to GitHub Pages via a `docs.yml` workflow, plus a `[![Docs]]` badge in the README. Gives consumers a browsable API reference instead of reading headers. **Trigger:** when the public surface is stable enough that a generated reference is worth maintaining.
+The docs *site* is shipped — `Doxyfile` + `.github/workflows/docs.yml` publish the public API to <https://luckyneko.github.io/thorax/> on push to `master`, and the README carries the badge. What remains is **content**: the headers under `include/thx/` use plain `//` comments, which Doxygen lists by signature but does not attach as prose. Convert them to `///` / `/** @brief … */`, incrementally header by header, so the reference carries the explanatory text. Optional polish: `\defgroup` the API into service / plugin / lifecycle modules. **One-time setup still needed:** enable GitHub Pages (Settings → Pages → Source = "GitHub Actions") so the workflow can deploy.
 
 ---
 
