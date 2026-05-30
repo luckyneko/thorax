@@ -7,7 +7,6 @@
  */
 
 #include <catch2/catch_all.hpp>
-#include <library.h>
 #include <thx/plugin/plugin.h>
 #include <plugin/plugin_manager.h>
 #include <thx/result.h>
@@ -43,86 +42,6 @@
 #ifndef THX_MOCK_FORGETS_UNLOAD_PLUGIN_PATH
 #  error "THX_MOCK_FORGETS_UNLOAD_PLUGIN_PATH not defined — set via target_compile_definitions in CMakeLists.txt"
 #endif
-
-// ---------------------------------------------------------------------------
-// Result<T, Error>
-// ---------------------------------------------------------------------------
-
-TEST_CASE("Result<int> - ok", "[result]")
-{
-	auto r = thx::Result<int>::ok(42);
-	REQUIRE(r.isOk());
-	REQUIRE(!r.isErr());
-	REQUIRE(bool(r));
-	REQUIRE(r.value() == 42);
-}
-
-TEST_CASE("Result<int> - err", "[result]")
-{
-	auto r = thx::Result<int>::err({thx::ErrorCode::NotLoaded, "nope"});
-	REQUIRE(r.isErr());
-	REQUIRE(!r.isOk());
-	REQUIRE(!bool(r));
-	REQUIRE(r.error().code == thx::ErrorCode::NotLoaded);
-	REQUIRE(r.error().message == "nope");
-}
-
-TEST_CASE("Result<void> - ok", "[result]")
-{
-	auto r = thx::Result<void>::ok();
-	REQUIRE(r.isOk());
-	REQUIRE(bool(r));
-}
-
-TEST_CASE("Result<void> - err", "[result]")
-{
-	auto r = thx::Result<void>::err({thx::ErrorCode::FileNotFound, "missing"});
-	REQUIRE(r.isErr());
-	REQUIRE(!bool(r));
-	REQUIRE(r.error().code == thx::ErrorCode::FileNotFound);
-}
-
-// ---------------------------------------------------------------------------
-// PluginHandle
-// ---------------------------------------------------------------------------
-
-TEST_CASE("PluginHandle - default is empty", "[plugin_handle]")
-{
-	thx::plugin::PluginHandle h;
-	REQUIRE(!bool(h));
-}
-
-TEST_CASE("PluginHandle::open - unloadable path returns OpenFailed", "[plugin_handle]")
-{
-	// PluginHandle::open doesn't pre-stat the file; any dlopen/LoadLibrary
-	// failure (including "no such file") surfaces as OpenFailed. The actual
-	// reason is in the error message. PluginManager's resolveCanonical step
-	// is what distinguishes genuinely-missing paths and returns FileNotFound.
-	auto r = thx::plugin::PluginHandle::open("/nonexistent/path/plugin.dylib");
-	REQUIRE(!r);
-	REQUIRE(r.error().code == thx::ErrorCode::OpenFailed);
-}
-
-TEST_CASE("PluginHandle::open - valid mock plugin", "[plugin_handle]")
-{
-	auto r = thx::plugin::PluginHandle::open(THX_MOCK_PLUGIN_PATH);
-	REQUIRE(r.isOk());
-	REQUIRE(bool(r.value()));
-	REQUIRE(r.value().createFn()  != nullptr);
-	REQUIRE(r.value().destroyFn() != nullptr);
-}
-
-TEST_CASE("PluginHandle::open - mismatched ABI version returns VersionMismatch", "[plugin_handle]")
-{
-	auto r = thx::plugin::PluginHandle::open(THX_MOCK_BAD_ABI_PLUGIN_PATH);
-	REQUIRE(!r);
-	REQUIRE(r.error().code == thx::ErrorCode::VersionMismatch);
-
-	// The diagnostic should include both the plugin's claimed version (99.0.0
-	// per the mock) and the host's THORAX_VERSION so the user can tell which
-	// side is too new.
-	REQUIRE(r.error().message.find("99.0.0") != std::string::npos);
-}
 
 // ---------------------------------------------------------------------------
 // PluginManager — error paths
@@ -222,6 +141,27 @@ TEST_CASE("PluginManager - destructor unloads remaining plugins",
 	} // loader destroyed here — should unregister the service
 
 	REQUIRE(sm.getService<thx_mock::MockService>() == nullptr);
+}
+
+TEST_CASE("PluginManager::clear - unloads all loaded plugins and empties the manager",
+          "[plugin_manager][integration]")
+{
+	thx::service::ServiceManager sm;
+	{
+		thx::plugin::PluginManager loader(sm);
+		REQUIRE(loader.load(THX_MOCK_PLUGIN_PATH));
+		REQUIRE(loader.isLoaded(THX_MOCK_PLUGIN_PATH));
+		REQUIRE(sm.getService<thx_mock::MockService>() != nullptr);
+
+		loader.clear();
+
+		REQUIRE(loader.plugins().empty());
+		REQUIRE(sm.getService<thx_mock::MockService>() == nullptr);
+	} // loader destroyed: clear() again is a no-op on the now-empty manager.
+
+	// clear() queued the DSO into the process-wide PluginGarbage; drain it now
+	// that no ServiceHandle into the plugin remains.
+	thx::plugin::collectGarbage();
 }
 
 // ---------------------------------------------------------------------------
@@ -1248,16 +1188,6 @@ TEST_CASE("PluginManager::pluginsProviding - filters by manifest provides",
 	REQUIRE(loader.pluginsProviding("nope.NotAService").empty());
 
 	fs::remove_all(tmp);
-}
-
-TEST_CASE("PluginHandle::open - LoadFlags::Strict succeeds on a healthy plugin",
-          "[plugin_handle]")
-{
-	// Strict (RTLD_NOW on POSIX) resolves every symbol at load time. A
-	// well-formed plugin has no unresolved symbols and so opens fine.
-	auto r = thx::plugin::PluginHandle::open(THX_MOCK_PLUGIN_PATH,
-	    thx::Library::LoadFlags::Strict);
-	REQUIRE(r.isOk());
 }
 
 TEST_CASE("PluginManager::discover - Recursive::Yes walks subdirectories",

@@ -16,6 +16,12 @@
 #include <registry.h>
 #include <service/service_manager.h>
 
+#include "mock_plugin.h"
+
+#ifndef THX_MOCK_PLUGIN_PATH
+#  error "THX_MOCK_PLUGIN_PATH not defined — set via target_compile_definitions in CMakeLists.txt"
+#endif
+
 // The Registry is a process-wide singleton; tests that mutate its state
 // (debug name, garbage queue) share it. Each test that pokes at lifecycle
 // state resets it on the way out.
@@ -23,10 +29,13 @@
 namespace
 {
 	// Probe service registered through the public facade to verify that
-	// shutdown() tears registered state down.
+	// shutdown() tears registered state down and runs onDestroy.
 	struct ShutdownProbe : thx::service::Service<ShutdownProbe>
 	{
 		static constexpr thx::Version staticVersion() { return {1, 0, 0}; }
+
+		static inline int destroyCount = 0;
+		void onDestroy() override { ++destroyCount; }
 	};
 }
 
@@ -120,4 +129,47 @@ TEST_CASE("thx::shutdown unregisters services left in the Registry",
 	thx::shutdown();
 	REQUIRE(getService<ShutdownProbe>() == nullptr);
 	REQUIRE(thx::registry().serviceManager().listServices().empty());
+}
+
+TEST_CASE("thx::shutdown runs service onDestroy hooks",
+          "[registry][lifecycle][service]")
+{
+	using namespace thx::service;
+
+	thx::shutdown();
+	ShutdownProbe::destroyCount = 0;
+
+	REQUIRE(registerService<ShutdownProbe>());
+	REQUIRE(ShutdownProbe::destroyCount == 0);  // onDestroy hasn't run yet
+
+	thx::shutdown();
+	REQUIRE(ShutdownProbe::destroyCount == 1);
+}
+
+TEST_CASE("thx::shutdown unloads loaded plugins and drains their DSOs",
+          "[registry][lifecycle][plugin]")
+{
+	using namespace thx;
+
+	shutdown();  // clean slate
+	REQUIRE(plugin::load(THX_MOCK_PLUGIN_PATH));
+	REQUIRE(plugin::isLoaded(THX_MOCK_PLUGIN_PATH));
+	REQUIRE(service::getService<thx_mock::MockService>() != nullptr);
+
+	shutdown();
+
+	REQUIRE_FALSE(plugin::isLoaded(THX_MOCK_PLUGIN_PATH));
+	REQUIRE(service::getService<thx_mock::MockService>() == nullptr);
+	// shutdown() drains the deferred-close queue after unloading.
+	REQUIRE(plugin::pendingGarbage() == 0);
+}
+
+TEST_CASE("thx::shutdown is idempotent", "[registry][lifecycle]")
+{
+	thx::shutdown();
+	thx::shutdown();  // second call must be a safe no-op
+
+	REQUIRE(thx::registry().serviceManager().listServices().empty());
+	REQUIRE(thx::registry().pluginManager().plugins().empty());
+	REQUIRE(thx::registry().debugName().empty());
 }

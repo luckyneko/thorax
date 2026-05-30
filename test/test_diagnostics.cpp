@@ -1,4 +1,4 @@
-﻿/*
+/*
  *  Created by LuckyNeko on 24/04/2026.
  *  Copyright 2026 LuckyNeko
  *
@@ -8,14 +8,11 @@
 
 #include <catch2/catch_all.hpp>
 #include <thx/log.h>
-#include <plugin/plugin_manager.h>
 #include <service/service_manager.h>
 
-#include "mock_plugin.h"
-
-#ifndef THX_MOCK_PLUGIN_PATH
-#  error "THX_MOCK_PLUGIN_PATH not defined"
-#endif
+#include <memory>
+#include <string>
+#include <vector>
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -57,18 +54,6 @@ struct SinkGuard
 
 	bool hasLevel(thx::LogLevel lvl) const { return sink->hasLevel(lvl); }
 	bool hasMessageContaining(std::string const& s) const { return sink->hasMessageContaining(s); }
-};
-
-// Minimal concrete IService for unit tests that don't need a real plugin.
-struct MinimalService : thx::service::IService
-{
-	thx::service::ServiceID id()      const override { return thx::service::ServiceID("test.Minimal"); }
-	thx::Version   version() const override { return thx::Version{1, 0, 0};     }
-};
-
-auto make_minimal = []() -> thx::service::IService*
-{
-	return new MinimalService();
 };
 
 } // namespace
@@ -116,7 +101,7 @@ TEST_CASE("log - captures call-site source location", "[log]")
 TEST_CASE("setLogSink - nullptr silences logging", "[log]")
 {
 	thx::setLogSink(nullptr);
-	// No crash, no output anywhere â€” the call simply drops.
+	// No crash, no output anywhere; the call simply drops.
 	thx::log(thx::LogLevel::Info, "this goes nowhere");
 	thx::restoreDefaultLogSink();
 }
@@ -187,41 +172,10 @@ TEST_CASE("assertThat - captures source location on failure", "[assert]")
 #endif
 
 // ---------------------------------------------------------------------------
-// ServiceManager diagnostic output routes through the log sink
+// ServiceManager diagnostics route through the installed log sink.
+// (Rejection *semantics* are covered in test_service_manager.cpp; this proves
+// the diagnostics actually reach the sink.)
 // ---------------------------------------------------------------------------
-
-TEST_CASE("ServiceManager - null factory logs Error", "[log][service_manager]")
-{
-	SinkGuard g;
-	thx::service::ServiceManager sm;
-
-	sm.registerService(thx::service::ServiceID("test.Null"), thx::Version{1, 0, 0},
-	                   thx::service::ServiceFactory{});  // empty factory — invoke is null
-
-	REQUIRE(g.hasLevel(thx::LogLevel::Error));
-}
-
-TEST_CASE("ServiceManager - incompatible major version logs Warn", "[log][service_manager]")
-{
-	SinkGuard g;
-	thx::service::ServiceManager sm;
-
-	sm.registerService(thx::service::ServiceID("test.Minimal"), thx::Version{1, 0, 0}, make_minimal);
-	// Attempt to register same ID at major version 2 â€” incompatible.
-	sm.registerService(thx::service::ServiceID("test.Minimal"), thx::Version{2, 0, 0}, make_minimal);
-
-	REQUIRE(g.hasLevel(thx::LogLevel::Warn));
-}
-
-TEST_CASE("ServiceManager - unregister unknown ID logs Warn", "[log][service_manager]")
-{
-	SinkGuard g;
-	thx::service::ServiceManager sm;
-
-	sm.unregisterService(thx::service::ServiceID("test.Unknown"));
-
-	REQUIRE(g.hasLevel(thx::LogLevel::Warn));
-}
 
 TEST_CASE("ServiceManager - errors route to installed sink", "[log][service_manager]")
 {
@@ -230,97 +184,9 @@ TEST_CASE("ServiceManager - errors route to installed sink", "[log][service_mana
 
 	thx::service::ServiceManager sm;
 	sm.registerService(thx::service::ServiceID("test.Static"), thx::Version{1, 0, 0},
-	                   thx::service::ServiceFactory{});
+	                   thx::service::ServiceFactory{});  // empty factory — invoke is null
 
 	thx::restoreDefaultLogSink();
 
 	REQUIRE(sink->hasLevel(thx::LogLevel::Error));
-}
-
-// ---------------------------------------------------------------------------
-// ServiceManager::listServices
-// ---------------------------------------------------------------------------
-
-TEST_CASE("ServiceManager::listServices - empty initially", "[introspection]")
-{
-	thx::service::ServiceManager sm;
-	REQUIRE(sm.listServices().empty());
-}
-
-TEST_CASE("ServiceManager::listServices - returns registered entry", "[introspection]")
-{
-	thx::service::ServiceManager sm;
-	sm.registerService(thx::service::ServiceID("test.Minimal"), thx::Version{1, 0, 0}, make_minimal);
-
-	auto svcs = sm.listServices();
-	REQUIRE(svcs.size() == 1);
-	REQUIRE(svcs[0].id == thx::service::ServiceID("test.Minimal"));
-}
-
-TEST_CASE("ServiceManager - duplicate registration is rejected",
-          "[introspection]")
-{
-	thx::service::ServiceManager sm;
-	REQUIRE(sm.registerService(thx::service::ServiceID("test.Minimal"),
-	                            thx::Version{1, 0, 0}, make_minimal));
-	REQUIRE_FALSE(sm.registerService(thx::service::ServiceID("test.Minimal"),
-	                                  thx::Version{1, 0, 0}, make_minimal));
-	REQUIRE(sm.listServices().size() == 1);
-}
-
-TEST_CASE("ServiceManager::listServices - entry removed after unregister",
-          "[introspection]")
-{
-	thx::service::ServiceManager sm;
-	sm.registerService(thx::service::ServiceID("test.Minimal"), thx::Version{1, 0, 0}, make_minimal);
-	sm.unregisterService(thx::service::ServiceID("test.Minimal"));
-
-	REQUIRE(sm.listServices().empty());
-}
-
-TEST_CASE("ServiceManager::listServices - multiple independent services",
-          "[introspection]")
-{
-	thx::service::ServiceManager sm;
-	sm.registerService(thx::service::ServiceID("test.A"), thx::Version{1, 0, 0}, make_minimal);
-	sm.registerService(thx::service::ServiceID("test.B"), thx::Version{1, 0, 0}, make_minimal);
-
-	REQUIRE(sm.listServices().size() == 2);
-}
-
-// ---------------------------------------------------------------------------
-// PluginManager::plugins(State::Loaded)
-// ---------------------------------------------------------------------------
-
-TEST_CASE("PluginManager::plugins(Loaded) - empty before load", "[introspection]")
-{
-	thx::service::ServiceManager sm;
-	thx::plugin::PluginManager   loader(sm);
-
-	REQUIRE(loader.plugins(thx::plugin::State::Loaded).empty());
-}
-
-TEST_CASE("PluginManager::plugins(Loaded) - entry present after load", "[introspection]")
-{
-	thx::service::ServiceManager sm;
-	thx::plugin::PluginManager   loader(sm);
-	loader.load(THX_MOCK_PLUGIN_PATH);
-
-	auto loaded = loader.plugins(thx::plugin::State::Loaded);
-	REQUIRE(loaded.size() == 1);
-	REQUIRE(!loaded[0].name.empty());
-	REQUIRE(loaded[0].services.size() == 1);
-	REQUIRE(loaded[0].services[0] == thx_mock::MockService::staticId().name());
-}
-
-TEST_CASE("PluginManager::plugins(Loaded) - empty after unload", "[introspection]")
-{
-	thx::service::ServiceManager sm;
-	thx::plugin::PluginManager   loader(sm);
-	loader.load(THX_MOCK_PLUGIN_PATH);
-	loader.unload(THX_MOCK_PLUGIN_PATH);
-
-	// After unload, the entry transitions to Discovered (per Phase 6 spec),
-	// not removed entirely. Loaded-filtered query is empty.
-	REQUIRE(loader.plugins(thx::plugin::State::Loaded).empty());
 }

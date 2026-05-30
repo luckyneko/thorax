@@ -186,7 +186,7 @@ TEST_CASE("ServiceManager - onConstruct called on first registration", "[service
 	REQUIRE(constructed);
 }
 
-TEST_CASE("ServiceManager - duplicate registration is rejected",
+TEST_CASE("ServiceManager - duplicate registration is rejected for every version",
 		  "[service_manager]")
 {
 	thx::service::ServiceManager sm;
@@ -205,8 +205,19 @@ TEST_CASE("ServiceManager - duplicate registration is rejected",
 		++construct_count;
 		return new TestService("thx.test.ServiceA", kV100); }));
 
+	// Single-owner semantics: re-registration is rejected for every version —
+	// older, newer-compatible, and different-major — never invoking a factory.
+	REQUIRE_FALSE(reg(sm, "thx.test.ServiceA", kV090));
+	REQUIRE_FALSE(reg(sm, "thx.test.ServiceA", kV110));
+	REQUIRE_FALSE(reg(sm, "thx.test.ServiceA", kV200));
+
 	REQUIRE(construct_count == 1);
 	REQUIRE(sm.listServices().size() == 1);
+
+	// The original registration survives unchanged.
+	auto svc = sm.getService<TestService>(kServiceA);
+	REQUIRE(svc != nullptr);
+	REQUIRE(svc->version() == kV100);
 }
 
 TEST_CASE("ServiceManager - onConstruct failure aborts registration",
@@ -284,22 +295,21 @@ TEST_CASE("ServiceManager - unregister releases shared_ptr ownership after onDes
 // Single-owner registration semantics
 // ---------------------------------------------------------------------------
 
-TEST_CASE("ServiceManager - second registration with any version is rejected",
+TEST_CASE("ServiceManager::clear - removes every service and runs onDestroy",
 		  "[service_manager]")
 {
 	thx::service::ServiceManager sm;
-	reg(sm, "thx.test.ServiceA", kV100);
+	bool destroyedA = false;
+	bool destroyedB = false;
+	reg(sm, "thx.test.ServiceA", kV100, nullptr, &destroyedA);
+	reg(sm, "thx.test.ServiceB", kV100, nullptr, &destroyedB);
+	REQUIRE(sm.listServices().size() == 2);
 
-	// All of these must fail under single-owner semantics, regardless of
-	// whether the version is older, newer-compatible, or different major.
-	REQUIRE_FALSE(reg(sm, "thx.test.ServiceA", kV090));
-	REQUIRE_FALSE(reg(sm, "thx.test.ServiceA", kV110));
-	REQUIRE_FALSE(reg(sm, "thx.test.ServiceA", kV200));
+	sm.clear();
 
-	// Original registration survives.
-	auto svc = sm.getService<TestService>(kServiceA);
-	REQUIRE(svc != nullptr);
-	REQUIRE(svc->version() == kV100);
+	REQUIRE(sm.listServices().empty());
+	REQUIRE(destroyedA);
+	REQUIRE(destroyedB);
 }
 
 // ---------------------------------------------------------------------------

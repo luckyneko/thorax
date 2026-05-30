@@ -18,9 +18,11 @@ add_executable(test-${PROJECT_NAME}
     test_umbrella_header.cpp
     test_service_id.cpp
     test_version.cpp
+    test_result.cpp
     test_service_manager.cpp
     test_abi_types.cpp
     test_library.cpp
+    test_plugin_handle.cpp
     test_manifest.cpp
     test_emit_manifest.cpp
     test_plugin_manager.cpp
