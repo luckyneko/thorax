@@ -107,6 +107,14 @@ namespace thx::service
 		template <typename T>
 		bool unregisterService();
 
+		// Unregisters every service, running each IService::onDestroy() outside
+		// the registry lock (same contract as unregisterService). Leaves no
+		// registered entries behind. Used by thx::shutdown() to return the
+		// process-wide registry to an empty state; also handy for per-test
+		// isolation. Services with outstanding ServiceHandles stay alive until
+		// the last handle drops, exactly as with unregisterService.
+		void clear();
+
 		// Returns a point-in-time snapshot of all registered service IDs.
 		// Useful for diagnostics and test assertions.
 		std::vector<ServiceInfo> listServices() const;

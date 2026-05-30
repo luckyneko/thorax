@@ -32,6 +32,20 @@ bool initialise(std::string debugName)
 void shutdown() noexcept
 {
 	auto& reg = Registry::instance();
+	// Tear framework-owned state down in the same order ~Registry would:
+	//   1. unload every plugin (runs onUnload, unregisters their services,
+	//      queues each DSO into PluginGarbage);
+	//   2. unregister any services registered directly (not owned by a plugin),
+	//      running their onDestroy;
+	//   3. drain the deferred-close queue so the DSOs queued in step 1 are
+	//      actually unmapped;
+	//   4. clear the debug name.
+	// After this call no framework-owned services, loaded plugins, or mapped
+	// plugin DSOs survive — only the empty Registry shell persists. Callers
+	// MUST have released every ServiceHandle into a plugin DSO first (step 3
+	// dlclose's them).
+	reg.m_pluginManager.clear();
+	reg.m_serviceManager.clear();
 	reg.m_pluginGarbage.collect();
 	reg.m_debugName.clear();
 }

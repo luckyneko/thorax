@@ -8,7 +8,26 @@ For naming/style conventions see CLAUDE.md "Layout & conventions". For the migra
 
 ## Open design questions
 
-(None currently.)
+### Migrate the test suite onto the production singleton + facades (AGENTS.md #4)
+
+**What:** the bulk of the suite (`test_service_manager.cpp`, `test_diagnostics.cpp`, `test_plugin_manager.cpp`, `test_io_plugin.cpp`, `test_logging_plugin.cpp`) constructs **local** `ServiceManager` / `PluginManager(sm)` instances per `TEST_CASE` purely for clean-slate isolation. CLAUDE.md flags this as "a workaround … not the canonical design." AGENTS.md non-negotiable #4 ("tests must exercise production code, not test-only scaffolding") wants these driven through the production path instead: the `thx::service::*` / `thx::plugin::*` facades over the Registry singleton. (`test_facades.cpp` / `test_registry.cpp` already do this and are the reference shape.)
+
+**Enabling primitive — now in place.** `thx::shutdown()` performs a full teardown (unload all plugins → unregister all services → drain garbage → clear name), built on the new `PluginManager::clear()` / `ServiceManager::clear()`. That gives tests a public reset between cases, so per-test isolation no longer needs a local manager — and crucially, no `THX_TESTING`-gated `resetForTesting` hook is required. Tests reset through the same lifecycle real programs use.
+
+**The migration:**
+
+- Rewrite the five files to register / look up via the facades against the singleton; reset with `thx::shutdown()` in teardown (a Catch2 `EventListener`, or explicit cleanup per case).
+- Each rewritten test must honour the `[lifetime]` discipline by hand: release every `ServiceHandle` into a plugin DSO before `shutdown()` / `collectGarbage()`. Local-manager teardown currently handles this automatically via scope exit; this is the main source of new fragility.
+- Once no test injects a local `ServiceManager`, the thread-local `ActiveServiceManagerScope` (`src/service/active_service_manager.h`) has only its identity (no-op) behaviour left — its non-identity redirect exists *solely* for the local-SM test pattern. **Delete the class** and have `PluginManager::load` / `unload` register straight through `m_sm` (always the Registry SM in production). This is the concrete simplification payoff. Drop `active_service_manager.h` from `test_iplugin.cpp` and remove the facade's slot check in `src/service/service.cpp`.
+- Remove the now-stale local-manager language: the `src/registry.h` comment ("Tests that need isolated state continue to construct local ServiceManager / PluginManager instances directly"), CLAUDE.md "Active ServiceManager scope" + "Test-pattern note", and the P0 #1 / P2 notes below that reference the pattern.
+
+**Does this let us drop `THX_INTERNAL_API`?** No — necessary but not sufficient. Even after the migration, several internal classes are unit-tested *as units* with no public-facade equivalent: `Library` (`test_library.cpp`, the raw dlopen/dlclose layer — no facade by design), the concurrency / lock-ordering / phase-1-reservation tests on `ServiceManager`, the `[lifetime]` / recursive-mutex / garbage-ordering tests on `PluginManager`, and Registry / PluginGarbage identity in `test_registry.cpp`. Removing the macro entirely means deleting that white-box coverage — exactly the ABI/concurrency internals most worth testing. **Recommendation: keep `THX_INTERNAL_API`.** It is free in production (gated on `THX_TESTING`; ~50 vs ~108 exported symbols). The macro was never the smell; the local-manager idiom and the test-only `ActiveServiceManagerScope` are, and this migration removes both.
+
+**Incidental find:** no test includes `plugin_handle.h` — `PluginHandle` is only exercised through `PluginManager` (same DSO), so its `THX_INTERNAL_API` decoration may already be vestigial and removable today, independent of this migration. Verify with `nm` before touching.
+
+**Status:** deferred. The `shutdown()` primitive is shipped; the migration itself is ~a day of work plus ASan re-validation, and it trades a documented, ASan-clean isolation mechanism for production-path fidelity.
+
+**Trigger:** when the local-manager idiom causes a real problem (cross-test contamination, or the P2 garbage-drain footgun biting in practice), or when test-path fidelity is explicitly prioritised.
 
 ---
 

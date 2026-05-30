@@ -65,6 +65,13 @@ namespace
 
 PluginManager::~PluginManager()
 {
+	clear();
+}
+
+void PluginManager::clear()
+{
+	std::lock_guard<std::recursive_mutex> lock(m_mutex);
+
 	// Loaded entries first: onUnload + service cleanup, then ~LoadedEntry
 	// schedules the DSO to the garbage queue.
 	for (auto& [path, entry] : m_plugins)
@@ -82,7 +89,10 @@ PluginManager::~PluginManager()
 	// the IPlugin and queues the DSO to the garbage queue. No services to
 	// unregister.
 	m_opened.clear();
-	// Discovered entries hold nothing; clearing is implicit.
+	// Discovered entries hold only a parsed manifest (no DSO); drop them too
+	// so clear() leaves the manager genuinely empty.
+	m_discovered.clear();
+	m_warnedMissingDso.clear();
 }
 
 std::string PluginManager::resolveCanonical(std::string const& path)

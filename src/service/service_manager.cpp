@@ -156,6 +156,27 @@ bool ServiceManager::unregisterService(ServiceID id)
 	return true;
 }
 
+void ServiceManager::clear()
+{
+	std::vector<ServiceHandle<IService>> to_destroy;
+
+	{
+		std::unique_lock lock(m_mutex);
+		to_destroy.reserve(m_services.size());
+		for (auto& [id, svc] : m_services)
+			to_destroy.push_back(std::move(svc));
+		m_services.clear();
+	}
+
+	// onDestroy runs without the registry lock so a service may safely call
+	// back into ServiceManager during teardown (mirrors unregisterService).
+	// Handles drop at scope exit; external holders keep their service alive
+	// past that point.
+	for (auto& handle : to_destroy)
+		if (handle)
+			handle->onDestroy();
+}
+
 std::vector<ServiceInfo> ServiceManager::listServices() const
 {
 	std::shared_lock lock(m_mutex);

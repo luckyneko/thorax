@@ -102,6 +102,18 @@ namespace thx::plugin
 		// phase where only a subset will be loaded.
 		std::size_t closeAllOpened();
 
+		// Resets the manager to empty: unloads every Loaded plugin (onUnload +
+		// service cleanup), drops every Opened entry, and forgets every
+		// Discovered entry. Each plugin's DSO is queued to PluginGarbage, NOT
+		// closed here — drain the queue (collectGarbage) once no ServiceHandle
+		// into those DSOs remains. This is the body of ~PluginManager, exposed
+		// so thx::shutdown() can return the process-wide manager to an empty
+		// state without destroying the Registry-owned instance.
+		//
+		// PRECONDITION (same as unload/reload): release every ServiceHandle
+		// obtained from these plugins' services before the subsequent drain.
+		void clear();
+
 		// Transitions a plugin into Loaded: checks required(), calls onLoad,
 		// and registers the plugin's services.
 		//

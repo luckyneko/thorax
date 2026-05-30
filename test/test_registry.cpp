@@ -9,6 +9,8 @@
 #include <catch2/catch_all.hpp>
 #include <thx/lifecycle.h>
 #include <thx/plugin/plugin.h>
+#include <thx/service/iservice.h>
+#include <thx/service/service.h>
 #include <plugin/plugin_garbage.h>
 #include <plugin/plugin_manager.h>
 #include <registry.h>
@@ -17,6 +19,16 @@
 // The Registry is a process-wide singleton; tests that mutate its state
 // (debug name, garbage queue) share it. Each test that pokes at lifecycle
 // state resets it on the way out.
+
+namespace
+{
+	// Probe service registered through the public facade to verify that
+	// shutdown() tears registered state down.
+	struct ShutdownProbe : thx::service::Service<ShutdownProbe>
+	{
+		static constexpr thx::Version staticVersion() { return {1, 0, 0}; }
+	};
+}
 
 TEST_CASE("Registry::instance returns the same object across calls", "[registry]")
 {
@@ -90,4 +102,22 @@ TEST_CASE("thx::shutdown drains the deferred-close queue",
 	thx::shutdown();
 	REQUIRE(gc.pending() == 0);
 	REQUIRE(thx::registry().debugName().empty());
+}
+
+TEST_CASE("thx::shutdown unregisters services left in the Registry",
+          "[registry][lifecycle][service]")
+{
+	using namespace thx::service;
+
+	// Start clean, register a service directly through the production facade,
+	// confirm it is live, then prove shutdown() removes it.
+	thx::shutdown();
+	REQUIRE(getService<ShutdownProbe>() == nullptr);
+
+	REQUIRE(registerService<ShutdownProbe>());
+	REQUIRE(getService<ShutdownProbe>() != nullptr);
+
+	thx::shutdown();
+	REQUIRE(getService<ShutdownProbe>() == nullptr);
+	REQUIRE(thx::registry().serviceManager().listServices().empty());
 }

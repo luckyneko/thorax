@@ -67,7 +67,7 @@ The `Registry` class itself is private (in `src/`); consumers never see it. Publ
 Lifecycle hooks (free functions in `thx::`, declared in [include/thx/lifecycle.h](include/thx/lifecycle.h)):
 
 - `thx::initialise(debugName)` — records an optional human-readable name. Returns `true` if this call set the name, `false` if a previous `initialise()` already did. Calling `initialise()` is *not* required.
-- `thx::shutdown()` — drains the deferred-close queue and clears the debug name. Does **not** destroy the Registry — the singleton persists until program exit. Safe to call multiple times. Callers MUST release any `ServiceHandle<IService>` references into unloaded DSOs before invoking it.
+- `thx::shutdown()` — tears the framework's owned state down to empty: unloads every loaded plugin (`PluginManager::clear()` → each `IPlugin::onUnload`), unregisters every remaining service (`ServiceManager::clear()` → each `IService::onDestroy`), drains the deferred-close queue, and clears the debug name — in that order (unload schedules DSOs into the queue, so the drain must come last, mirroring the `~PluginManager` → `~ServiceManager` → `~PluginGarbage` destruction order). Does **not** destroy the Registry — only the empty singleton shell persists until program exit. Idempotent; safe to call multiple times. Callers MUST release any `ServiceHandle<IService>` references into plugin DSOs before invoking it, because `shutdown()` `dlclose`s those DSOs and a later release of a dangling handle runs the service destructor in unmapped code. `PluginManager::clear()` / `ServiceManager::clear()` are the reusable teardown primitives — `clear()` is the body of `~PluginManager`, exposed so `shutdown()` can reset the Registry-owned manager in place.
 
 ### Free-function facades
 
