@@ -34,6 +34,10 @@ With the manifest auto-derived from `IPlugin` (`thx_plugin_auto_manifest`), thre
 
 `Library::open` and `PluginHandle::open` already accept `LoadFlags` (Lazy/Strict; Strict → `RTLD_NOW | RTLD_LOCAL` on POSIX). `PluginManager` always passes Lazy. Wire Strict through `PluginManager::open`/`load` if a consumer wants fail-fast loading via the framework loader rather than `PluginHandle` directly.
 
+### Doxygen API-reference site + Docs badge
+
+Mirror the sibling `multi` project: a Doxygen config over the public headers (`include/thx/`) published to GitHub Pages via a `docs.yml` workflow, plus a `[![Docs]]` badge in the README. Gives consumers a browsable API reference instead of reading headers. **Trigger:** when the public surface is stable enough that a generated reference is worth maintaining.
+
 ---
 
 ## Performance — only if measured
