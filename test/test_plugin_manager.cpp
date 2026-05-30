@@ -9,8 +9,15 @@
 #include <catch2/catch_all.hpp>
 #include <thx/plugin/plugin.h>
 #include <plugin/plugin_manager.h>
+#include <registry.h>
 #include <thx/result.h>
 #include "mock_plugin.h"
+
+// White-box unit tests of the PluginManager class. Each case constructs a local
+// PluginManager bound to the Registry's ServiceManager (`sm` below) so the
+// load/unload path runs against production wiring; the test-wide reset listener
+// (test_reset_listener.cpp) returns the Registry to empty after every case, so
+// `sm` is a clean slate at the start of each.
 
 #include <filesystem>
 #include <fstream>
@@ -49,7 +56,7 @@
 
 TEST_CASE("PluginManager::load - missing file returns error", "[plugin_manager]")
 {
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   loader(sm);
 
 	auto r = loader.load("/nonexistent/plugin.dylib");
@@ -59,7 +66,7 @@ TEST_CASE("PluginManager::load - missing file returns error", "[plugin_manager]"
 
 TEST_CASE("PluginManager::unload - not-loaded path returns error", "[plugin_manager]")
 {
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   loader(sm);
 
 	auto r = loader.unload("/nonexistent/plugin.dylib");
@@ -69,7 +76,7 @@ TEST_CASE("PluginManager::unload - not-loaded path returns error", "[plugin_mana
 
 TEST_CASE("PluginManager::isLoaded - false before load", "[plugin_manager]")
 {
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   loader(sm);
 
 	REQUIRE(!loader.isLoaded(THX_MOCK_PLUGIN_PATH));
@@ -81,7 +88,7 @@ TEST_CASE("PluginManager::isLoaded - false before load", "[plugin_manager]")
 
 TEST_CASE("PluginManager - load registers service", "[plugin_manager][integration]")
 {
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   loader(sm);
 
 	REQUIRE(loader.load(THX_MOCK_PLUGIN_PATH));
@@ -91,7 +98,7 @@ TEST_CASE("PluginManager - load registers service", "[plugin_manager][integratio
 
 TEST_CASE("PluginManager - loaded service is functional", "[plugin_manager][integration]")
 {
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   loader(sm);
 
 	loader.load(THX_MOCK_PLUGIN_PATH);
@@ -103,7 +110,7 @@ TEST_CASE("PluginManager - loaded service is functional", "[plugin_manager][inte
 
 TEST_CASE("PluginManager - double-load same path is a no-op", "[plugin_manager][integration]")
 {
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   loader(sm);
 
 	REQUIRE(loader.load(THX_MOCK_PLUGIN_PATH));
@@ -116,7 +123,7 @@ TEST_CASE("PluginManager - double-load same path is a no-op", "[plugin_manager][
 
 TEST_CASE("PluginManager - unload removes service", "[plugin_manager][integration]")
 {
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   loader(sm);
 
 	loader.load(THX_MOCK_PLUGIN_PATH);
@@ -133,7 +140,7 @@ TEST_CASE("PluginManager - unload removes service", "[plugin_manager][integratio
 TEST_CASE("PluginManager - destructor unloads remaining plugins",
           "[plugin_manager][integration]")
 {
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	{
 		thx::plugin::PluginManager loader(sm);
 		loader.load(THX_MOCK_PLUGIN_PATH);
@@ -146,7 +153,7 @@ TEST_CASE("PluginManager - destructor unloads remaining plugins",
 TEST_CASE("PluginManager::clear - unloads all loaded plugins and empties the manager",
           "[plugin_manager][integration]")
 {
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	{
 		thx::plugin::PluginManager loader(sm);
 		REQUIRE(loader.load(THX_MOCK_PLUGIN_PATH));
@@ -174,7 +181,7 @@ TEST_CASE("PluginManager - service survives unload until collectGarbage",
 	// Drain anything queued from previous tests so our count is meaningful.
 	thx::plugin::collectGarbage();
 
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::service::ServiceHandle<thx_mock::MockService> svc;
 	{
 		thx::plugin::PluginManager loader(sm);
@@ -207,7 +214,7 @@ TEST_CASE("PluginManager - load drains the deferred-close queue",
 {
 	thx::plugin::collectGarbage();
 
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   loader(sm);
 
 	REQUIRE(loader.load(THX_MOCK_PLUGIN_PATH));
@@ -278,7 +285,7 @@ TEST_CASE("PluginManager::discover - DSO without sidecar is ignored, paired DSO+
 	std::ofstream{(tmp / "readme.txt").string()};
 	std::ofstream{(tmp / "data.bin").string()};
 
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   loader(sm);
 
 	REQUIRE(loader.discover(tmp.string()));
@@ -302,7 +309,7 @@ TEST_CASE("PluginManager::discover - orphan sidecar (no DSO) is skipped with a w
 	// Manifest without a paired DSO.
 	writeStubManifest(tmp / "ghost.thx.json", "thx.test.Ghost");
 
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   loader(sm);
 
 	REQUIRE(loader.discover(tmp.string()));
@@ -320,7 +327,7 @@ TEST_CASE("PluginManager::discover - empty directory yields no entries",
 	fs::remove_all(tmp);
 	fs::create_directories(tmp);
 
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   loader(sm);
 
 	REQUIRE(loader.discover(tmp.string()));
@@ -334,7 +341,7 @@ TEST_CASE("PluginManager::discover - empty directory yields no entries",
 TEST_CASE("PluginManager::discover - missing directory returns FileNotFound",
           "[plugin_manager][discover]")
 {
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   loader(sm);
 
 	auto r = loader.discover("/nonexistent/path/that/does/not/exist");
@@ -352,7 +359,7 @@ TEST_CASE("PluginManager::discover - real plugin populates a Discovered entry fr
 	fs::create_directories(tmp);
 	auto dst = copyPluginWithSidecar(THX_MOCK_PLUGIN_PATH, tmp);
 
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   loader(sm);
 
 	REQUIRE(loader.discover(tmp.string()));
@@ -381,7 +388,7 @@ TEST_CASE("PluginManager::forget - removes a Discovered entry",
 	fs::create_directories(tmp);
 	auto dst = copyPluginWithSidecar(THX_MOCK_PLUGIN_PATH, tmp);
 
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   loader(sm);
 
 	REQUIRE(loader.discover(tmp.string()));
@@ -399,7 +406,7 @@ TEST_CASE("PluginManager::forget - removes a Discovered entry",
 TEST_CASE("PluginManager::forget - returns InUse for a loaded plugin",
           "[plugin_manager][discover][integration]")
 {
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   loader(sm);
 
 	REQUIRE(loader.load(THX_MOCK_PLUGIN_PATH));
@@ -422,7 +429,7 @@ TEST_CASE("PluginManager::discover - re-scan leaves Loaded entries untouched",
 	fs::create_directories(tmp);
 	auto dst = copyPluginWithSidecar(THX_MOCK_PLUGIN_PATH, tmp);
 
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   loader(sm);
 
 	REQUIRE(loader.load(dst.string()));
@@ -446,7 +453,7 @@ TEST_CASE("PluginManager::discover - re-scan leaves Loaded entries untouched",
 TEST_CASE("PluginManager - IPlugin plugin registers multiple services",
           "[plugin_manager][iplugin][integration]")
 {
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   loader(sm);
 
 	// mock_plugin_multi requires MockService, so load mock_plugin first.
@@ -461,7 +468,7 @@ TEST_CASE("PluginManager - IPlugin plugin registers multiple services",
 TEST_CASE("PluginManager - unloading IPlugin plugin removes all its services",
           "[plugin_manager][iplugin][integration]")
 {
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   loader(sm);
 
 	loader.load(THX_MOCK_PLUGIN_PATH);
@@ -477,7 +484,7 @@ TEST_CASE("PluginManager - unloading IPlugin plugin removes all its services",
 TEST_CASE("PluginManager - IPlugin onLoad returning false fails the load",
           "[plugin_manager][iplugin][integration]")
 {
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   loader(sm);
 
 	auto r = loader.load(THX_MOCK_BAILS_PLUGIN_PATH);
@@ -492,7 +499,7 @@ TEST_CASE("PluginManager - onLoad partial registration is rolled back on failure
 	// mock_plugin_bails_after_register registers ServiceA in onLoad then
 	// returns false. The loader must unregister ServiceA so the failed
 	// load leaves the registry as it was.
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   loader(sm);
 
 	REQUIRE(sm.listServices().empty());
@@ -511,7 +518,7 @@ TEST_CASE("PluginManager - unload sweeps services left behind by onUnload",
 	// mock_plugin_forgets_unload registers ServiceA in onLoad but does NOT
 	// unregister it in onUnload. The loader's safety-net sweep must catch
 	// the survivor and unregister it.
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   loader(sm);
 
 	REQUIRE(loader.load(THX_MOCK_FORGETS_UNLOAD_PLUGIN_PATH));
@@ -524,7 +531,7 @@ TEST_CASE("PluginManager - unload sweeps services left behind by onUnload",
 TEST_CASE("PluginManager - destructor sweeps services left behind by onUnload",
           "[plugin_manager][iplugin][integration]")
 {
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	{
 		thx::plugin::PluginManager loader(sm);
 		REQUIRE(loader.load(THX_MOCK_FORGETS_UNLOAD_PLUGIN_PATH));
@@ -537,7 +544,7 @@ TEST_CASE("PluginManager - destructor sweeps services left behind by onUnload",
 TEST_CASE("PluginManager - IPlugin required() rejected when registered version is too old",
           "[plugin_manager][iplugin][integration]")
 {
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   loader(sm);
 
 	// mock_plugin registers MockService 1.0.0;
@@ -555,7 +562,7 @@ TEST_CASE("PluginManager - IPlugin required() rejected when registered version i
 TEST_CASE("PluginManager - IPlugin required() service missing fails the load",
           "[plugin_manager][iplugin][integration]")
 {
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   loader(sm);
 
 	// mock_plugin_multi requires MockService — without loading mock_plugin
@@ -576,7 +583,7 @@ TEST_CASE("PluginManager::discoverAndLoad - loads real plugin from directory",
 	fs::create_directories(tmp);
 	auto dst = copyPluginWithSidecar(THX_MOCK_PLUGIN_PATH, tmp);
 
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   loader(sm);
 
 	auto summary = loader.discoverAndLoad(tmp.string());
@@ -608,7 +615,7 @@ TEST_CASE("PluginManager::discoverAndLoad - loads real plugin from directory",
 TEST_CASE("PluginManager::open - moves entry to Opened without registering services",
           "[plugin_manager][open][integration]")
 {
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   loader(sm);
 
 	REQUIRE(loader.open(THX_MOCK_PLUGIN_PATH));
@@ -628,7 +635,7 @@ TEST_CASE("PluginManager::open - moves entry to Opened without registering servi
 TEST_CASE("PluginManager::open then load - registers the service",
           "[plugin_manager][open][integration]")
 {
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   loader(sm);
 
 	REQUIRE(loader.open(THX_MOCK_PLUGIN_PATH));
@@ -642,7 +649,7 @@ TEST_CASE("PluginManager::open then load - registers the service",
 TEST_CASE("PluginManager::open - missing file returns FileNotFound",
           "[plugin_manager][open]")
 {
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   loader(sm);
 
 	auto r = loader.open("/nonexistent/plugin.dylib");
@@ -653,7 +660,7 @@ TEST_CASE("PluginManager::open - missing file returns FileNotFound",
 TEST_CASE("PluginManager::open / load are idempotent on the target state",
           "[plugin_manager][open][integration]")
 {
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   loader(sm);
 
 	REQUIRE(loader.load(THX_MOCK_PLUGIN_PATH));
@@ -672,7 +679,7 @@ TEST_CASE("PluginManager::close - returns an Opened entry to Discovered",
 {
 	thx::plugin::collectGarbage();
 
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   loader(sm);
 
 	REQUIRE(loader.open(THX_MOCK_PLUGIN_PATH));
@@ -696,7 +703,7 @@ TEST_CASE("PluginManager::closeAllOpened - sweeps every Opened-not-Loaded entry"
 {
 	thx::plugin::collectGarbage();
 
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   loader(sm);
 
 	REQUIRE(loader.open(THX_MOCK_PLUGIN_PATH));
@@ -717,7 +724,7 @@ TEST_CASE("PluginManager::closeAllOpened - sweeps every Opened-not-Loaded entry"
 TEST_CASE("PluginManager::load on Opened entry - still checks required()",
           "[plugin_manager][open][iplugin][integration]")
 {
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   loader(sm);
 
 	// mock_plugin_multi requires MockService. Open it first (no requirement
@@ -739,7 +746,7 @@ TEST_CASE("PluginManager::load on Opened entry - still checks required()",
 TEST_CASE("PluginManager - inspect required() on Opened entries, load in dependency order",
           "[plugin_manager][open][integration]")
 {
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   loader(sm);
 
 	// Open both plugins up front to inspect their requirements via PluginInfo.
@@ -765,7 +772,7 @@ TEST_CASE("PluginManager - inspect required() on Opened entries, load in depende
 TEST_CASE("PluginManager::checkRequirements - dry-run against the registry",
           "[plugin_manager][open]")
 {
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 
 	// Empty requirements always succeed.
 	thx::Span<const thx::plugin::ServiceRequirement> empty;
@@ -804,7 +811,7 @@ TEST_CASE("PluginManager::checkRequirements - dry-run against the registry",
 TEST_CASE("PluginManager::plugins() returns empty when nothing is loaded",
           "[plugin_manager][query]")
 {
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   pm(sm);
 
 	REQUIRE(pm.plugins().empty());
@@ -816,7 +823,7 @@ TEST_CASE("PluginManager::plugins() returns empty when nothing is loaded",
 TEST_CASE("PluginManager::pluginInfo returns nullopt for unknown paths",
           "[plugin_manager][query]")
 {
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   pm(sm);
 
 	REQUIRE_FALSE(pm.pluginInfo("/nonexistent/path.dylib").has_value());
@@ -826,7 +833,7 @@ TEST_CASE("PluginManager::pluginInfo returns nullopt for unknown paths",
 TEST_CASE("PluginManager::plugins() reflects a loaded plugin",
           "[plugin_manager][query][integration]")
 {
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   pm(sm);
 
 	REQUIRE(pm.load(THX_MOCK_PLUGIN_PATH));
@@ -851,7 +858,7 @@ TEST_CASE("PluginManager::plugins() reflects a loaded plugin",
 TEST_CASE("PluginManager::pluginInfo returns a snapshot for a loaded plugin",
           "[plugin_manager][query][integration]")
 {
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   pm(sm);
 
 	REQUIRE(pm.load(THX_MOCK_PLUGIN_PATH));
@@ -871,7 +878,7 @@ TEST_CASE("PluginManager::pluginInfo returns a snapshot for a loaded plugin",
 TEST_CASE("PluginManager::is(State, path) for loaded plugins",
           "[plugin_manager][query][integration]")
 {
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   pm(sm);
 
 	REQUIRE_FALSE(pm.is(thx::plugin::State::Loaded, THX_MOCK_PLUGIN_PATH));
@@ -913,7 +920,7 @@ TEST_CASE("Manifest verification - matching manifest loads cleanly",
 {
 	// The in-tree mock_plugin's sidecar is authored to match the live IPlugin.
 	// If verification is wired up correctly, the load succeeds.
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   pm(sm);
 
 	REQUIRE(pm.load(THX_MOCK_PLUGIN_PATH));
@@ -943,7 +950,7 @@ TEST_CASE("Manifest verification - mismatched name fails with ManifestMismatch",
 })";
 	}
 
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   pm(sm);
 
 	auto r = pm.load(dst.string());
@@ -980,7 +987,7 @@ TEST_CASE("Manifest verification - mismatched version fails with ManifestMismatc
 })";
 	}
 
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   pm(sm);
 
 	auto r = pm.load(dst.string());
@@ -1015,7 +1022,7 @@ TEST_CASE("Manifest verification - mismatched provides fails with ManifestMismat
 })";
 	}
 
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   pm(sm);
 
 	auto r = pm.load(dst.string());
@@ -1052,7 +1059,7 @@ TEST_CASE("Manifest verification - mismatched requirements fails with ManifestMi
 })";
 	}
 
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   pm(sm);
 
 	auto r = pm.load(dst.string());
@@ -1081,7 +1088,7 @@ TEST_CASE("PluginManager - concurrent reads are safe", "[plugin_manager][threadi
 	// load/unload. Without the coarse mutex, the readers would race the writer
 	// on the m_discovered/m_opened/m_plugins maps. With it, readers see a
 	// consistent snapshot.
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   pm(sm);
 
 	REQUIRE(pm.load(THX_MOCK_PLUGIN_PATH));
@@ -1142,7 +1149,7 @@ TEST_CASE("PluginManager::discoverAndLoad - second call reports alreadyLoaded",
 	fs::create_directories(tmp);
 	auto dst = copyPluginWithSidecar(THX_MOCK_PLUGIN_PATH, tmp);
 
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   loader(sm);
 
 	auto first = loader.discoverAndLoad(tmp.string());
@@ -1174,7 +1181,7 @@ TEST_CASE("PluginManager::pluginsProviding - filters by manifest provides",
 	fs::create_directories(tmp);
 	auto dst = copyPluginWithSidecar(THX_MOCK_PLUGIN_PATH, tmp);
 
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   loader(sm);
 
 	REQUIRE(loader.discover(tmp.string()));
@@ -1204,7 +1211,7 @@ TEST_CASE("PluginManager::discover - Recursive::Yes walks subdirectories",
 	copyPluginWithSidecar(THX_MOCK_PLUGIN_PATH, root / "category_a");
 	copyPluginWithSidecar(THX_MOCK_PLUGIN_PATH, root / "category_b");
 
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   loader(sm);
 
 	// Non-recursive: top-level dir has no sidecars → nothing discovered.
@@ -1223,7 +1230,7 @@ TEST_CASE("PluginManager::discover - Recursive::Yes walks subdirectories",
 TEST_CASE("PluginManager::reload - unloads and reloads the plugin",
           "[plugin_manager]")
 {
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   loader(sm);
 
 	REQUIRE(loader.load(THX_MOCK_PLUGIN_PATH));
@@ -1249,7 +1256,7 @@ TEST_CASE("PluginManager::reload - unloads and reloads the plugin",
 TEST_CASE("PluginManager::reload - not-loaded returns NotLoaded",
           "[plugin_manager]")
 {
-	thx::service::ServiceManager sm;
+	auto& sm = thx::registry().serviceManager();
 	thx::plugin::PluginManager   loader(sm);
 
 	auto r = loader.reload(THX_MOCK_PLUGIN_PATH);
