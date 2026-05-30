@@ -76,21 +76,15 @@ Two "system-level" headers — `thx/<layer>/<layer>.h` — are the only way for 
 - [thx/service/service.h](include/thx/service/service.h) — `thx::service::registerService<T>`, `unregisterService<T>`, `getService<T>`, `listServices`. The templates forward to `thx::service::detail::*Impl` exports defined in [src/service/service.cpp](src/service/service.cpp).
 - [thx/plugin/plugin.h](include/thx/plugin/plugin.h) — `thx::plugin::discover`, `forget`, `open`, `close`, `closeAllOpened`, `load`, `unload`, `discoverAndLoad`, `checkRequirements`, `plugins`/`plugins(State)`/`pluginInfo`/`is`/`isDiscovered`/`isOpened`/`isLoaded`, `collectGarbage`/`pendingGarbage`. Out-of-line in [src/plugin/plugin.cpp](src/plugin/plugin.cpp).
 
-Plugin code calls the facade from inside `IPlugin::onLoad` / `onUnload`. While those hooks are running, the facade routes service operations through the active `PluginManager`'s `m_sm` (see "Active ServiceManager scope" below) rather than directly through the Registry. In production these are the same object; in tests with a local `PluginManager(local_sm)`, they're not.
+Plugin code calls the facade from inside `IPlugin::onLoad` / `onUnload`. The facade's `detail::*Impl` functions dispatch unconditionally to `Registry::instance().serviceManager()`, so a plugin's registrations land in the Registry's ServiceManager — which is exactly the `m_sm` that the loading `PluginManager` was constructed with (a `PluginManager` must be built with the Registry's ServiceManager; see its class contract in [src/plugin/plugin_manager.h](src/plugin/plugin_manager.h)). `finalizeLoad` then attributes the freshly-registered services to the plugin by diffing that same `m_sm`.
 
 **`#include` policy.** Service authors writing an interface type `IFooService : thx::service::Service<IFooService>` should `#include "thx/service/iservice.h"` — the CRTP base `Service<>` is paired with `IService` there. Host code calling the facade functions includes `thx/service/service.h` and `thx/plugin/plugin.h`. The umbrella `thx/thorax.h` brings in everything public.
-
-### Active ServiceManager scope
-
-The thread-local `thx::service::detail::ActiveServiceManagerScope` (in private header [src/service/active_service_manager.h](src/service/active_service_manager.h)) is how `PluginManager` redirects facade-based service registration during plugin load/unload. The scope swaps a `ServiceManager*` into a thread-local slot for its lifetime; the facade's `detail::*Impl` functions check the slot before falling through to `Registry::instance().serviceManager()`.
-
-`PluginManager::load` opens an `ActiveServiceManagerScope(m_sm)` around `plugin->onLoad()`; `unload` and `~PluginManager` do the same around `onUnload`. In production this is `Registry`'s own ServiceManager (identity). In tests that construct a local `PluginManager(local_sm)`, the override directs the plugin's registrations into `local_sm` — preserving the per-test-case isolation the test suite relies on.
 
 Outside the load/unload window the override is null and the facade dispatches through Registry. Plugin code that calls the facade *after* `onLoad` returns (e.g. from a service method) will register against the global Registry, not whatever `PluginManager` loaded the plugin. This is rarely what you want and is mostly relevant for tests.
 
 ### ServiceManager
 
-`ServiceManager` ([src/service/service_manager.h](src/service/service_manager.h), private) is owned by the process-wide Registry. Consumers reach it through `thx::service::*` facades, not directly. The class is also default-constructible, and tests routinely build local instances in conjunction with a local `PluginManager` (see "Active ServiceManager scope" above). Reads use `std::shared_lock` so concurrent `getService<T>()` calls never block each other; `registerService`/`unregisterService` take exclusive locks.
+`ServiceManager` ([src/service/service_manager.h](src/service/service_manager.h), private) is owned by the process-wide Registry. Consumers reach it through `thx::service::*` facades, not directly. The class is also default-constructible; its unit tests build local instances to exercise it in isolation ([test/test_service_manager.cpp](test/test_service_manager.cpp)). Reads use `std::shared_lock` so concurrent `getService<T>()` calls never block each other; `registerService`/`unregisterService` take exclusive locks.
 
 **Single-owner semantics:** each `ServiceID` may be registered exactly once. A duplicate `registerService` returns `false` with a `Warn` diagnostic and *does not* invoke the supplied factory. Plugins that want to *contribute* to an existing service (rather than replace it) use the provider pattern exposed by that service — see the logging/io services for the canonical shape (`addBackend` / `addReader`, holding `weak_ptr` to providers).
 
@@ -171,7 +165,7 @@ The class lives separately from `PluginManager` because the queue has to outlive
 
 `PluginManager::~PluginManager` calls `onUnload` for every still-loaded plugin and clears its entries, but does **not** drain `PluginGarbage`. The framework can't auto-drain: it has no way to know whether outstanding `ServiceHandle`s into those DSOs remain, and calling `dlclose` while a handle is still alive segfaults on the handle's eventual release (the service's destructor lives in unmapped code). Drain explicitly when no service references into those DSOs remain.
 
-**Test-pattern note.** Tests that construct a local `PluginManager(sm)` are a workaround for per-test isolation; they aren't the canonical design. In production there is exactly one `PluginManager` (Registry-owned). When a local PM goes out of scope, its plugins' DSOs are scheduled into the process-wide `PluginGarbage` and sit there until the next `collectGarbage()` (or program exit). Tests that load plugins should call `thx::plugin::collectGarbage()` at teardown — the `[lifetime]` tests in `test_plugin_manager.cpp` model the pattern. The accumulation is bounded by program exit and ASan won't flag it (the queue holds the resource), but it's better hygiene to drain explicitly.
+**Test-pattern note.** [test/test_plugin_manager.cpp](test/test_plugin_manager.cpp) white-box unit-tests the `PluginManager` class by constructing local instances (needed for the destructor / lifetime / threading cases). Each is bound to the Registry's ServiceManager (`auto& sm = thx::registry().serviceManager()`), so loads register into the production ServiceManager and the `ActiveServiceManagerScope` redirect is no longer needed. Per-case isolation comes from the reset listener ([test/test_reset_listener.cpp](test/test_reset_listener.cpp)), which calls `thx::shutdown()` after every case to unload plugins, unregister services, and drain `PluginGarbage`. The `[lifetime]` cases that hold a `ServiceHandle` across `unload` still drop it before draining within the case. Plugin-behaviour and facade tests ([test/test_facades.cpp](test/test_facades.cpp), the io/logging plugin tests) drive the `thx::plugin::*` / `thx::service::*` facades against the singleton directly.
 
 ### Sidecar manifests
 
@@ -251,7 +245,7 @@ thx::assertThat(condition, "message");   // logs at Error if false; std::abort()
 
 **Two export macros.**
 - `THX_API` (in [include/thx/thx_api.h](include/thx/thx_api.h)) — part of the stable wire ABI. Always emits a visibility attribute.
-- `THX_INTERNAL_API` (in [src/thx_internal_api.h](src/thx_internal_api.h)) — exposed so the in-tree test binary can link against internal classes (`Registry`, `ServiceManager`, `PluginManager`, `Library`, `PluginHandle`, `PluginGarbage`, `ActiveServiceManagerScope`). Gated on `THX_TESTING`. When `THORAX_BUILD_TESTING=ON`, both the library and the test binary define `THX_TESTING` and internals are exported; when OFF, internals stay hidden in the `.so`'s export table. Production builds export ~50 symbols; dev builds ~108.
+- `THX_INTERNAL_API` (in [src/thx_internal_api.h](src/thx_internal_api.h)) — exposed so the in-tree test binary can link against internal classes (`Registry`, `ServiceManager`, `PluginManager`, `Library`, `PluginHandle`, `PluginGarbage`). Gated on `THX_TESTING`. When `THORAX_BUILD_TESTING=ON`, both the library and the test binary define `THX_TESTING` and internals are exported; when OFF, internals stay hidden in the `.so`'s export table. Production builds export ~50 symbols; dev builds ~105.
 
 ```
 include/thx/             public — installed
@@ -265,7 +259,7 @@ include/thx/             public — installed
 src/                     private — not installed
 ├── library.h/cpp, registry.h/cpp, log.cpp, thorax.cpp, abi.cpp
 ├── service/service_manager.{h,inl,cpp}                 (the ServiceManager class itself)
-├── service/active_service_manager.h, service.cpp        (thread-local SM override + facade impls)
+├── service/service.cpp                                  (thx::service::* facade impls)
 └── plugin/plugin_handle.{h,cpp}, plugin_garbage.{h,cpp}, plugin_manager.{h,cpp}, plugin.cpp, manifest.cpp
 
 plugins/                 in-tree plugins (logging, io); each is a SHARED lib using THX_DEFINE_SERVICE_PLUGIN (or THX_DEFINE_PLUGIN for the multi-service form)

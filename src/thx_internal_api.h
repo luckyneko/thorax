@@ -18,9 +18,9 @@
 //
 //   THX_INTERNAL_API  — exposed so the in-tree test binary can link against
 //                       internal classes (Registry, ServiceManager,
-//                       PluginManager, Library, PluginHandle, PluginGarbage,
-//                       ActiveServiceManagerScope). NOT part of the stable
-//                       ABI; subject to change. Only emits a visibility
+//                       PluginManager, Library, PluginHandle, PluginGarbage).
+//                       NOT part of the stable ABI; subject to change. Only
+//                       emits a visibility
 //                       attribute when THX_TESTING is defined. In production
 //                       builds (THORAX_BUILD_TESTING=OFF) it expands to
 //                       nothing, letting the library's hidden-visibility

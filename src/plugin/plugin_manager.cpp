@@ -9,7 +9,6 @@
 #include "plugin/plugin_manager.h"
 #include "library.h"
 #include "registry.h"
-#include "service/active_service_manager.h"
 #include "thx/to_string.h"
 #include "thx/plugin/manifest.h"
 #include "thx/plugin/platform.h"
@@ -78,10 +77,7 @@ void PluginManager::clear()
 	{
 		auto name = pluginDisplayName(entry.plugin, path);
 		if (entry.plugin)
-		{
-			thx::service::detail::ActiveServiceManagerScope scope(m_sm);
 			entry.plugin->onUnload();
-		}
 		sweepSurvivingServices(m_sm, entry.serviceIds, name);
 	}
 	m_plugins.clear();
@@ -223,14 +219,12 @@ PluginManager::finalizeLoad(OpenedEntry opened, std::string const& canonical)
 		return ids;
 	};
 
-	bool onLoadOk;
-	{
-		// Route the facade's registerService calls to m_sm for the duration of
-		// onLoad. Plugin code uses thx::service::registerService<T>(...) which
-		// now dispatches through this thread-local override.
-		thx::service::detail::ActiveServiceManagerScope scope(m_sm);
-		onLoadOk = opened.plugin->onLoad();
-	}
+	// Plugin code registers via thx::service::registerService<T>(...), which
+	// dispatches to the Registry's ServiceManager — the same instance as m_sm
+	// (PluginManager must be constructed with the Registry's ServiceManager;
+	// see the class contract). The service-ID diff below reads m_sm, so the
+	// services onLoad registered are exactly what gets attributed to the plugin.
+	bool onLoadOk = opened.plugin->onLoad();
 	if (!onLoadOk)
 	{
 		// onLoad may have partially registered services before returning false.
@@ -570,10 +564,7 @@ Result<void, Error> PluginManager::unload(std::string const& path)
 	auto name     = pluginDisplayName(it->second.plugin, key);
 	auto manifest = std::move(it->second.manifest);
 	if (it->second.plugin)
-	{
-		thx::service::detail::ActiveServiceManagerScope scope(m_sm);
 		it->second.plugin->onUnload();
-	}
 	sweepSurvivingServices(m_sm, it->second.serviceIds, name);
 
 	m_plugins.erase(it); // ~LoadedEntry queues DSO to garbage

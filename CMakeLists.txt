@@ -92,7 +92,6 @@ add_library(${PROJECT_NAME} SHARED
     # Private headers
     src/library.h
     src/registry.h
-    src/service/active_service_manager.h
     src/service/service_manager.h
     src/service/service_manager.inl
     src/plugin/plugin_handle.h

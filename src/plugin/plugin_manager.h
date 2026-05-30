@@ -51,6 +51,15 @@ namespace thx::plugin
 	class THX_INTERNAL_API PluginManager
 	{
 	public:
+		// `sm` MUST be the Registry's ServiceManager. A plugin's onLoad/onUnload
+		// registers its services through the thx::service::* facades, which
+		// dispatch to Registry::instance().serviceManager(); finalizeLoad then
+		// attributes the newly-registered services by diffing `sm`. The two only
+		// agree when sm IS the Registry's ServiceManager. In production the
+		// Registry constructs the PluginManager with its own ServiceManager; the
+		// injected reference exists so that construction can happen in the right
+		// order (ServiceManager before PluginManager), not to support alternate
+		// ServiceManagers.
 		explicit PluginManager(thx::service::ServiceManager& sm);
 		~PluginManager();
 

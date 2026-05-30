@@ -30,8 +30,9 @@ namespace thx
 	//
 	// Registry::instance() is the framework's only static singleton; the
 	// individual manager classes no longer expose their own instance()
-	// accessors. Tests that need isolated state continue to construct local
-	// ServiceManager / PluginManager instances directly.
+	// accessors. Tests isolate state by resetting the singleton between cases
+	// (thx::shutdown() via a Catch2 listener) rather than by constructing
+	// alternate registries.
 	class THX_INTERNAL_API Registry
 	{
 	public:
