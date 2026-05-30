@@ -13,7 +13,7 @@
 namespace examples
 {
 
-	// Shared interface header â€” included by both the file plugin and the host.
+	// Shared interface header — included by both the file plugin and the host.
 	struct IFileService : thx::service::Service<IFileService>
 	{
 		static constexpr thx::Version staticVersion()

@@ -397,7 +397,7 @@ TEST_CASE("ServiceManager - concurrent register and getService is safe",
 namespace
 {
 
-	// Interface header â€” what both Plugin A and Plugin B would include.
+	// Interface header — what both Plugin A and Plugin B would include.
 	struct ICountingService : thx::service::Service<ICountingService>
 	{
 		static constexpr thx::service::ServiceID staticId()
@@ -413,7 +413,7 @@ namespace
 		virtual void increment() = 0;
 	};
 
-	// Concrete implementation â€” what Plugin A's .cpp would contain.
+	// Concrete implementation — what Plugin A's .cpp would contain.
 	struct CountingServiceImpl : ICountingService
 	{
 		int m_value{0};
@@ -471,7 +471,7 @@ TEST_CASE("ServiceManager - type-deducing and explicit-ID APIs are interchangeab
 		[]()
 		{ return new CountingServiceImpl(); });
 
-	// Retrieve via explicit-ID API â€” same entry.
+	// Retrieve via explicit-ID API — same entry.
 	auto svc = sm.getService<ICountingService>(ICountingService::staticId());
 	REQUIRE(svc != nullptr);
 

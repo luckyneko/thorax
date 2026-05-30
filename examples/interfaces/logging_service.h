@@ -13,7 +13,7 @@
 namespace examples
 {
 
-	// Shared interface header â€” included by both the logging plugin and the host.
+	// Shared interface header — included by both the logging plugin and the host.
 	struct ILoggingService : thx::service::Service<ILoggingService>
 	{
 		static constexpr thx::Version staticVersion()

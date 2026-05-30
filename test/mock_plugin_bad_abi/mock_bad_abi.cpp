@@ -41,6 +41,6 @@ THX_PLUGIN_API void thx_destroy_plugin(thx::plugin::IPlugin* p)
 }
 THX_PLUGIN_API uint32_t thx_abi_version()
 {
-	// Major = 99 in the upper 8 bits â€” guaranteed to mismatch any real host.
+	// Major = 99 in the upper 8 bits — guaranteed to mismatch any real host.
 	return thx::Version{99, 0, 0}.pack();
 }
