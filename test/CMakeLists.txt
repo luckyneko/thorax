@@ -15,6 +15,7 @@ add_subdirectory(mock_plugin_bails_after_register)
 add_subdirectory(mock_plugin_forgets_unload)
 
 add_executable(test-${PROJECT_NAME}
+    test_reset_listener.cpp
     test_umbrella_header.cpp
     test_service_id.cpp
     test_version.cpp

@@ -7,8 +7,8 @@
  */
 
 #include <catch2/catch_all.hpp>
-#include <plugin/plugin_manager.h>
-#include <service/service_manager.h>
+#include <thx/plugin/plugin.h>
+#include <thx/service/service.h>
 #include <thx/plugins/io/io_service.h>
 
 #include <cstring>
@@ -30,16 +30,15 @@ using namespace thx::plugins::io;
 namespace
 {
 
+// Loads the IO plugin through the production facade. The test-wide reset
+// listener unloads it again after each case.
 struct Fixture
 {
-	thx::service::ServiceManager sm;
-	thx::plugin::PluginManager   loader{sm};
-
-	explicit Fixture() { REQUIRE(loader.load(THX_IO_PLUGIN_PATH)); }
+	explicit Fixture() { REQUIRE(thx::plugin::load(THX_IO_PLUGIN_PATH)); }
 
 	thx::service::ServiceHandle<IIOService> service()
 	{
-		return sm.getService<IIOService>();
+		return thx::service::getService<IIOService>();
 	}
 };
 

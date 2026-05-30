@@ -7,8 +7,8 @@
  */
 
 #include <catch2/catch_all.hpp>
-#include <plugin/plugin_manager.h>
-#include <service/service_manager.h>
+#include <thx/plugin/plugin.h>
+#include <thx/service/service.h>
 #include <thx/plugins/logging/logging_service.h>
 
 #include <filesystem>
@@ -46,21 +46,18 @@ struct CaptureBackend : ILogBackend
 	}
 };
 
-// Load the logging plugin into a local ServiceManager.
-// Returns the loader (RAII — unloads on destruction) or reports failure.
+// Loads the logging plugin through the production facade. The test-wide reset
+// listener unloads it again after each case.
 struct Fixture
 {
-	thx::service::ServiceManager sm;
-	thx::plugin::PluginManager   loader{sm};
-
 	explicit Fixture()
 	{
-		REQUIRE(loader.load(THX_LOGGING_PLUGIN_PATH));
+		REQUIRE(thx::plugin::load(THX_LOGGING_PLUGIN_PATH));
 	}
 
 	thx::service::ServiceHandle<ILoggingService> service()
 	{
-		return sm.getService<ILoggingService>();
+		return thx::service::getService<ILoggingService>();
 	}
 };
 

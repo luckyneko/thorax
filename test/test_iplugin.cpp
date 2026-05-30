@@ -11,9 +11,6 @@
 #include <thx/service/iservice.h>
 #include <thx/service/service.h>
 
-#include "service/active_service_manager.h"
-#include "service/service_manager.h"
-
 #include <memory>
 
 namespace
@@ -77,20 +74,19 @@ namespace
 TEST_CASE("ServicePluginShim - registers and unregisters one service",
 		  "[iplugin]")
 {
-	thx::service::ServiceManager sm;
-	thx::service::detail::ActiveServiceManagerScope scope(sm);
-
+	using namespace thx::service;
 	thx::plugin::ServicePluginShim<ShimTestService> shim;
 
-	REQUIRE(sm.getService<ShimTestService>() == nullptr);
+	REQUIRE(getService<ShimTestService>() == nullptr);
 	REQUIRE(shim.onLoad());
 
-	auto svc = sm.getService<ShimTestService>();
+	auto svc = getService<ShimTestService>();
 	REQUIRE(svc != nullptr);
 	REQUIRE(svc->m_constructed);
+	svc.reset();
 
 	shim.onUnload();
-	REQUIRE(sm.getService<ShimTestService>() == nullptr);
+	REQUIRE(getService<ShimTestService>() == nullptr);
 }
 
 TEST_CASE("ServicePluginShim - reports name and version from the service type",
@@ -132,18 +128,16 @@ TEST_CASE("ServicePluginShim - provides() reports T::staticId()",
 TEST_CASE("IPlugin - custom plugin can register multiple services",
 		  "[iplugin]")
 {
-	thx::service::ServiceManager sm;
-	thx::service::detail::ActiveServiceManagerScope scope(sm);
-
+	using namespace thx::service;
 	MultiServicePlugin plugin;
 
 	REQUIRE(plugin.onLoad());
-	REQUIRE(sm.getService<ServiceA>() != nullptr);
-	REQUIRE(sm.getService<ServiceB>() != nullptr);
+	REQUIRE(getService<ServiceA>() != nullptr);
+	REQUIRE(getService<ServiceB>() != nullptr);
 
 	plugin.onUnload();
-	REQUIRE(sm.getService<ServiceA>() == nullptr);
-	REQUIRE(sm.getService<ServiceB>() == nullptr);
+	REQUIRE(getService<ServiceA>() == nullptr);
+	REQUIRE(getService<ServiceB>() == nullptr);
 }
 
 TEST_CASE("IPlugin - onLoad returning false does not register anything",
@@ -158,11 +152,8 @@ TEST_CASE("IPlugin - onLoad returning false does not register anything",
 		void onUnload() override {}
 	};
 
-	thx::service::ServiceManager sm;
-	thx::service::detail::ActiveServiceManagerScope scope(sm);
-
 	BailingPlugin p;
 
 	REQUIRE_FALSE(p.onLoad());
-	REQUIRE(sm.listServices().empty());
+	REQUIRE(thx::service::listServices().empty());
 }
