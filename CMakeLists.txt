@@ -44,7 +44,8 @@ option(THORAX_BUILD_TESTING "Build UnitTesting project" ${NOT_SUBPROJECT})
 option(THORAX_BUILD_EXAMPLES "Build example applications" ${NOT_SUBPROJECT})
 option(THORAX_BUILD_PLUGINS "Build built-in plugins" ${NOT_SUBPROJECT})
 option(THORAX_INSTALL "Generate install targets and CMake package files" ${NOT_SUBPROJECT})
-option(THORAX_SANITIZE "Enable AddressSanitizer and UndefinedBehaviorSanitizer (Clang/GCC only)" OFF)
+set(THORAX_SANITIZE OFF CACHE STRING
+    "Sanitizers (Clang/GCC only): OFF, ON (= address,undefined), or any -fsanitize list e.g. 'thread'")
 
 include(GNUInstallDirs)
 
@@ -157,13 +158,21 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 # Set default warnings
 thx_set_warnings(${PROJECT_NAME})
 
-# Handle Sanitization
+# Handle sanitization. THORAX_SANITIZE selects the -fsanitize set:
+#   OFF (default) — none
+#   ON            — address,undefined (back-compat with the original boolean)
+#   <list>        — passed through verbatim, e.g. "thread"
 if(THORAX_SANITIZE)
     if(MSVC)
         message(WARNING "THORAX_SANITIZE is not supported with MSVC; ignored.")
     else()
-        add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
-        add_link_options(-fsanitize=address,undefined)
+        if(THORAX_SANITIZE STREQUAL "ON" OR THORAX_SANITIZE STREQUAL "TRUE")
+            set(_thx_sanitizers "address,undefined")
+        else()
+            set(_thx_sanitizers "${THORAX_SANITIZE}")
+        endif()
+        add_compile_options(-fsanitize=${_thx_sanitizers} -fno-omit-frame-pointer)
+        add_link_options(-fsanitize=${_thx_sanitizers})
     endif()
 endif()
 

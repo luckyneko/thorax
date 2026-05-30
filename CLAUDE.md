@@ -17,7 +17,8 @@ In-source builds are forbidden by `CMakeLists.txt` — always build into a separ
 ```bash
 # Configure (Release is the default)
 cmake -S . -B build
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DTHORAX_SANITIZE=ON   # ASan + UBSan
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DTHORAX_SANITIZE=ON       # ASan + UBSan
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DTHORAX_SANITIZE=thread   # TSan
 
 # Build everything
 cmake --build build --parallel
@@ -31,7 +32,7 @@ build/test/test-thorax "[plugin_manager]"          # by tag
 build/test/test-thorax --list-tests
 ```
 
-CMake options (all default ON when configured as the top-level project, OFF when bundled as a subproject): `THORAX_BUILD_TESTING`, `THORAX_BUILD_EXAMPLES`, `THORAX_BUILD_PLUGINS`, `THORAX_INSTALL`, `THORAX_SANITIZE`.
+CMake options: `THORAX_BUILD_TESTING`, `THORAX_BUILD_EXAMPLES`, `THORAX_BUILD_PLUGINS`, and `THORAX_INSTALL` default ON when configured as the top-level project, OFF when bundled as a subproject. `THORAX_SANITIZE` defaults OFF and accepts `OFF` / `ON` (= `address,undefined`) / any explicit `-fsanitize` list such as `thread` (Clang/GCC only).
 
 The test binary is `build/test/test-thorax`. CTest also runs an `examples.host` integration test and, when `THORAX_INSTALL` is on, an `install.*` smoke test that installs the library into `build/test_install_prefix/` and builds [test/consumer/](test/consumer/) against it via `find_package(Thorax)`.
 
