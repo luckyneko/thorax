@@ -18,7 +18,8 @@
 
 namespace thx::service
 {
-	template <typename T> class ServiceHandle;
+	template <typename T>
+	class ServiceHandle;
 
 	// Base interface for all services registered with the ServiceManager.
 	// Concrete services inherit this and add their own API on top.
@@ -63,7 +64,8 @@ namespace thx::service
 		virtual void onDestroy() {}
 
 	private:
-		template <typename> friend class ServiceHandle;
+		template <typename>
+		friend class ServiceHandle;
 
 		// Intrusive strong refcount. Initial value is 0; the first
 		// ServiceHandle wrapping a freshly-allocated IService brings it to 1.
@@ -131,8 +133,8 @@ namespace thx::service
 		Version version() const final
 		{
 			static_assert(std::is_same_v<decltype(Derived::staticVersion()), Version>,
-			    "Service<Derived>: Derived must define "
-			    "`static constexpr thx::Version staticVersion()`");
+						  "Service<Derived>: Derived must define "
+						  "`static constexpr thx::Version staticVersion()`");
 			return Derived::staticVersion();
 		}
 	};

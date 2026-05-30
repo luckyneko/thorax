@@ -32,13 +32,13 @@
 // consumer's translation unit.
 
 #if defined(_WIN32)
-#  if defined(THX_BUILDING)
-#    define THX_API __declspec(dllexport)
-#  else
-#    define THX_API __declspec(dllimport)
-#  endif
+#	if defined(THX_BUILDING)
+#		define THX_API __declspec(dllexport)
+#	else
+#		define THX_API __declspec(dllimport)
+#	endif
 #elif defined(__GNUC__) || defined(__clang__)
-#  define THX_API __attribute__((visibility("default")))
+#	define THX_API __attribute__((visibility("default")))
 #else
-#  define THX_API
+#	define THX_API
 #endif

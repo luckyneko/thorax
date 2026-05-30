@@ -37,17 +37,17 @@
 // and the test binary's.
 
 #if defined(THX_TESTING)
-#  if defined(_WIN32)
-#    if defined(THX_BUILDING)
-#      define THX_INTERNAL_API __declspec(dllexport)
-#    else
-#      define THX_INTERNAL_API __declspec(dllimport)
-#    endif
-#  elif defined(__GNUC__) || defined(__clang__)
-#    define THX_INTERNAL_API __attribute__((visibility("default")))
-#  else
-#    define THX_INTERNAL_API
-#  endif
+#	if defined(_WIN32)
+#		if defined(THX_BUILDING)
+#			define THX_INTERNAL_API __declspec(dllexport)
+#		else
+#			define THX_INTERNAL_API __declspec(dllimport)
+#		endif
+#	elif defined(__GNUC__) || defined(__clang__)
+#		define THX_INTERNAL_API __attribute__((visibility("default")))
+#	else
+#		define THX_INTERNAL_API
+#	endif
 #else
-#  define THX_INTERNAL_API
+#	define THX_INTERNAL_API
 #endif

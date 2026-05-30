@@ -19,7 +19,7 @@
 // GCC/Clang support __builtin_FILE/LINE/FUNCTION natively.
 // MSVC supports them since VS 2019 16.6 (_MSC_VER 1926).
 #if defined(__GNUC__) || defined(__clang__) || (defined(_MSC_VER) && _MSC_VER >= 1926)
-#  define THX_DETAIL_HAS_BUILTIN_LOCATION 1
+#	define THX_DETAIL_HAS_BUILTIN_LOCATION 1
 #endif
 
 namespace thx
@@ -38,21 +38,21 @@ namespace thx
 	// GCC, Clang, and MSVC >= VS 2019 16.6; empty on older toolchains.
 	struct SourceLocation
 	{
-		const char* file     = "";
-		int         line     = 0;
+		const char* file = "";
+		int line = 0;
 		const char* function = "";
 
 		static constexpr SourceLocation current(
 #if defined(THX_DETAIL_HAS_BUILTIN_LOCATION)
-			const char* f  = __builtin_FILE(),
-			int         ln = __builtin_LINE(),
+			const char* f = __builtin_FILE(),
+			int ln = __builtin_LINE(),
 			const char* fn = __builtin_FUNCTION()
 #else
-			const char* f  = "",
-			int         ln = 0,
+			const char* f = "",
+			int ln = 0,
 			const char* fn = ""
 #endif
-		) noexcept
+				) noexcept
 		{
 			return {f, ln, fn};
 		}
@@ -61,9 +61,9 @@ namespace thx
 	// Diagnostic record passed to ILogSink::write().
 	struct LogRecord
 	{
-		LogLevel       level;
+		LogLevel level;
 		SourceLocation location;
-		std::string    message;
+		std::string message;
 	};
 
 	// Implement this interface and call setLogSink() to intercept all library
@@ -90,16 +90,16 @@ namespace thx
 	// Emits a log record to the active sink.
 	// The source location is captured automatically at the call site on supported
 	// compilers (GCC, Clang, MSVC >= VS 2019 16.6).
-	THX_API void log(LogLevel            level,
-	                 std::string const&  message,
-	                 SourceLocation      location = SourceLocation::current());
+	THX_API void log(LogLevel level,
+					 std::string const& message,
+					 SourceLocation location = SourceLocation::current());
 
 	// Logs message at Error level if condition is false.
 	// Debug builds also call std::abort(); Release builds only log.
 	// The condition is always evaluated — never silently swallowed.
-	inline void assertThat(bool               condition,
-	                         std::string const& message,
-	                         SourceLocation     location = SourceLocation::current())
+	inline void assertThat(bool condition,
+						   std::string const& message,
+						   SourceLocation location = SourceLocation::current())
 	{
 		if (condition)
 			return;

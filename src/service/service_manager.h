@@ -9,13 +9,13 @@
 #pragma once
 
 #include "thx/service/iservice.h"
-#include "thx/service/service.h"   // ServiceFactory, ServiceInfo
+#include "thx/service/service.h" // ServiceFactory, ServiceInfo
 #include "thx_internal_api.h"
 
 #include <memory>
 #include <mutex>
-#include <type_traits>
 #include <shared_mutex>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -64,11 +64,11 @@ namespace thx::service
 		// it via makeServiceFactory(). Mostly used by tests; production code
 		// goes through the facade in service.h.
 		template <typename Callable, typename = std::enable_if_t<
-			!std::is_same_v<std::decay_t<Callable>, ServiceFactory>>>
+										 !std::is_same_v<std::decay_t<Callable>, ServiceFactory>>>
 		bool registerService(ServiceID id, Version version, Callable&& callable)
 		{
 			return registerService(std::move(id), version,
-			    makeServiceFactory(std::forward<Callable>(callable)));
+								   makeServiceFactory(std::forward<Callable>(callable)));
 		}
 
 		// Type-deducing registration. Requires T to provide T::staticId() and
@@ -79,8 +79,7 @@ namespace thx::service
 
 		// Type-deducing registration with an arbitrary callable. Wraps the
 		// callable via makeServiceFactory().
-		template <typename T, typename Callable, typename = std::enable_if_t<
-			!std::is_same_v<std::decay_t<Callable>, ServiceFactory>>>
+		template <typename T, typename Callable, typename = std::enable_if_t<!std::is_same_v<std::decay_t<Callable>, ServiceFactory>>>
 		bool registerService(Callable&& callable)
 		{
 			return registerService<T>(makeServiceFactory(std::forward<Callable>(callable)));

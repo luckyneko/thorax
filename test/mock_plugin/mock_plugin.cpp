@@ -12,10 +12,10 @@
 namespace
 {
 
-struct MockServiceImpl : thx_mock::MockService
-{
-	int ping() const override { return 42; }
-};
+	struct MockServiceImpl : thx_mock::MockService
+	{
+		int ping() const override { return 42; }
+	};
 
 } // namespace
 

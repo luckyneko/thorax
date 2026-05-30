@@ -7,15 +7,15 @@
  */
 
 #include <catch2/catch_all.hpp>
-#include <thx/plugin/plugin.h>
 #include <registry.h>
+#include <thx/plugin/plugin.h>
 #include <thx/service/iservice.h>
 #include <thx/service/service.h>
 
 #include "mock_plugin.h"
 
 #ifndef THX_MOCK_PLUGIN_PATH
-#  error "THX_MOCK_PLUGIN_PATH not defined — set via target_compile_definitions in CMakeLists.txt"
+#	error "THX_MOCK_PLUGIN_PATH not defined — set via target_compile_definitions in CMakeLists.txt"
 #endif
 
 // The facade tests exercise the Registry-owned managers. Each test cleans up
@@ -31,10 +31,10 @@ namespace
 		static constexpr thx::Version staticVersion() { return {1, 0, 0}; }
 		int answer() const { return 42; }
 	};
-}
+} // namespace
 
 TEST_CASE("thx::service:: facades round-trip register / get / unregister",
-          "[facade][service]")
+		  "[facade][service]")
 {
 	using namespace thx::service;
 
@@ -52,7 +52,7 @@ TEST_CASE("thx::service:: facades round-trip register / get / unregister",
 }
 
 TEST_CASE("thx::service::listServices reflects the Registry-owned manager",
-          "[facade][service]")
+		  "[facade][service]")
 {
 	// Register a single service via the facade and confirm it appears in
 	// the listServices snapshot.
@@ -74,7 +74,7 @@ TEST_CASE("thx::service::listServices reflects the Registry-owned manager",
 }
 
 TEST_CASE("thx::plugin:: facades cover the load lifecycle",
-          "[facade][plugin][integration]")
+		  "[facade][plugin][integration]")
 {
 	// Sanity: nothing loaded.
 	REQUIRE_FALSE(thx::plugin::isLoaded(THX_MOCK_PLUGIN_PATH));
@@ -112,7 +112,7 @@ TEST_CASE("thx::plugin:: facades cover the load lifecycle",
 }
 
 TEST_CASE("thx::plugin::open then load work through the facade",
-          "[facade][plugin][integration]")
+		  "[facade][plugin][integration]")
 {
 	REQUIRE(thx::plugin::open(THX_MOCK_PLUGIN_PATH));
 	REQUIRE(thx::plugin::isOpened(THX_MOCK_PLUGIN_PATH));
@@ -125,10 +125,10 @@ TEST_CASE("thx::plugin::open then load work through the facade",
 }
 
 TEST_CASE("thx::plugin::checkRequirements operates on the Registry's ServiceManager",
-          "[facade][plugin]")
+		  "[facade][plugin]")
 {
 	thx::plugin::ServiceRequirement reqs[] = {
-	    {thx_mock::MockService::staticId(), thx::Version{1, 0, 0}},
+		{thx_mock::MockService::staticId(), thx::Version{1, 0, 0}},
 	};
 
 	// Without the mock plugin loaded the requirement is missing.

@@ -21,18 +21,28 @@ namespace thx
 	class Span
 	{
 	public:
-		constexpr Span() noexcept : m_data(nullptr), m_size(0) {}
-
-		constexpr Span(T* data, std::size_t size) noexcept : m_data(data), m_size(size) {}
-
-		template <std::size_t N>
-		constexpr Span(T (&arr)[N]) noexcept : m_data(arr), m_size(N)  // NOLINT(google-explicit-constructor)
+		constexpr Span() noexcept
+			: m_data(nullptr)
+			, m_size(0)
 		{
 		}
 
-		constexpr T*          data() const noexcept { return m_data; }
+		constexpr Span(T* data, std::size_t size) noexcept
+			: m_data(data)
+			, m_size(size)
+		{
+		}
+
+		template <std::size_t N>
+		constexpr Span(T (&arr)[N]) noexcept
+			: m_data(arr)
+			, m_size(N) // NOLINT(google-explicit-constructor)
+		{
+		}
+
+		constexpr T* data() const noexcept { return m_data; }
 		constexpr std::size_t size() const noexcept { return m_size; }
-		constexpr bool        empty() const noexcept { return m_size == 0; }
+		constexpr bool empty() const noexcept { return m_size == 0; }
 
 		constexpr T& operator[](std::size_t i) const noexcept { return m_data[i]; }
 
@@ -40,13 +50,13 @@ namespace thx
 		constexpr T* end() const noexcept { return m_data + m_size; }
 
 	private:
-		T*           m_data;
-		std::size_t  m_size;
+		T* m_data;
+		std::size_t m_size;
 	};
 
 	// ABI lock-down — Span<T> crosses plugin boundaries; pin the layout we
 	// promised the docs (single ptr + size_t, no padding under standard ABIs).
 	static_assert(sizeof(Span<int>) == sizeof(int*) + sizeof(std::size_t),
-	    "Span<T> must have layout { T* data, size_t size } for the documented ABI");
+				  "Span<T> must have layout { T* data, size_t size } for the documented ABI");
 
 } // namespace thx

@@ -10,9 +10,9 @@
 int main()
 {
 	std::printf("Thorax %u.%u.%u\n",
-	            thx::THORAX_VERSION.major,
-	            thx::THORAX_VERSION.minor,
-	            thx::THORAX_VERSION.patch);
+				thx::THORAX_VERSION.major,
+				thx::THORAX_VERSION.minor,
+				thx::THORAX_VERSION.patch);
 
 	// ServiceManager is now an implementation detail. Consumers use the
 	// free-function facade (forwards to the framework's internal manager).

@@ -13,17 +13,17 @@
 namespace examples
 {
 
-// Shared interface header â€” included by both the file plugin and the host.
-struct IFileService : thx::service::Service<IFileService>
-{
-	static constexpr thx::Version staticVersion()
+	// Shared interface header â€” included by both the file plugin and the host.
+	struct IFileService : thx::service::Service<IFileService>
 	{
-		return thx::Version{1, 0, 0};
-	}
+		static constexpr thx::Version staticVersion()
+		{
+			return thx::Version{1, 0, 0};
+		}
 
-	// Reads up to (buffer_size - 1) bytes from path into buffer.
-	// Returns the number of bytes read, or -1 on failure.
-	virtual int read(const char* path, char* buffer, int buffer_size) = 0;
-};
+		// Reads up to (buffer_size - 1) bytes from path into buffer.
+		// Returns the number of bytes read, or -1 on failure.
+		virtual int read(const char* path, char* buffer, int buffer_size) = 0;
+	};
 
 } // namespace examples

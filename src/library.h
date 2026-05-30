@@ -71,14 +71,14 @@ namespace thx
 		Library(Library&&) noexcept;
 		Library& operator=(Library&&) noexcept;
 
-		Library(Library const&)            = delete;
+		Library(Library const&) = delete;
 		Library& operator=(Library const&) = delete;
 
 		// Opens the DSO at path. If the Library is already holding an open
 		// handle, closes it first. After the call, valid() reflects success
 		// and error() carries any platform diagnostic.
 		Library& open(std::filesystem::path const& path,
-		              LoadFlags flags = LoadFlags::Lazy);
+					  LoadFlags flags = LoadFlags::Lazy);
 
 		// Closes the DSO if open. Idempotent and noexcept; calls dlclose /
 		// FreeLibrary synchronously.
@@ -92,7 +92,7 @@ namespace thx
 		Library& bind(char const* name, FnPtr& out)
 		{
 			static_assert(std::is_pointer_v<FnPtr>,
-			    "Library::bind expects a function-pointer out-parameter");
+						  "Library::bind expects a function-pointer out-parameter");
 			if (!m_valid)
 				return *this;
 			void* raw = sym(name);
@@ -114,15 +114,14 @@ namespace thx
 		Result<void, Error> tryBind(char const* name, FnPtr& out)
 		{
 			static_assert(std::is_pointer_v<FnPtr>,
-			    "Library::tryBind expects a function-pointer out-parameter");
+						  "Library::tryBind expects a function-pointer out-parameter");
 			if (!m_handle)
 				return Result<void, Error>::err({ErrorCode::NotLoaded,
-					"Library::tryBind: library is not open"});
+												 "Library::tryBind: library is not open"});
 			void* raw = sym(name);
 			if (!raw)
 				return Result<void, Error>::err({ErrorCode::SymbolNotFound,
-					std::string("Library::tryBind: symbol '") + (name ? name : "")
-					+ "' not found in '" + m_path + "'"});
+												 std::string("Library::tryBind: symbol '") + (name ? name : "") + "' not found in '" + m_path + "'"});
 			out = reinterpret_cast<FnPtr>(raw);
 			return Result<void, Error>::ok();
 		}
@@ -162,8 +161,8 @@ namespace thx
 		void* sym(char const* name) noexcept;
 
 	private:
-		void*       m_handle = nullptr;
-		bool        m_valid  = false;
+		void* m_handle = nullptr;
+		bool m_valid = false;
 		std::string m_path;
 		std::string m_error;
 	};

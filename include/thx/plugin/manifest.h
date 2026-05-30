@@ -54,16 +54,16 @@ namespace thx::plugin
 	struct ManifestRequirement
 	{
 		std::string id;
-		Version     version;
+		Version version;
 	};
 
 	// In-memory representation of a parsed *.thx.json sidecar.
 	struct PluginManifest
 	{
-		int                              schema = 1;     // currently must be 1
-		std::string                      name;
-		Version                          version;
-		std::vector<std::string>         provides;       // service-ID names
+		int schema = 1; // currently must be 1
+		std::string name;
+		Version version;
+		std::vector<std::string> provides; // service-ID names
 		std::vector<ManifestRequirement> requirements;
 	};
 

@@ -61,7 +61,7 @@ TEST_CASE("StringView - ordering", "[string_view]")
 
 	STATIC_REQUIRE(alpha < beta);
 	STATIC_REQUIRE(beta > alpha);
-	STATIC_REQUIRE(alph < alpha);   // shorter common prefix loses
+	STATIC_REQUIRE(alph < alpha); // shorter common prefix loses
 	STATIC_REQUIRE(alpha <= alpha);
 	STATIC_REQUIRE(alpha >= alpha);
 }
@@ -134,4 +134,3 @@ TEST_CASE("Span<const char> - string span", "[span]")
 	REQUIRE(sp.size() == 5);
 	REQUIRE(sp[0] == 'h');
 }
-

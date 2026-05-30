@@ -23,42 +23,40 @@
 namespace
 {
 
-class MultiPlugin : public thx::plugin::IPlugin
-{
-public:
-	thx::StringView name()    const override { return "thx.mock.MultiPlugin"; }
-	thx::Version    version() const override { return thx::Version{1, 0, 0}; }
-
-	bool onLoad() override
+	class MultiPlugin : public thx::plugin::IPlugin
 	{
-		bool a = thx::service::registerService<thx_mock::ServiceA>();
-		bool b = thx::service::registerService<thx_mock::ServiceB>();
-		return a && b;
-	}
+	public:
+		thx::StringView name() const override { return "thx.mock.MultiPlugin"; }
+		thx::Version version() const override { return thx::Version{1, 0, 0}; }
 
-	void onUnload() override
-	{
-		thx::service::unregisterService<thx_mock::ServiceB>();
-		thx::service::unregisterService<thx_mock::ServiceA>();
-	}
+		bool onLoad() override
+		{
+			bool a = thx::service::registerService<thx_mock::ServiceA>();
+			bool b = thx::service::registerService<thx_mock::ServiceB>();
+			return a && b;
+		}
 
-	thx::Span<const thx::plugin::ServiceRequirement> required() const override
-	{
-		static const thx::plugin::ServiceRequirement kReqs[] = {
-			{ thx_mock::MockService::staticId(), thx_mock::MockService::staticVersion() }
-		};
-		return thx::Span<const thx::plugin::ServiceRequirement>(kReqs, 1);
-	}
+		void onUnload() override
+		{
+			thx::service::unregisterService<thx_mock::ServiceB>();
+			thx::service::unregisterService<thx_mock::ServiceA>();
+		}
 
-	thx::Span<const thx::service::ServiceID> provides() const override
-	{
-		static const thx::service::ServiceID kProvides[] = {
-			thx_mock::ServiceA::staticId(),
-			thx_mock::ServiceB::staticId()
-		};
-		return thx::Span<const thx::service::ServiceID>(kProvides, 2);
-	}
-};
+		thx::Span<const thx::plugin::ServiceRequirement> required() const override
+		{
+			static const thx::plugin::ServiceRequirement kReqs[] = {
+				{thx_mock::MockService::staticId(), thx_mock::MockService::staticVersion()}};
+			return thx::Span<const thx::plugin::ServiceRequirement>(kReqs, 1);
+		}
+
+		thx::Span<const thx::service::ServiceID> provides() const override
+		{
+			static const thx::service::ServiceID kProvides[] = {
+				thx_mock::ServiceA::staticId(),
+				thx_mock::ServiceB::staticId()};
+			return thx::Span<const thx::service::ServiceID>(kProvides, 2);
+		}
+	};
 
 } // namespace
 

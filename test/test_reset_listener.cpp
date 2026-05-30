@@ -34,6 +34,6 @@ namespace
 			thx::shutdown();
 		}
 	};
-}
+} // namespace
 
 CATCH_REGISTER_LISTENER(RegistryResetListener)

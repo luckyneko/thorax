@@ -69,7 +69,7 @@ int main(int argc, char* argv[])
 	}
 
 	char buf[64] = {};
-	int  n       = file_svc->read(tmp_path, buf, static_cast<int>(sizeof(buf)));
+	int n = file_svc->read(tmp_path, buf, static_cast<int>(sizeof(buf)));
 	if (n < 0)
 	{
 		std::fprintf(stderr, "FileService::read failed\n");

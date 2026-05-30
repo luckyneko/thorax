@@ -25,9 +25,9 @@
 namespace thx::plugin
 {
 	// Function pointer types for the plugin C exports.
-	using PluginCreateFn   = IPlugin*    (*)();
-	using PluginDestroyFn  = void        (*)(IPlugin*);
-	using AbiVersionFn     = uint32_t    (*)();
+	using PluginCreateFn = IPlugin* (*)();
+	using PluginDestroyFn = void (*)(IPlugin*);
+	using AbiVersionFn = uint32_t (*)();
 
 	// LIBRARY_EXTENSION moved to thx/library.h.
 
@@ -44,11 +44,11 @@ namespace thx::plugin
 // symbols are visible to the dynamic linker, avoiding ODR collisions between
 // independently loaded plugins that happen to define the same internal names.
 #if defined(_WIN32)
-#  define THX_PLUGIN_API extern "C" __declspec(dllexport)
+#	define THX_PLUGIN_API extern "C" __declspec(dllexport)
 #elif defined(__GNUC__) || defined(__clang__)
-#  define THX_PLUGIN_API extern "C" __attribute__((visibility("default")))
+#	define THX_PLUGIN_API extern "C" __attribute__((visibility("default")))
 #else
-#  define THX_PLUGIN_API extern "C"
+#	define THX_PLUGIN_API extern "C"
 #endif
 
 // Every thorax plugin shared library must export three C-linkage symbols:
@@ -78,18 +78,18 @@ namespace thx::plugin
 //
 // Place this macro once in a .cpp file. ServiceType must inherit from
 // thx::service::Service<ServiceType>, define staticVersion(), and be default-constructible.
-#define THX_DEFINE_SERVICE_PLUGIN(ServiceType)                                          \
-	THX_PLUGIN_API thx::plugin::IPlugin* thx_create_plugin()                            \
-	{                                                                                   \
-		return new (std::nothrow) thx::plugin::ServicePluginShim<ServiceType>();        \
-	}                                                                                   \
-	THX_PLUGIN_API void thx_destroy_plugin(thx::plugin::IPlugin* p)                     \
-	{                                                                                   \
-		delete p;                                                                       \
-	}                                                                                   \
-	THX_PLUGIN_API uint32_t thx_abi_version()                                           \
-	{                                                                                   \
-		return thx::THORAX_VERSION.pack();                                              \
+#define THX_DEFINE_SERVICE_PLUGIN(ServiceType)                                   \
+	THX_PLUGIN_API thx::plugin::IPlugin* thx_create_plugin()                     \
+	{                                                                            \
+		return new (std::nothrow) thx::plugin::ServicePluginShim<ServiceType>(); \
+	}                                                                            \
+	THX_PLUGIN_API void thx_destroy_plugin(thx::plugin::IPlugin* p)              \
+	{                                                                            \
+		delete p;                                                                \
+	}                                                                            \
+	THX_PLUGIN_API uint32_t thx_abi_version()                                    \
+	{                                                                            \
+		return thx::THORAX_VERSION.pack();                                       \
 	}
 
 // THX_DEFINE_PLUGIN(PluginType) — power-user form. The plugin author supplies
@@ -97,16 +97,16 @@ namespace thx::plugin
 // required() dependencies.
 //
 // PluginType must inherit from thx::plugin::IPlugin and be default-constructible.
-#define THX_DEFINE_PLUGIN(PluginType)                                                   \
-	THX_PLUGIN_API thx::plugin::IPlugin* thx_create_plugin()                            \
-	{                                                                                   \
-		return new (std::nothrow) PluginType();                                         \
-	}                                                                                   \
-	THX_PLUGIN_API void thx_destroy_plugin(thx::plugin::IPlugin* p)                     \
-	{                                                                                   \
-		delete p;                                                                       \
-	}                                                                                   \
-	THX_PLUGIN_API uint32_t thx_abi_version()                                           \
-	{                                                                                   \
-		return thx::THORAX_VERSION.pack();                                              \
+#define THX_DEFINE_PLUGIN(PluginType)                               \
+	THX_PLUGIN_API thx::plugin::IPlugin* thx_create_plugin()        \
+	{                                                               \
+		return new (std::nothrow) PluginType();                     \
+	}                                                               \
+	THX_PLUGIN_API void thx_destroy_plugin(thx::plugin::IPlugin* p) \
+	{                                                               \
+		delete p;                                                   \
+	}                                                               \
+	THX_PLUGIN_API uint32_t thx_abi_version()                       \
+	{                                                               \
+		return thx::THORAX_VERSION.pack();                          \
 	}

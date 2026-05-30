@@ -8,8 +8,8 @@
 
 #include <catch2/catch_all.hpp>
 #include <thx/plugin/plugin.h>
-#include <thx/service/service.h>
 #include <thx/plugins/io/io_service.h>
+#include <thx/service/service.h>
 
 #include <cstring>
 #include <filesystem>
@@ -18,7 +18,7 @@
 #include <string>
 
 #ifndef THX_IO_PLUGIN_PATH
-#  error "THX_IO_PLUGIN_PATH not defined — set via target_compile_definitions in CMakeLists.txt"
+#	error "THX_IO_PLUGIN_PATH not defined — set via target_compile_definitions in CMakeLists.txt"
 #endif
 
 using namespace thx::plugins::io;
@@ -30,64 +30,67 @@ using namespace thx::plugins::io;
 namespace
 {
 
-// Loads the IO plugin through the production facade. The test-wide reset
-// listener unloads it again after each case.
-struct Fixture
-{
-	explicit Fixture() { REQUIRE(thx::plugin::load(THX_IO_PLUGIN_PATH)); }
-
-	thx::service::ServiceHandle<IIOService> service()
+	// Loads the IO plugin through the production facade. The test-wide reset
+	// listener unloads it again after each case.
+	struct Fixture
 	{
-		return thx::service::getService<IIOService>();
-	}
-};
+		explicit Fixture() { REQUIRE(thx::plugin::load(THX_IO_PLUGIN_PATH)); }
 
-// Write content to a temp file; return the path.
-std::string makeTempFile(const char* name, const char* content)
-{
-	namespace fs = std::filesystem;
-	auto path = (fs::temp_directory_path() / name).string();
-	std::ofstream{path} << content;
-	return path;
-}
+		thx::service::ServiceHandle<IIOService> service()
+		{
+			return thx::service::getService<IIOService>();
+		}
+	};
 
-// Custom reader used in provider-dispatch tests.
-// Accepts only files whose path ends with the given suffix.
-struct SuffixReader : IFileReader
-{
-	std::string m_suffix;
-	int         m_readCount{0};
-
-	explicit SuffixReader(std::string suffix) : m_suffix(std::move(suffix)) {}
-
-	bool canRead(const char* path) override
+	// Write content to a temp file; return the path.
+	std::string makeTempFile(const char* name, const char* content)
 	{
-		if (!path)
-			return false;
-		std::string p(path);
-		return p.size() >= m_suffix.size() &&
-		       p.compare(p.size() - m_suffix.size(), m_suffix.size(), m_suffix) == 0;
+		namespace fs = std::filesystem;
+		auto path = (fs::temp_directory_path() / name).string();
+		std::ofstream{path} << content;
+		return path;
 	}
 
-	int read(const char* path, char* buffer, int buffer_size) override
+	// Custom reader used in provider-dispatch tests.
+	// Accepts only files whose path ends with the given suffix.
+	struct SuffixReader : IFileReader
 	{
-		if (!path || !buffer || buffer_size <= 0)
-			return -1;
-		++m_readCount;
-		// Prepend a marker so tests can verify this reader was called.
-		const char* marker = "[suffix]";
-		int mlen = static_cast<int>(std::strlen(marker));
-		if (buffer_size <= mlen)
-			return -1;
-		std::memcpy(buffer, marker, static_cast<std::size_t>(mlen));
+		std::string m_suffix;
+		int m_readCount{0};
 
-		std::ifstream f(path, std::ios::binary);
-		if (!f)
-			return mlen;
-		f.read(buffer + mlen, static_cast<std::streamsize>(buffer_size - mlen - 1));
-		return mlen + static_cast<int>(f.gcount());
-	}
-};
+		explicit SuffixReader(std::string suffix)
+			: m_suffix(std::move(suffix))
+		{
+		}
+
+		bool canRead(const char* path) override
+		{
+			if (!path)
+				return false;
+			std::string p(path);
+			return p.size() >= m_suffix.size() &&
+				   p.compare(p.size() - m_suffix.size(), m_suffix.size(), m_suffix) == 0;
+		}
+
+		int read(const char* path, char* buffer, int buffer_size) override
+		{
+			if (!path || !buffer || buffer_size <= 0)
+				return -1;
+			++m_readCount;
+			// Prepend a marker so tests can verify this reader was called.
+			const char* marker = "[suffix]";
+			int mlen = static_cast<int>(std::strlen(marker));
+			if (buffer_size <= mlen)
+				return -1;
+			std::memcpy(buffer, marker, static_cast<std::size_t>(mlen));
+
+			std::ifstream f(path, std::ios::binary);
+			if (!f)
+				return mlen;
+			f.read(buffer + mlen, static_cast<std::streamsize>(buffer_size - mlen - 1));
+			return mlen + static_cast<int>(f.gcount());
+		}
+	};
 
 } // namespace
 
@@ -141,7 +144,7 @@ TEST_CASE("IOPlugin - text reader reads file content", "[io_plugin]")
 	svc->addReader(txt);
 
 	char buf[64]{};
-	int  n = svc->read(path.c_str(), buf, static_cast<int>(sizeof(buf)));
+	int n = svc->read(path.c_str(), buf, static_cast<int>(sizeof(buf)));
 
 	std::filesystem::remove(path);
 
@@ -217,7 +220,7 @@ TEST_CASE("IOPlugin - specific reader takes priority over text reader", "[io_plu
 	namespace fs = std::filesystem;
 
 	auto json_path = makeTempFile("thx_io_dispatch.json", "{}");
-	auto txt_path  = makeTempFile("thx_io_dispatch.txt",  "plain");
+	auto txt_path = makeTempFile("thx_io_dispatch.txt", "plain");
 
 	Fixture f;
 	auto svc = f.service();
@@ -226,7 +229,7 @@ TEST_CASE("IOPlugin - specific reader takes priority over text reader", "[io_plu
 	// Register specific reader first, then the generic fallback.
 	// Both shared_ptrs must be kept alive; the service only holds weak_ptrs.
 	auto json_reader = std::make_shared<SuffixReader>(".json");
-	auto txt_reader  = svc->makeTextReader();
+	auto txt_reader = svc->makeTextReader();
 	svc->addReader(json_reader);
 	svc->addReader(txt_reader);
 
@@ -250,7 +253,7 @@ TEST_CASE("IOPlugin - specific reader takes priority over text reader", "[io_plu
 }
 
 TEST_CASE("IOPlugin - unregistered extension falls through to text reader",
-          "[io_plugin]")
+		  "[io_plugin]")
 {
 	auto path = makeTempFile("thx_io_fallthru.bin", "binary");
 
@@ -261,7 +264,7 @@ TEST_CASE("IOPlugin - unregistered extension falls through to text reader",
 	// Only add a .json-specific reader + generic fallback.
 	// Both shared_ptrs must be kept alive; the service only holds weak_ptrs.
 	auto json_reader = std::make_shared<SuffixReader>(".json");
-	auto txt_reader  = svc->makeTextReader();
+	auto txt_reader = svc->makeTextReader();
 	svc->addReader(json_reader);
 	svc->addReader(txt_reader);
 
@@ -274,7 +277,7 @@ TEST_CASE("IOPlugin - unregistered extension falls through to text reader",
 }
 
 TEST_CASE("IOPlugin - -1 means no reader, -2 means reader accepted but failed",
-          "[io_plugin]")
+		  "[io_plugin]")
 {
 	auto path = makeTempFile("thx_io_errcode.txt", "data");
 
@@ -300,7 +303,7 @@ TEST_CASE("IOPlugin - -1 means no reader, -2 means reader accepted but failed",
 }
 
 TEST_CASE("IOPlugin - reader removed at plugin scope still evicted correctly",
-          "[io_plugin]")
+		  "[io_plugin]")
 {
 	auto path = makeTempFile("thx_io_scope.txt", "data");
 

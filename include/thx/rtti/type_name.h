@@ -60,7 +60,7 @@ namespace thx::rtti
 		auto raw = fn.substr(start, end - start);
 
 		// MSVC prepends "class " or "struct " to user-defined types.
-		constexpr std::size_t kClassLen  = std::size_t{6}; // "class "
+		constexpr std::size_t kClassLen = std::size_t{6};  // "class "
 		constexpr std::size_t kStructLen = std::size_t{7}; // "struct "
 		if (raw.size() >= kClassLen && raw.substr(std::size_t{0}, kClassLen) == "class ")
 			return raw.substr(kClassLen);

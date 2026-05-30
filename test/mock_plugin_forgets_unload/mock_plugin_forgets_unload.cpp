@@ -21,29 +21,28 @@
 namespace
 {
 
-class ForgetsUnloadPlugin : public thx::plugin::IPlugin
-{
-public:
-	thx::StringView name()    const override { return "thx.mock.ForgetsUnloadPlugin"; }
-	thx::Version    version() const override { return thx::Version{1, 0, 0}; }
-
-	bool onLoad() override
+	class ForgetsUnloadPlugin : public thx::plugin::IPlugin
 	{
-		return thx::service::registerService<thx_mock::ServiceA>();
-	}
+	public:
+		thx::StringView name() const override { return "thx.mock.ForgetsUnloadPlugin"; }
+		thx::Version version() const override { return thx::Version{1, 0, 0}; }
 
-	// Intentionally empty: simulate a misbehaved plugin that forgets to
-	// unregister what it registered.
-	void onUnload() override {}
+		bool onLoad() override
+		{
+			return thx::service::registerService<thx_mock::ServiceA>();
+		}
 
-	thx::Span<const thx::service::ServiceID> provides() const override
-	{
-		static const thx::service::ServiceID kProvides[] = {
-			thx_mock::ServiceA::staticId()
-		};
-		return thx::Span<const thx::service::ServiceID>(kProvides, 1);
-	}
-};
+		// Intentionally empty: simulate a misbehaved plugin that forgets to
+		// unregister what it registered.
+		void onUnload() override {}
+
+		thx::Span<const thx::service::ServiceID> provides() const override
+		{
+			static const thx::service::ServiceID kProvides[] = {
+				thx_mock::ServiceA::staticId()};
+			return thx::Span<const thx::service::ServiceID>(kProvides, 1);
+		}
+	};
 
 } // namespace
 

@@ -75,13 +75,13 @@ namespace thx::plugin
 	// concepts keyword.
 	struct PluginInfo
 	{
-		std::string                      path;
-		State                            state;
-		std::string                      name;
-		Version                          version;
+		std::string path;
+		State state;
+		std::string name;
+		Version version;
 		std::vector<ManifestRequirement> requirements;
-		std::vector<std::string>         provides;
-		std::vector<std::string>         services;
+		std::vector<std::string> provides;
+		std::vector<std::string> services;
 	};
 
 	// Outcome of a discoverAndLoad call.
@@ -98,8 +98,8 @@ namespace thx::plugin
 	// Any of the three lists may be empty.
 	struct LoadSummary
 	{
-		std::vector<std::string>                   loaded;
-		std::vector<std::string>                   alreadyLoaded;
+		std::vector<std::string> loaded;
+		std::vector<std::string> alreadyLoaded;
 		std::vector<std::pair<std::string, Error>> failed;
 	};
 
@@ -111,7 +111,7 @@ namespace thx::plugin
 	THX_API Result<void, Error> forget(std::string const& path);
 	THX_API Result<void, Error> open(std::string const& path);
 	THX_API Result<void, Error> close(std::string const& path);
-	THX_API std::size_t         closeAllOpened();
+	THX_API std::size_t closeAllOpened();
 	THX_API Result<void, Error> load(std::string const& path);
 	THX_API Result<void, Error> unload(std::string const& path);
 
@@ -157,20 +157,20 @@ namespace thx::plugin
 	THX_API Result<void, Error> checkRequirements(Span<const ServiceRequirement> reqs);
 
 	// --- Queries -----------------------------------------------------------
-	THX_API std::vector<PluginInfo>   plugins();
-	THX_API std::vector<PluginInfo>   plugins(State state);
+	THX_API std::vector<PluginInfo> plugins();
+	THX_API std::vector<PluginInfo> plugins(State state);
 	THX_API std::optional<PluginInfo> pluginInfo(std::string const& path);
-	THX_API bool                      is(State state, std::string const& path);
-	THX_API bool                      isDiscovered(std::string const& path);
-	THX_API bool                      isOpened    (std::string const& path);
-	THX_API bool                      isLoaded    (std::string const& path);
+	THX_API bool is(State state, std::string const& path);
+	THX_API bool isDiscovered(std::string const& path);
+	THX_API bool isOpened(std::string const& path);
+	THX_API bool isLoaded(std::string const& path);
 
 	// Returns plugins (any state) whose manifest `provides` list contains
 	// the given service id. Useful for picking out e.g. all camera drivers
 	// without dlopen-ing anything: the manifest is read at discover() time.
 	// Match is by ServiceID name (the string form), since manifest-derived
 	// service ids are stored as strings.
-	THX_API std::vector<PluginInfo>   pluginsProviding(std::string const& serviceId);
+	THX_API std::vector<PluginInfo> pluginsProviding(std::string const& serviceId);
 
 	// --- Garbage queue -----------------------------------------------------
 	// Drains / queries the framework-owned deferred-dlclose queue.

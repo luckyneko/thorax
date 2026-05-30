@@ -22,16 +22,15 @@ namespace
 	{
 		namespace fs = std::filesystem;
 		static int counter = 0;
-		auto p = fs::temp_directory_path()
-		    / ("thx_test_manifest_" + tag + "_" + std::to_string(++counter) + ".thx.json");
+		auto p = fs::temp_directory_path() / ("thx_test_manifest_" + tag + "_" + std::to_string(++counter) + ".thx.json");
 		std::ofstream f(p);
 		f << contents;
 		return p.string();
 	}
-}
+} // namespace
 
 TEST_CASE("parseManifest - well-formed minimal manifest parses cleanly",
-          "[manifest]")
+		  "[manifest]")
 {
 	auto path = writeTempManifest("minimal", R"({
 		"schema":   1,
@@ -327,19 +326,18 @@ namespace
 	{
 		namespace fs = std::filesystem;
 		static int counter = 0;
-		auto p = fs::temp_directory_path()
-		    / ("thx_test_serialise_" + tag + "_" + std::to_string(++counter) + ".thx.json");
+		auto p = fs::temp_directory_path() / ("thx_test_serialise_" + tag + "_" + std::to_string(++counter) + ".thx.json");
 		std::ofstream f(p);
 		f << contents;
 		return p.string();
 	}
-}
+} // namespace
 
 TEST_CASE("serialiseManifest - empty provides and requires", "[manifest][serialise]")
 {
 	thx::plugin::PluginManifest m;
-	m.schema  = 1;
-	m.name    = "thx.test.Empty";
+	m.schema = 1;
+	m.name = "thx.test.Empty";
 	m.version = thx::Version{1, 2, 3};
 	auto json = thx::plugin::serialiseManifest(m);
 
@@ -354,13 +352,13 @@ TEST_CASE("serialiseManifest - empty provides and requires", "[manifest][seriali
 TEST_CASE("serialiseManifest - round-trip preserves all fields", "[manifest][serialise]")
 {
 	thx::plugin::PluginManifest original;
-	original.schema  = 1;
-	original.name    = "thx.cameras.AcmeCameraDriver";
+	original.schema = 1;
+	original.name = "thx.cameras.AcmeCameraDriver";
 	original.version = thx::Version{1, 2, 0};
 	original.provides = {"thx.cameras.ICameraDriver", "thx.bus.IUsbDevice"};
 	original.requirements = {
-	    {"thx.io.ILogService",   thx::Version{1, 0, 0}},
-	    {"thx.gpu.IShaderCache", thx::Version{2, 5, 1}},
+		{"thx.io.ILogService", thx::Version{1, 0, 0}},
+		{"thx.gpu.IShaderCache", thx::Version{2, 5, 1}},
 	};
 
 	auto json = thx::plugin::serialiseManifest(original);
@@ -370,24 +368,24 @@ TEST_CASE("serialiseManifest - round-trip preserves all fields", "[manifest][ser
 	REQUIRE(parsed);
 	auto const& r = parsed.value();
 
-	REQUIRE(r.schema  == original.schema);
-	REQUIRE(r.name    == original.name);
+	REQUIRE(r.schema == original.schema);
+	REQUIRE(r.name == original.name);
 	REQUIRE(r.version == original.version);
 	REQUIRE(r.provides == original.provides);
 	REQUIRE(r.requirements.size() == original.requirements.size());
 	for (std::size_t i = 0; i < r.requirements.size(); ++i)
 	{
-		REQUIRE(r.requirements[i].id      == original.requirements[i].id);
+		REQUIRE(r.requirements[i].id == original.requirements[i].id);
 		REQUIRE(r.requirements[i].version == original.requirements[i].version);
 	}
 }
 
 TEST_CASE("serialiseManifest - escapes special characters in strings",
-          "[manifest][serialise]")
+		  "[manifest][serialise]")
 {
 	thx::plugin::PluginManifest m;
-	m.schema  = 1;
-	m.name    = "thx.test.with\"quote";
+	m.schema = 1;
+	m.name = "thx.test.with\"quote";
 	m.version = thx::Version{1, 0, 0};
 	m.provides = {"thx.path.with\\slash"};
 
@@ -415,14 +413,15 @@ TEST_CASE("parseManifest - deeply-nested unknown field is rejected", "[manifest]
 		nested = "[" + nested + "]";
 
 	auto path = writeTempManifest("deep_nest",
-		"{\n"
-		"\t\"schema\":   1,\n"
-		"\t\"name\":     \"thx.test.Deep\",\n"
-		"\t\"version\":  \"1.0.0\",\n"
-		"\t\"provides\": [],\n"
-		"\t\"requires\": [],\n"
-		"\t\"extra\":    " + nested + "\n"
-		"}");
+								  "{\n"
+								  "\t\"schema\":   1,\n"
+								  "\t\"name\":     \"thx.test.Deep\",\n"
+								  "\t\"version\":  \"1.0.0\",\n"
+								  "\t\"provides\": [],\n"
+								  "\t\"requires\": [],\n"
+								  "\t\"extra\":    " +
+									  nested + "\n"
+											   "}");
 
 	auto r = thx::plugin::parseManifest(path);
 	REQUIRE_FALSE(r);

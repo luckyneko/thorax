@@ -20,28 +20,27 @@
 namespace
 {
 
-class BailsAfterRegisterPlugin : public thx::plugin::IPlugin
-{
-public:
-	thx::StringView name()    const override { return "thx.mock.BailsAfterRegisterPlugin"; }
-	thx::Version    version() const override { return thx::Version{1, 0, 0}; }
-
-	bool onLoad() override
+	class BailsAfterRegisterPlugin : public thx::plugin::IPlugin
 	{
-		thx::service::registerService<thx_mock::ServiceA>();
-		return false; // PluginManager must roll back the ServiceA registration.
-	}
+	public:
+		thx::StringView name() const override { return "thx.mock.BailsAfterRegisterPlugin"; }
+		thx::Version version() const override { return thx::Version{1, 0, 0}; }
 
-	void onUnload() override {}
+		bool onLoad() override
+		{
+			thx::service::registerService<thx_mock::ServiceA>();
+			return false; // PluginManager must roll back the ServiceA registration.
+		}
 
-	thx::Span<const thx::service::ServiceID> provides() const override
-	{
-		static const thx::service::ServiceID kProvides[] = {
-			thx_mock::ServiceA::staticId()
-		};
-		return thx::Span<const thx::service::ServiceID>(kProvides, 1);
-	}
-};
+		void onUnload() override {}
+
+		thx::Span<const thx::service::ServiceID> provides() const override
+		{
+			static const thx::service::ServiceID kProvides[] = {
+				thx_mock::ServiceA::staticId()};
+			return thx::Span<const thx::service::ServiceID>(kProvides, 1);
+		}
+	};
 
 } // namespace
 

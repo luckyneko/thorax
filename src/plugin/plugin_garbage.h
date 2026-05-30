@@ -34,10 +34,10 @@ namespace thx::plugin
 	class THX_INTERNAL_API PluginGarbage
 	{
 	public:
-		PluginGarbage()  = default;
+		PluginGarbage() = default;
 		~PluginGarbage() = default;
 
-		PluginGarbage(PluginGarbage const&)            = delete;
+		PluginGarbage(PluginGarbage const&) = delete;
 		PluginGarbage& operator=(PluginGarbage const&) = delete;
 
 		// Queues a Library for deferred close. An empty Library is a safe
@@ -58,7 +58,7 @@ namespace thx::plugin
 		std::size_t pending() const noexcept;
 
 	private:
-		mutable std::mutex   m_mutex;
+		mutable std::mutex m_mutex;
 		std::vector<Library> m_libraries;
 	};
 

@@ -7,8 +7,8 @@
  */
 
 #include <catch2/catch_all.hpp>
-#include <thx/log.h>
 #include <service/service_manager.h>
+#include <thx/log.h>
 
 #include <memory>
 #include <string>
@@ -21,40 +21,42 @@
 namespace
 {
 
-struct CapturingSink : thx::ILogSink
-{
-	std::vector<thx::LogRecord> records;
-
-	void write(thx::LogRecord const& r) override { records.push_back(r); }
-
-	bool hasLevel(thx::LogLevel lvl) const
+	struct CapturingSink : thx::ILogSink
 	{
-		for (auto const& r : records)
-			if (r.level == lvl) return true;
-		return false;
-	}
+		std::vector<thx::LogRecord> records;
 
-	bool hasMessageContaining(std::string const& substr) const
+		void write(thx::LogRecord const& r) override { records.push_back(r); }
+
+		bool hasLevel(thx::LogLevel lvl) const
+		{
+			for (auto const& r : records)
+				if (r.level == lvl)
+					return true;
+			return false;
+		}
+
+		bool hasMessageContaining(std::string const& substr) const
+		{
+			for (auto const& r : records)
+				if (r.message.find(substr) != std::string::npos)
+					return true;
+			return false;
+		}
+	};
+
+	// RAII guard: installs a capturing sink and restores the default on destruction.
+	struct SinkGuard
 	{
-		for (auto const& r : records)
-			if (r.message.find(substr) != std::string::npos) return true;
-		return false;
-	}
-};
+		std::shared_ptr<CapturingSink> sink = std::make_shared<CapturingSink>();
 
-// RAII guard: installs a capturing sink and restores the default on destruction.
-struct SinkGuard
-{
-	std::shared_ptr<CapturingSink> sink = std::make_shared<CapturingSink>();
+		SinkGuard() { thx::setLogSink(sink); }
+		~SinkGuard() { thx::restoreDefaultLogSink(); }
 
-	SinkGuard()  { thx::setLogSink(sink); }
-	~SinkGuard() { thx::restoreDefaultLogSink(); }
+		std::vector<thx::LogRecord> const& records() const { return sink->records; }
 
-	std::vector<thx::LogRecord> const& records() const { return sink->records; }
-
-	bool hasLevel(thx::LogLevel lvl) const { return sink->hasLevel(lvl); }
-	bool hasMessageContaining(std::string const& s) const { return sink->hasMessageContaining(s); }
-};
+		bool hasLevel(thx::LogLevel lvl) const { return sink->hasLevel(lvl); }
+		bool hasMessageContaining(std::string const& s) const { return sink->hasMessageContaining(s); }
+	};
 
 } // namespace
 
@@ -68,7 +70,7 @@ TEST_CASE("log - record reaches installed sink", "[log]")
 	thx::log(thx::LogLevel::Info, "hello from test");
 
 	REQUIRE(g.records().size() == 1);
-	REQUIRE(g.records()[0].level   == thx::LogLevel::Info);
+	REQUIRE(g.records()[0].level == thx::LogLevel::Info);
 	REQUIRE(g.records()[0].message == "hello from test");
 }
 
@@ -76,8 +78,8 @@ TEST_CASE("log - all LogLevel values are routed", "[log]")
 {
 	SinkGuard g;
 	thx::log(thx::LogLevel::Debug, "d");
-	thx::log(thx::LogLevel::Info,  "i");
-	thx::log(thx::LogLevel::Warn,  "w");
+	thx::log(thx::LogLevel::Info, "i");
+	thx::log(thx::LogLevel::Warn, "w");
 	thx::log(thx::LogLevel::Error, "e");
 
 	REQUIRE(g.records().size() == 4);
@@ -156,7 +158,7 @@ TEST_CASE("assertThat - false condition logs Error in release build", "[assert]"
 	thx::assertThat(false, "intentional failure");
 
 	REQUIRE(g.records().size() == 1);
-	REQUIRE(g.records()[0].level   == thx::LogLevel::Error);
+	REQUIRE(g.records()[0].level == thx::LogLevel::Error);
 	REQUIRE(g.records()[0].message == "intentional failure");
 }
 
@@ -184,7 +186,7 @@ TEST_CASE("ServiceManager - errors route to installed sink", "[log][service_mana
 
 	thx::service::ServiceManager sm;
 	sm.registerService(thx::service::ServiceID("test.Static"), thx::Version{1, 0, 0},
-	                   thx::service::ServiceFactory{});  // empty factory — invoke is null
+					   thx::service::ServiceFactory{}); // empty factory — invoke is null
 
 	thx::restoreDefaultLogSink();
 

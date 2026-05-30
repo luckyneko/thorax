@@ -15,15 +15,15 @@
 #include <string>
 
 #ifndef THX_EMIT_MANIFEST_PATH
-#  error "THX_EMIT_MANIFEST_PATH not defined — set via target_compile_definitions"
+#	error "THX_EMIT_MANIFEST_PATH not defined — set via target_compile_definitions"
 #endif
 
 #ifndef THX_MOCK_PLUGIN_PATH
-#  error "THX_MOCK_PLUGIN_PATH not defined"
+#	error "THX_MOCK_PLUGIN_PATH not defined"
 #endif
 
 #ifndef THX_MOCK_MULTI_PLUGIN_PATH
-#  error "THX_MOCK_MULTI_PLUGIN_PATH not defined"
+#	error "THX_MOCK_MULTI_PLUGIN_PATH not defined"
 #endif
 
 namespace
@@ -40,8 +40,8 @@ namespace
 		cmd << '"';
 #endif
 		cmd << '"' << THX_EMIT_MANIFEST_PATH << '"'
-		    << ' ' << '"' << dso << '"'
-		    << ' ' << '"' << outPath << '"';
+			<< ' ' << '"' << dso << '"'
+			<< ' ' << '"' << outPath << '"';
 #ifdef _WIN32
 		cmd << '"';
 #endif
@@ -50,15 +50,14 @@ namespace
 
 	std::string tempOut(std::string const& tag)
 	{
-		auto p = std::filesystem::temp_directory_path()
-		    / ("thx_test_emit_" + tag + ".thx.json");
+		auto p = std::filesystem::temp_directory_path() / ("thx_test_emit_" + tag + ".thx.json");
 		std::filesystem::remove(p);
 		return p.string();
 	}
-}
+} // namespace
 
 TEST_CASE("thx_emit_manifest - extracts a single-service plugin manifest",
-          "[emit_manifest][integration]")
+		  "[emit_manifest][integration]")
 {
 	auto outPath = tempOut("mock");
 
@@ -68,8 +67,8 @@ TEST_CASE("thx_emit_manifest - extracts a single-service plugin manifest",
 	REQUIRE(parsed);
 	auto const& m = parsed.value();
 
-	REQUIRE(m.schema  == 1);
-	REQUIRE(m.name    == "thx_mock.MockService");
+	REQUIRE(m.schema == 1);
+	REQUIRE(m.name == "thx_mock.MockService");
 	REQUIRE(m.version == thx::Version{1, 0, 0});
 	REQUIRE(m.provides.size() == 1);
 	REQUIRE(m.provides[0] == "thx_mock.MockService");
@@ -79,7 +78,7 @@ TEST_CASE("thx_emit_manifest - extracts a single-service plugin manifest",
 }
 
 TEST_CASE("thx_emit_manifest - extracts a multi-service plugin with requirements",
-          "[emit_manifest][integration]")
+		  "[emit_manifest][integration]")
 {
 	auto outPath = tempOut("multi");
 
@@ -105,7 +104,7 @@ TEST_CASE("thx_emit_manifest - extracts a multi-service plugin with requirements
 }
 
 TEST_CASE("thx_emit_manifest - returns non-zero on a missing DSO",
-          "[emit_manifest][integration]")
+		  "[emit_manifest][integration]")
 {
 	auto outPath = tempOut("missing");
 	int rc = runEmit("/nonexistent/path/to.dylib", outPath);

@@ -47,8 +47,8 @@ namespace thx::service
 			return !(*this == other);
 		}
 
-		constexpr uint64_t     hash() const noexcept { return m_hash; }
-		constexpr const char*  name() const noexcept { return m_name; }
+		constexpr uint64_t hash() const noexcept { return m_hash; }
+		constexpr const char* name() const noexcept { return m_name; }
 
 	private:
 		// FNV-1a 64-bit. Internal helper for the constructor — kept private
@@ -64,7 +64,7 @@ namespace thx::service
 			return hash;
 		}
 
-		uint64_t    m_hash;
+		uint64_t m_hash;
 		const char* m_name;
 	};
 

@@ -17,24 +17,23 @@
 namespace
 {
 
-class RequiresNewerPlugin : public thx::plugin::IPlugin
-{
-public:
-	thx::StringView name()    const override { return "thx.mock.RequiresNewerPlugin"; }
-	thx::Version    version() const override { return thx::Version{1, 0, 0}; }
-
-	bool onLoad()   override { return true; }
-	void onUnload() override {}
-
-	thx::Span<const thx::plugin::ServiceRequirement> required() const override
+	class RequiresNewerPlugin : public thx::plugin::IPlugin
 	{
-		// Require MockService at 2.0.0; the registered MockService is only 1.0.0.
-		static const thx::plugin::ServiceRequirement kReqs[] = {
-			{ thx_mock::MockService::staticId(), thx::Version{2, 0, 0} }
-		};
-		return thx::Span<const thx::plugin::ServiceRequirement>(kReqs, 1);
-	}
-};
+	public:
+		thx::StringView name() const override { return "thx.mock.RequiresNewerPlugin"; }
+		thx::Version version() const override { return thx::Version{1, 0, 0}; }
+
+		bool onLoad() override { return true; }
+		void onUnload() override {}
+
+		thx::Span<const thx::plugin::ServiceRequirement> required() const override
+		{
+			// Require MockService at 2.0.0; the registered MockService is only 1.0.0.
+			static const thx::plugin::ServiceRequirement kReqs[] = {
+				{thx_mock::MockService::staticId(), thx::Version{2, 0, 0}}};
+			return thx::Span<const thx::plugin::ServiceRequirement>(kReqs, 1);
+		}
+	};
 
 } // namespace
 

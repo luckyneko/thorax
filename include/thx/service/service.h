@@ -48,43 +48,63 @@ namespace thx::service
 	template <typename T>
 	class ServiceHandle
 	{
-		template <typename> friend class ServiceHandle;
+		template <typename>
+		friend class ServiceHandle;
 
-		struct AdoptTag {};
-		constexpr ServiceHandle(T* p, AdoptTag) noexcept : m_ptr(p) {}
+		struct AdoptTag
+		{
+		};
+		constexpr ServiceHandle(T* p, AdoptTag) noexcept
+			: m_ptr(p)
+		{
+		}
 
 		T* m_ptr;
 
 	public:
-		constexpr ServiceHandle() noexcept                  : m_ptr(nullptr) {}
-		constexpr ServiceHandle(std::nullptr_t) noexcept    : m_ptr(nullptr) {}
+		constexpr ServiceHandle() noexcept
+			: m_ptr(nullptr)
+		{
+		}
+		constexpr ServiceHandle(std::nullptr_t) noexcept
+			: m_ptr(nullptr)
+		{
+		}
 
 		// Construct from a raw pointer, incrementing the refcount. The raw
 		// pointer must point to a complete object derived from IService.
-		explicit ServiceHandle(T* p) noexcept : m_ptr(p)
+		explicit ServiceHandle(T* p) noexcept
+			: m_ptr(p)
 		{
-			if (m_ptr) m_ptr->thxRetain();
+			if (m_ptr)
+				m_ptr->thxRetain();
 		}
 
-		ServiceHandle(ServiceHandle const& other) noexcept : m_ptr(other.m_ptr)
+		ServiceHandle(ServiceHandle const& other) noexcept
+			: m_ptr(other.m_ptr)
 		{
-			if (m_ptr) m_ptr->thxRetain();
+			if (m_ptr)
+				m_ptr->thxRetain();
 		}
 
-		ServiceHandle(ServiceHandle&& other) noexcept : m_ptr(other.m_ptr)
+		ServiceHandle(ServiceHandle&& other) noexcept
+			: m_ptr(other.m_ptr)
 		{
 			other.m_ptr = nullptr;
 		}
 
 		~ServiceHandle()
 		{
-			if (m_ptr) m_ptr->thxRelease();
+			if (m_ptr)
+				m_ptr->thxRelease();
 		}
 
 		ServiceHandle& operator=(ServiceHandle const& other) noexcept
 		{
-			if (other.m_ptr) other.m_ptr->thxRetain();
-			if (m_ptr) m_ptr->thxRelease();
+			if (other.m_ptr)
+				other.m_ptr->thxRetain();
+			if (m_ptr)
+				m_ptr->thxRelease();
 			m_ptr = other.m_ptr;
 			return *this;
 		}
@@ -93,7 +113,8 @@ namespace thx::service
 		{
 			if (this != &other)
 			{
-				if (m_ptr) m_ptr->thxRelease();
+				if (m_ptr)
+					m_ptr->thxRelease();
 				m_ptr = other.m_ptr;
 				other.m_ptr = nullptr;
 			}
@@ -106,14 +127,15 @@ namespace thx::service
 			return *this;
 		}
 
-		T* get()                const noexcept { return m_ptr;     }
-		T& operator*()          const noexcept { return *m_ptr;    }
-		T* operator->()         const noexcept { return m_ptr;     }
-		explicit operator bool()const noexcept { return m_ptr != nullptr; }
+		T* get() const noexcept { return m_ptr; }
+		T& operator*() const noexcept { return *m_ptr; }
+		T* operator->() const noexcept { return m_ptr; }
+		explicit operator bool() const noexcept { return m_ptr != nullptr; }
 
 		void reset() noexcept
 		{
-			if (m_ptr) m_ptr->thxRelease();
+			if (m_ptr)
+				m_ptr->thxRelease();
 			m_ptr = nullptr;
 		}
 
@@ -137,17 +159,17 @@ namespace thx::service
 
 		friend bool operator==(ServiceHandle const& a, ServiceHandle const& b) noexcept { return a.m_ptr == b.m_ptr; }
 		friend bool operator!=(ServiceHandle const& a, ServiceHandle const& b) noexcept { return a.m_ptr != b.m_ptr; }
-		friend bool operator==(ServiceHandle const& a, std::nullptr_t)        noexcept  { return a.m_ptr == nullptr; }
-		friend bool operator!=(ServiceHandle const& a, std::nullptr_t)        noexcept  { return a.m_ptr != nullptr; }
-		friend bool operator==(std::nullptr_t, ServiceHandle const& a)        noexcept  { return a.m_ptr == nullptr; }
-		friend bool operator!=(std::nullptr_t, ServiceHandle const& a)        noexcept  { return a.m_ptr != nullptr; }
+		friend bool operator==(ServiceHandle const& a, std::nullptr_t) noexcept { return a.m_ptr == nullptr; }
+		friend bool operator!=(ServiceHandle const& a, std::nullptr_t) noexcept { return a.m_ptr != nullptr; }
+		friend bool operator==(std::nullptr_t, ServiceHandle const& a) noexcept { return a.m_ptr == nullptr; }
+		friend bool operator!=(std::nullptr_t, ServiceHandle const& a) noexcept { return a.m_ptr != nullptr; }
 	};
 
 	// Snapshot entry returned by listServices().
 	struct ServiceInfo
 	{
 		ServiceID id;
-		Version   version;
+		Version version;
 	};
 
 	// Service factory. Wire ABI between the caller's DSO and libthorax.
@@ -159,9 +181,9 @@ namespace thx::service
 	// must be noexcept since it runs on the cleanup path.
 	struct ServiceFactory
 	{
-		IService* (*invoke)(void* ctx)            = nullptr;
-		void      (*destroyCtx)(void* ctx) noexcept = nullptr;
-		void*       ctx                           = nullptr;
+		IService* (*invoke)(void* ctx) = nullptr;
+		void (*destroyCtx)(void* ctx) noexcept = nullptr;
+		void* ctx = nullptr;
 	};
 
 	// Build a ServiceFactory that adapts an arbitrary callable. The callable
@@ -174,10 +196,12 @@ namespace thx::service
 		using Stored = std::decay_t<Callable>;
 		auto* state = new Stored(std::forward<Callable>(callable));
 		return ServiceFactory{
-			+[](void* ctx) -> IService* {
+			+[](void* ctx) -> IService*
+			{
 				return (*static_cast<Stored*>(ctx))();
 			},
-			+[](void* ctx) noexcept {
+			+[](void* ctx) noexcept
+			{
 				delete static_cast<Stored*>(ctx);
 			},
 			state,
@@ -188,13 +212,13 @@ namespace thx::service
 	// Public consumers should call the template wrappers below, not these.
 	namespace detail
 	{
-		THX_API bool                     registerServiceImpl(ServiceID id, Version version, ServiceFactory factory);
-		THX_API bool                     unregisterServiceImpl(ServiceID id);
+		THX_API bool registerServiceImpl(ServiceID id, Version version, ServiceFactory factory);
+		THX_API bool unregisterServiceImpl(ServiceID id);
 		// Returns an already-retained IService* (refcount incremented). Caller
 		// must wrap in ServiceHandle::adopt() to take ownership.
-		THX_API IService*                acquireServiceImpl(ServiceID id);
+		THX_API IService* acquireServiceImpl(ServiceID id);
 		THX_API std::vector<ServiceInfo> listServicesImpl();
-	}
+	} // namespace detail
 
 	// --- Facade -----------------------------------------------------------
 
@@ -209,12 +233,12 @@ namespace thx::service
 	// from any callable. The callable must return IService* (or a convertible
 	// raw pointer to a service derived from IService).
 	template <typename Callable, typename = std::enable_if_t<
-		!std::is_same_v<std::decay_t<Callable>, ServiceFactory>>>
+									 !std::is_same_v<std::decay_t<Callable>, ServiceFactory>>>
 	inline bool registerService(ServiceID id, Version version, Callable&& callable)
 	{
 		return detail::registerServiceImpl(
-		    std::move(id), version,
-		    makeServiceFactory(std::forward<Callable>(callable)));
+			std::move(id), version,
+			makeServiceFactory(std::forward<Callable>(callable)));
 	}
 
 	// Type-deduced registration. T must derive from Service<T> (provides
@@ -223,22 +247,22 @@ namespace thx::service
 	inline bool registerService()
 	{
 		return detail::registerServiceImpl(
-		    T::staticId(), T::staticVersion(),
-		    ServiceFactory{
-		        +[](void*) -> IService* { return new T(); },
-		        +[](void*) noexcept {},
-		        nullptr,
-		    });
+			T::staticId(), T::staticVersion(),
+			ServiceFactory{
+				+[](void*) -> IService*
+				{ return new T(); },
+				+[](void*) noexcept {},
+				nullptr,
+			});
 	}
 
 	// Type-deduced registration with a custom factory callable.
-	template <typename T, typename Callable, typename = std::enable_if_t<
-		!std::is_same_v<std::decay_t<Callable>, ServiceFactory>>>
+	template <typename T, typename Callable, typename = std::enable_if_t<!std::is_same_v<std::decay_t<Callable>, ServiceFactory>>>
 	inline bool registerService(Callable&& callable)
 	{
 		return detail::registerServiceImpl(
-		    T::staticId(), T::staticVersion(),
-		    makeServiceFactory(std::forward<Callable>(callable)));
+			T::staticId(), T::staticVersion(),
+			makeServiceFactory(std::forward<Callable>(callable)));
 	}
 
 	// Type-deduced registration with a pre-built ServiceFactory.
@@ -263,7 +287,7 @@ namespace thx::service
 	inline ServiceHandle<T> getService(ServiceID id)
 	{
 		static_assert(std::is_base_of_v<IService, T>,
-		    "getService<T>: T must derive from thx::service::IService");
+					  "getService<T>: T must derive from thx::service::IService");
 		// detail returns an already-retained pointer; adopt without re-retaining.
 		// The ServiceID is the type discriminator at lookup time; the cast is
 		// just a pointer adjustment — see service_manager.inl for why we don't
@@ -286,8 +310,8 @@ namespace thx::service
 	// ABI lock-down. ServiceHandle and ServiceFactory cross the DSO boundary;
 	// confirm their layout is what consumers expect.
 	static_assert(sizeof(ServiceHandle<IService>) == sizeof(void*),
-	    "ServiceHandle must be a single-pointer type for ABI stability");
+				  "ServiceHandle must be a single-pointer type for ABI stability");
 	static_assert(sizeof(ServiceFactory) == 3 * sizeof(void*),
-	    "ServiceFactory layout must be { invoke_fn, destroy_fn, ctx }");
+				  "ServiceFactory layout must be { invoke_fn, destroy_fn, ctx }");
 
 } // namespace thx::service

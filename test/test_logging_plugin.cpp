@@ -8,8 +8,8 @@
 
 #include <catch2/catch_all.hpp>
 #include <thx/plugin/plugin.h>
-#include <thx/service/service.h>
 #include <thx/plugins/logging/logging_service.h>
+#include <thx/service/service.h>
 
 #include <filesystem>
 #include <fstream>
@@ -18,7 +18,7 @@
 #include <vector>
 
 #ifndef THX_LOGGING_PLUGIN_PATH
-#  error "THX_LOGGING_PLUGIN_PATH not defined — set via target_compile_definitions in CMakeLists.txt"
+#	error "THX_LOGGING_PLUGIN_PATH not defined — set via target_compile_definitions in CMakeLists.txt"
 #endif
 
 using namespace thx::plugins::logging;
@@ -30,36 +30,36 @@ using namespace thx::plugins::logging;
 namespace
 {
 
-struct CaptureBackend : ILogBackend
-{
-	struct Entry
+	struct CaptureBackend : ILogBackend
 	{
-		LogLevel    level;
-		std::string message;
+		struct Entry
+		{
+			LogLevel level;
+			std::string message;
+		};
+
+		std::vector<Entry> entries;
+
+		void write(LogLevel level, const char* message) override
+		{
+			entries.push_back({level, message ? message : ""});
+		}
 	};
 
-	std::vector<Entry> entries;
-
-	void write(LogLevel level, const char* message) override
+	// Loads the logging plugin through the production facade. The test-wide reset
+	// listener unloads it again after each case.
+	struct Fixture
 	{
-		entries.push_back({level, message ? message : ""});
-	}
-};
+		explicit Fixture()
+		{
+			REQUIRE(thx::plugin::load(THX_LOGGING_PLUGIN_PATH));
+		}
 
-// Loads the logging plugin through the production facade. The test-wide reset
-// listener unloads it again after each case.
-struct Fixture
-{
-	explicit Fixture()
-	{
-		REQUIRE(thx::plugin::load(THX_LOGGING_PLUGIN_PATH));
-	}
-
-	thx::service::ServiceHandle<ILoggingService> service()
-	{
-		return thx::service::getService<ILoggingService>();
-	}
-};
+		thx::service::ServiceHandle<ILoggingService> service()
+		{
+			return thx::service::getService<ILoggingService>();
+		}
+	};
 
 } // namespace
 
@@ -86,13 +86,13 @@ TEST_CASE("LoggingPlugin - addBackend routes log() to backend", "[logging_plugin
 	auto cap = std::make_shared<CaptureBackend>();
 	svc->addBackend(cap);
 
-	svc->log(LogLevel::Info,  "hello");
+	svc->log(LogLevel::Info, "hello");
 	svc->log(LogLevel::Error, "world");
 
 	REQUIRE(cap->entries.size() == 2);
-	REQUIRE(cap->entries[0].level   == LogLevel::Info);
+	REQUIRE(cap->entries[0].level == LogLevel::Info);
 	REQUIRE(cap->entries[0].message == "hello");
-	REQUIRE(cap->entries[1].level   == LogLevel::Error);
+	REQUIRE(cap->entries[1].level == LogLevel::Error);
 	REQUIRE(cap->entries[1].message == "world");
 }
 
@@ -181,7 +181,7 @@ TEST_CASE("LoggingPlugin - makeFileBackend writes messages to file", "[logging_p
 		std::ifstream in(tmp);
 		REQUIRE(in.is_open());
 		contents.assign(std::istreambuf_iterator<char>(in),
-		                std::istreambuf_iterator<char>());
+						std::istreambuf_iterator<char>());
 	} // close in before remove — Windows requires no open handles to delete
 
 	fs::remove(tmp);
@@ -190,7 +190,7 @@ TEST_CASE("LoggingPlugin - makeFileBackend writes messages to file", "[logging_p
 }
 
 TEST_CASE("LoggingPlugin - makeFileBackend with null path returns null",
-          "[logging_plugin]")
+		  "[logging_plugin]")
 {
 	Fixture f;
 	auto svc = f.service();
@@ -204,7 +204,7 @@ TEST_CASE("LoggingPlugin - makeFileBackend with null path returns null",
 // ---------------------------------------------------------------------------
 
 TEST_CASE("LoggingPlugin - rotating backend rotates when size is exceeded",
-          "[logging_plugin]")
+		  "[logging_plugin]")
 {
 	namespace fs = std::filesystem;
 
@@ -242,13 +242,13 @@ TEST_CASE("LoggingPlugin - rotating backend rotates when size is exceeded",
 }
 
 TEST_CASE("LoggingPlugin - rotating backend with invalid args returns null",
-          "[logging_plugin]")
+		  "[logging_plugin]")
 {
 	Fixture f;
 	auto svc = f.service();
 	REQUIRE(svc);
 
-	REQUIRE(svc->makeRotatingFileBackend(nullptr,   64, 3) == nullptr);
-	REQUIRE(svc->makeRotatingFileBackend("x.log",    0, 3) == nullptr);
-	REQUIRE(svc->makeRotatingFileBackend("x.log",   64, 0) == nullptr);
+	REQUIRE(svc->makeRotatingFileBackend(nullptr, 64, 3) == nullptr);
+	REQUIRE(svc->makeRotatingFileBackend("x.log", 0, 3) == nullptr);
+	REQUIRE(svc->makeRotatingFileBackend("x.log", 64, 0) == nullptr);
 }

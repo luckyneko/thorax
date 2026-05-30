@@ -10,7 +10,7 @@
 #include <library.h>
 
 #ifndef THX_MOCK_PLUGIN_PATH
-#  error "THX_MOCK_PLUGIN_PATH not defined — set via target_compile_definitions in CMakeLists.txt"
+#	error "THX_MOCK_PLUGIN_PATH not defined — set via target_compile_definitions in CMakeLists.txt"
 #endif
 
 #include <cstdint>
@@ -19,10 +19,10 @@ namespace
 {
 	// Function pointer types matching the mock plugin's exports (validated only
 	// to confirm bind() resolved them — these tests don't call into them).
-	using ThxCreateFn      = void* (*)();
-	using ThxDestroyFn     = void  (*)(void*);
-	using ThxAbiVersionFn  = std::uint32_t (*)();
-}
+	using ThxCreateFn = void* (*)();
+	using ThxDestroyFn = void (*)(void*);
+	using ThxAbiVersionFn = std::uint32_t (*)();
+} // namespace
 
 TEST_CASE("Library default-constructed is empty and invalid", "[library]")
 {
@@ -61,34 +61,34 @@ TEST_CASE("Library::bind resolves an existing symbol", "[library]")
 	ThxAbiVersionFn abiFn = nullptr;
 	lib.bind("thx_abi_version", abiFn);
 
-	REQUIRE(lib);                  // chain still valid
+	REQUIRE(lib); // chain still valid
 	REQUIRE(abiFn != nullptr);
-	REQUIRE(abiFn() != 0);         // the symbol returns a packed version
+	REQUIRE(abiFn() != 0); // the symbol returns a packed version
 }
 
 TEST_CASE("Library::bind chains and reports the first missing symbol",
-          "[library]")
+		  "[library]")
 {
 	thx::Library lib;
-	ThxCreateFn  createFn  = nullptr;
+	ThxCreateFn createFn = nullptr;
 	ThxDestroyFn destroyFn = nullptr;
-	void*        bogus     = nullptr;
+	void* bogus = nullptr;
 
 	lib.open(THX_MOCK_PLUGIN_PATH)
-	   .bind("thx_create_plugin",  createFn)
-	   .bind("does_not_exist",     bogus)
-	   .bind("thx_destroy_plugin", destroyFn);
+		.bind("thx_create_plugin", createFn)
+		.bind("does_not_exist", bogus)
+		.bind("thx_destroy_plugin", destroyFn);
 
 	REQUIRE_FALSE(lib);
 	// First two resolved before the failure.
 	REQUIRE(createFn != nullptr);
-	REQUIRE(bogus    == nullptr);
+	REQUIRE(bogus == nullptr);
 	// Subsequent bind on an invalid Library is a no-op and leaves out untouched.
 	REQUIRE(destroyFn == nullptr);
 }
 
 TEST_CASE("Library::close releases the native handle and is idempotent",
-          "[library]")
+		  "[library]")
 {
 	thx::Library lib;
 	lib.open(THX_MOCK_PLUGIN_PATH);
@@ -104,7 +104,7 @@ TEST_CASE("Library::close releases the native handle and is idempotent",
 }
 
 TEST_CASE("Library::release transfers ownership of the native handle",
-          "[library]")
+		  "[library]")
 {
 	thx::Library lib;
 	lib.open(THX_MOCK_PLUGIN_PATH);

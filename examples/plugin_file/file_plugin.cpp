@@ -14,21 +14,21 @@
 namespace
 {
 
-struct FileServiceImpl : examples::IFileService
-{
-	int read(const char* path, char* buffer, int buffer_size) override
+	struct FileServiceImpl : examples::IFileService
 	{
-		if (!path || !buffer || buffer_size <= 0)
-			return -1;
+		int read(const char* path, char* buffer, int buffer_size) override
+		{
+			if (!path || !buffer || buffer_size <= 0)
+				return -1;
 
-		std::ifstream f(path, std::ios::binary);
-		if (!f)
-			return -1;
+			std::ifstream f(path, std::ios::binary);
+			if (!f)
+				return -1;
 
-		f.read(buffer, static_cast<std::streamsize>(buffer_size - 1));
-		return static_cast<int>(f.gcount());
-	}
-};
+			f.read(buffer, static_cast<std::streamsize>(buffer_size - 1));
+			return static_cast<int>(f.gcount());
+		}
+	};
 
 } // namespace
 

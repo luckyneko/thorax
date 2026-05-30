@@ -14,11 +14,11 @@
 #include <string>
 
 #ifndef THX_MOCK_PLUGIN_PATH
-#  error "THX_MOCK_PLUGIN_PATH not defined — set via target_compile_definitions in CMakeLists.txt"
+#	error "THX_MOCK_PLUGIN_PATH not defined — set via target_compile_definitions in CMakeLists.txt"
 #endif
 
 #ifndef THX_MOCK_BAD_ABI_PLUGIN_PATH
-#  error "THX_MOCK_BAD_ABI_PLUGIN_PATH not defined — set via target_compile_definitions in CMakeLists.txt"
+#	error "THX_MOCK_BAD_ABI_PLUGIN_PATH not defined — set via target_compile_definitions in CMakeLists.txt"
 #endif
 
 // ---------------------------------------------------------------------------
@@ -48,7 +48,7 @@ TEST_CASE("PluginHandle::open - valid mock plugin", "[plugin_handle]")
 	auto r = thx::plugin::PluginHandle::open(THX_MOCK_PLUGIN_PATH);
 	REQUIRE(r.isOk());
 	REQUIRE(bool(r.value()));
-	REQUIRE(r.value().createFn()  != nullptr);
+	REQUIRE(r.value().createFn() != nullptr);
 	REQUIRE(r.value().destroyFn() != nullptr);
 }
 
@@ -65,11 +65,11 @@ TEST_CASE("PluginHandle::open - mismatched ABI version returns VersionMismatch",
 }
 
 TEST_CASE("PluginHandle::open - LoadFlags::Strict succeeds on a healthy plugin",
-          "[plugin_handle]")
+		  "[plugin_handle]")
 {
 	// Strict (RTLD_NOW on POSIX) resolves every symbol at load time. A
 	// well-formed plugin has no unresolved symbols and so opens fine.
 	auto r = thx::plugin::PluginHandle::open(THX_MOCK_PLUGIN_PATH,
-	    thx::Library::LoadFlags::Strict);
+											 thx::Library::LoadFlags::Strict);
 	REQUIRE(r.isOk());
 }

@@ -25,7 +25,7 @@ namespace thx::plugin
 	struct ServiceRequirement
 	{
 		thx::service::ServiceID id;
-		Version                 version;
+		Version version;
 	};
 
 	// Plugin abstraction. A DSO produces exactly one IPlugin via thx_create_plugin
@@ -99,7 +99,7 @@ namespace thx::plugin
 	{
 	public:
 		StringView name() const override { return T::staticId().name(); }
-		Version    version() const override { return T::staticVersion(); }
+		Version version() const override { return T::staticVersion(); }
 
 		bool onLoad() override
 		{
@@ -120,8 +120,8 @@ namespace thx::plugin
 			// only holds the Span transiently (it deep-copies the IDs into
 			// std::vector<ServiceID> before the DSO can be unmapped — see the
 			// LoadedEntry destruction order in plugin_manager.h).
-			static const thx::service::ServiceID kProvides[] = { T::staticId() };
-			return { kProvides, 1 };
+			static const thx::service::ServiceID kProvides[] = {T::staticId()};
+			return {kProvides, 1};
 		}
 	};
 

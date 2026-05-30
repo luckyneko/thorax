@@ -7,19 +7,19 @@
  */
 
 #include <catch2/catch_all.hpp>
-#include <thx/lifecycle.h>
-#include <thx/plugin/plugin.h>
-#include <thx/service/iservice.h>
-#include <thx/service/service.h>
 #include <plugin/plugin_garbage.h>
 #include <plugin/plugin_manager.h>
 #include <registry.h>
 #include <service/service_manager.h>
+#include <thx/lifecycle.h>
+#include <thx/plugin/plugin.h>
+#include <thx/service/iservice.h>
+#include <thx/service/service.h>
 
 #include "mock_plugin.h"
 
 #ifndef THX_MOCK_PLUGIN_PATH
-#  error "THX_MOCK_PLUGIN_PATH not defined — set via target_compile_definitions in CMakeLists.txt"
+#	error "THX_MOCK_PLUGIN_PATH not defined — set via target_compile_definitions in CMakeLists.txt"
 #endif
 
 // The Registry is a process-wide singleton; tests that mutate its state
@@ -37,7 +37,7 @@ namespace
 		static inline int destroyCount = 0;
 		void onDestroy() override { ++destroyCount; }
 	};
-}
+} // namespace
 
 TEST_CASE("Registry::instance returns the same object across calls", "[registry]")
 {
@@ -52,12 +52,12 @@ TEST_CASE("thx::registry is a shorthand for Registry::instance", "[registry]")
 }
 
 TEST_CASE("Registry exposes ServiceManager, PluginManager, and PluginGarbage",
-          "[registry]")
+		  "[registry]")
 {
 	auto& reg = thx::Registry::instance();
-	auto& sm  = reg.serviceManager();
-	auto& pm  = reg.pluginManager();
-	auto& gc  = reg.pluginGarbage();
+	auto& sm = reg.serviceManager();
+	auto& pm = reg.pluginManager();
+	auto& gc = reg.pluginGarbage();
 
 	// Calling the accessors again yields the same objects.
 	REQUIRE(&sm == &reg.serviceManager());
@@ -66,7 +66,7 @@ TEST_CASE("Registry exposes ServiceManager, PluginManager, and PluginGarbage",
 }
 
 TEST_CASE("collectGarbage / pendingGarbage operate on the Registry-owned queue",
-          "[registry]")
+		  "[registry]")
 {
 	auto& gc = thx::registry().pluginGarbage();
 	// Drain in case earlier tests left handles queued.
@@ -77,7 +77,7 @@ TEST_CASE("collectGarbage / pendingGarbage operate on the Registry-owned queue",
 }
 
 TEST_CASE("thx::initialise sets the debug name when previously empty",
-          "[registry][lifecycle]")
+		  "[registry][lifecycle]")
 {
 	// Reset to a known state — earlier tests may have set a name.
 	thx::shutdown();
@@ -95,7 +95,7 @@ TEST_CASE("thx::initialise sets the debug name when previously empty",
 }
 
 TEST_CASE("thx::shutdown drains the deferred-close queue",
-          "[registry][lifecycle]")
+		  "[registry][lifecycle]")
 {
 	auto& gc = thx::registry().pluginGarbage();
 
@@ -114,7 +114,7 @@ TEST_CASE("thx::shutdown drains the deferred-close queue",
 }
 
 TEST_CASE("thx::shutdown unregisters services left in the Registry",
-          "[registry][lifecycle][service]")
+		  "[registry][lifecycle][service]")
 {
 	using namespace thx::service;
 
@@ -132,7 +132,7 @@ TEST_CASE("thx::shutdown unregisters services left in the Registry",
 }
 
 TEST_CASE("thx::shutdown runs service onDestroy hooks",
-          "[registry][lifecycle][service]")
+		  "[registry][lifecycle][service]")
 {
 	using namespace thx::service;
 
@@ -140,18 +140,18 @@ TEST_CASE("thx::shutdown runs service onDestroy hooks",
 	ShutdownProbe::destroyCount = 0;
 
 	REQUIRE(registerService<ShutdownProbe>());
-	REQUIRE(ShutdownProbe::destroyCount == 0);  // onDestroy hasn't run yet
+	REQUIRE(ShutdownProbe::destroyCount == 0); // onDestroy hasn't run yet
 
 	thx::shutdown();
 	REQUIRE(ShutdownProbe::destroyCount == 1);
 }
 
 TEST_CASE("thx::shutdown unloads loaded plugins and drains their DSOs",
-          "[registry][lifecycle][plugin]")
+		  "[registry][lifecycle][plugin]")
 {
 	using namespace thx;
 
-	shutdown();  // clean slate
+	shutdown(); // clean slate
 	REQUIRE(plugin::load(THX_MOCK_PLUGIN_PATH));
 	REQUIRE(plugin::isLoaded(THX_MOCK_PLUGIN_PATH));
 	REQUIRE(service::getService<thx_mock::MockService>() != nullptr);
@@ -167,7 +167,7 @@ TEST_CASE("thx::shutdown unloads loaded plugins and drains their DSOs",
 TEST_CASE("thx::shutdown is idempotent", "[registry][lifecycle]")
 {
 	thx::shutdown();
-	thx::shutdown();  // second call must be a safe no-op
+	thx::shutdown(); // second call must be a safe no-op
 
 	REQUIRE(thx::registry().serviceManager().listServices().empty());
 	REQUIRE(thx::registry().pluginManager().plugins().empty());

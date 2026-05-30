@@ -26,16 +26,21 @@ namespace thx
 	class StringView
 	{
 	public:
-		constexpr StringView() noexcept : m_data(""), m_size(0) {}
+		constexpr StringView() noexcept
+			: m_data("")
+			, m_size(0)
+		{
+		}
 
 		constexpr StringView(const char* str, std::size_t len) noexcept
-			: m_data(str ? str : ""), m_size(len)
+			: m_data(str ? str : "")
+			, m_size(len)
 		{
 		}
 
 		// Implicit construction from string literals so existing call sites
 		// (e.g. Version{1, 0, 0, "alpha"}) do not need updating.
-		constexpr StringView(const char* str) noexcept  // NOLINT(google-explicit-constructor)
+		constexpr StringView(const char* str) noexcept // NOLINT(google-explicit-constructor)
 			: m_data(str ? str : "")
 			, m_size(str ? std::char_traits<char>::length(str) : 0)
 		{
@@ -43,7 +48,7 @@ namespace thx
 
 		constexpr const char* data() const noexcept { return m_data; }
 		constexpr std::size_t size() const noexcept { return m_size; }
-		constexpr bool        empty() const noexcept { return m_size == 0; }
+		constexpr bool empty() const noexcept { return m_size == 0; }
 
 		constexpr const char* begin() const noexcept { return m_data; }
 		constexpr const char* end() const noexcept { return m_data + m_size; }
@@ -98,13 +103,13 @@ namespace thx
 		}
 
 	private:
-		const char*  m_data;
-		std::size_t  m_size;
+		const char* m_data;
+		std::size_t m_size;
 	};
 
 	// ABI lock-down — StringView crosses plugin boundaries; pin the layout
 	// we promised the docs (single ptr + size_t, no padding under standard ABIs).
 	static_assert(sizeof(StringView) == sizeof(const char*) + sizeof(std::size_t),
-	    "StringView must have layout { const char* data, size_t size } for the documented ABI");
+				  "StringView must have layout { const char* data, size_t size } for the documented ABI");
 
 } // namespace thx

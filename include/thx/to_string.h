@@ -20,9 +20,7 @@ namespace thx
 
 	inline std::string toString(Version const& v)
 	{
-		return std::to_string(v.major) + '.'
-		     + std::to_string(v.minor) + '.'
-		     + std::to_string(v.patch);
+		return std::to_string(v.major) + '.' + std::to_string(v.minor) + '.' + std::to_string(v.patch);
 	}
 
 } // namespace thx

@@ -36,17 +36,17 @@ namespace thx
 	class THX_INTERNAL_API Registry
 	{
 	public:
-		Registry(Registry const&)            = delete;
+		Registry(Registry const&) = delete;
 		Registry& operator=(Registry const&) = delete;
-		Registry(Registry&&)                 = delete;
-		Registry& operator=(Registry&&)      = delete;
+		Registry(Registry&&) = delete;
+		Registry& operator=(Registry&&) = delete;
 
 		// Process-wide singleton accessor. Constructs lazily on first call.
 		static Registry& instance() noexcept;
 
 		thx::service::ServiceManager& serviceManager() noexcept { return m_serviceManager; }
-		thx::plugin::PluginManager&   pluginManager()  noexcept { return m_pluginManager;  }
-		thx::plugin::PluginGarbage&   pluginGarbage()  noexcept { return m_pluginGarbage;  }
+		thx::plugin::PluginManager& pluginManager() noexcept { return m_pluginManager; }
+		thx::plugin::PluginGarbage& pluginGarbage() noexcept { return m_pluginGarbage; }
 
 		// Optional human-readable name set via thx::initialise(). Used for
 		// diagnostics; has no effect on framework behaviour. Empty until
@@ -70,10 +70,10 @@ namespace thx
 		//   - m_serviceManager must be initialised before m_pluginManager
 		//     because m_pluginManager's constructor takes m_serviceManager by
 		//     reference.
-		thx::plugin::PluginGarbage    m_pluginGarbage;
-		thx::service::ServiceManager  m_serviceManager;
-		thx::plugin::PluginManager    m_pluginManager;
-		std::string                   m_debugName;
+		thx::plugin::PluginGarbage m_pluginGarbage;
+		thx::service::ServiceManager m_serviceManager;
+		thx::plugin::PluginManager m_pluginManager;
+		std::string m_debugName;
 	};
 
 	// thx::initialise / thx::shutdown are declared in <thx/lifecycle.h>

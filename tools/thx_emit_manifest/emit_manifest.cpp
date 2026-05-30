@@ -34,47 +34,46 @@
 namespace
 {
 
-// Mirrors discover()'s sidecar↔DSO pairing rule: strip the platform DSO
-// suffix and append .thx.json. The platform extension is duplicated here
-// rather than imported from the framework's private library.h header —
-// the tool is a normal API consumer and shouldn't reach into src/.
-std::string manifestPathForDso(std::string const& dsoPath)
-{
+	// Mirrors discover()'s sidecar↔DSO pairing rule: strip the platform DSO
+	// suffix and append .thx.json. The platform extension is duplicated here
+	// rather than imported from the framework's private library.h header —
+	// the tool is a normal API consumer and shouldn't reach into src/.
+	std::string manifestPathForDso(std::string const& dsoPath)
+	{
 #if defined(_WIN32)
-	constexpr char const* kExt = ".dll";
+		constexpr char const* kExt = ".dll";
 #elif defined(__APPLE__)
-	constexpr char const* kExt = ".dylib";
+		constexpr char const* kExt = ".dylib";
 #else
-	constexpr char const* kExt = ".so";
+		constexpr char const* kExt = ".so";
 #endif
-	std::string const suffix = kExt;
-	if (dsoPath.size() > suffix.size()
-	    && dsoPath.compare(dsoPath.size() - suffix.size(), suffix.size(), suffix) == 0)
-		return dsoPath.substr(0, dsoPath.size() - suffix.size()) + ".thx.json";
-	return dsoPath + ".thx.json";
-}
-
-int emit(std::string const& dsoPath, std::string const& outPath)
-{
-	auto inspected = thx::plugin::inspect(dsoPath);
-	if (!inspected)
-	{
-		std::fprintf(stderr, "thx_emit_manifest: %s\n",
-		             inspected.error().message.c_str());
-		return 1;
+		std::string const suffix = kExt;
+		if (dsoPath.size() > suffix.size() && dsoPath.compare(dsoPath.size() - suffix.size(), suffix.size(), suffix) == 0)
+			return dsoPath.substr(0, dsoPath.size() - suffix.size()) + ".thx.json";
+		return dsoPath + ".thx.json";
 	}
 
-	auto json = thx::plugin::serialiseManifest(inspected.value());
-
-	std::ofstream f(outPath);
-	if (!f)
+	int emit(std::string const& dsoPath, std::string const& outPath)
 	{
-		std::fprintf(stderr, "thx_emit_manifest: cannot write '%s'\n", outPath.c_str());
-		return 1;
+		auto inspected = thx::plugin::inspect(dsoPath);
+		if (!inspected)
+		{
+			std::fprintf(stderr, "thx_emit_manifest: %s\n",
+						 inspected.error().message.c_str());
+			return 1;
+		}
+
+		auto json = thx::plugin::serialiseManifest(inspected.value());
+
+		std::ofstream f(outPath);
+		if (!f)
+		{
+			std::fprintf(stderr, "thx_emit_manifest: cannot write '%s'\n", outPath.c_str());
+			return 1;
+		}
+		f << json;
+		return 0;
 	}
-	f << json;
-	return 0;
-}
 
 } // namespace
 

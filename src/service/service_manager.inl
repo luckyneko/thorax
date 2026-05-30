@@ -9,7 +9,7 @@ namespace thx::service
 	ServiceHandle<T> ServiceManager::getService(ServiceID id) const
 	{
 		static_assert(std::is_base_of_v<IService, T>,
-		    "getService<T>: T must derive from thx::service::IService");
+					  "getService<T>: T must derive from thx::service::IService");
 		std::shared_lock lock(m_mutex);
 		auto it = m_services.find(id);
 		if (it == m_services.end())

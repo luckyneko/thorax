@@ -22,22 +22,22 @@ namespace thx
 	enum class ErrorCode
 	{
 		Unknown = 0,
-		FileNotFound,          // path does not exist on disk
-		OpenFailed,            // file exists but the platform loader rejected it (permissions, missing transitive deps, malformed DSO, …)
+		FileNotFound, // path does not exist on disk
+		OpenFailed,	  // file exists but the platform loader rejected it (permissions, missing transitive deps, malformed DSO, …)
 		SymbolNotFound,
 		FactoryFailed,
 		NotLoaded,
 		VersionMismatch,
 		RegistrationFailed,
-		InUse,                 // operation rejected because the target is still in active use
-		MalformedManifest,     // sidecar JSON could not be parsed or has wrong shape
-		ManifestMismatch,      // manifest's declared name/version/requires/provides disagrees with the live IPlugin
+		InUse,			   // operation rejected because the target is still in active use
+		MalformedManifest, // sidecar JSON could not be parsed or has wrong shape
+		ManifestMismatch,  // manifest's declared name/version/requires/provides disagrees with the live IPlugin
 	};
 
 	// Lightweight error descriptor returned (not thrown) by fallible operations.
 	struct Error
 	{
-		ErrorCode   code{ErrorCode::Unknown};
+		ErrorCode code{ErrorCode::Unknown};
 		std::string message;
 	};
 
@@ -63,14 +63,14 @@ namespace thx
 			return Result{std::in_place_index<1>, std::move(error)};
 		}
 
-		bool isOk()  const noexcept { return m_data.index() == 0; }
+		bool isOk() const noexcept { return m_data.index() == 0; }
 		bool isErr() const noexcept { return m_data.index() == 1; }
 
 		explicit operator bool() const noexcept { return isOk(); }
 
-		T&       value()       { return std::get<0>(m_data); }
+		T& value() { return std::get<0>(m_data); }
 		T const& value() const { return std::get<0>(m_data); }
-		E&       error()       { return std::get<1>(m_data); }
+		E& error() { return std::get<1>(m_data); }
 		E const& error() const { return std::get<1>(m_data); }
 
 		// Returns value() if ok, otherwise the supplied fallback.
@@ -122,24 +122,29 @@ namespace thx
 	class Result<void, E>
 	{
 	public:
-		static Result ok()         { return Result{};                          }
-		static Result err(E error) { Result r; r.m_error = std::move(error); return r; }
+		static Result ok() { return Result{}; }
+		static Result err(E error)
+		{
+			Result r;
+			r.m_error = std::move(error);
+			return r;
+		}
 
-		bool isOk()  const noexcept { return !m_error.has_value(); }
-		bool isErr() const noexcept { return  m_error.has_value(); }
+		bool isOk() const noexcept { return !m_error.has_value(); }
+		bool isErr() const noexcept { return m_error.has_value(); }
 
 		explicit operator bool() const noexcept { return isOk(); }
 
 		E& error()
 		{
 			thx::assertThat(m_error.has_value(),
-			    "Result<void, E>::error() called on an ok Result");
+							"Result<void, E>::error() called on an ok Result");
 			return *m_error;
 		}
 		E const& error() const
 		{
 			thx::assertThat(m_error.has_value(),
-			    "Result<void, E>::error() called on an ok Result");
+							"Result<void, E>::error() called on an ok Result");
 			return *m_error;
 		}
 

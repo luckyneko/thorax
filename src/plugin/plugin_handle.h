@@ -42,16 +42,16 @@ namespace thx::plugin
 		PluginHandle(PluginHandle&&) noexcept;
 		PluginHandle& operator=(PluginHandle&&) noexcept;
 
-		PluginHandle(PluginHandle const&)            = delete;
+		PluginHandle(PluginHandle const&) = delete;
 		PluginHandle& operator=(PluginHandle const&) = delete;
 
 		// True if the handle holds an open DSO.
 		explicit operator bool() const noexcept { return static_cast<bool>(m_library); }
 
-		std::string const& path()       const noexcept { return m_library.path(); }
+		std::string const& path() const noexcept { return m_library.path(); }
 
-		PluginCreateFn     createFn()  const noexcept { return m_createFn;  }
-		PluginDestroyFn    destroyFn() const noexcept { return m_destroyFn; }
+		PluginCreateFn createFn() const noexcept { return m_createFn; }
+		PluginDestroyFn destroyFn() const noexcept { return m_destroyFn; }
 
 		// Opens the DSO at path and resolves thx_create_plugin /
 		// thx_destroy_plugin / thx_abi_version. Returns Err if the file is
@@ -61,14 +61,14 @@ namespace thx::plugin
 		// fail-fast loading when a plugin has missing transitive deps. Default
 		// is Lazy.
 		static Result<PluginHandle, Error> open(
-		    std::string const& path,
-		    Library::LoadFlags flags = Library::LoadFlags::Lazy);
+			std::string const& path,
+			Library::LoadFlags flags = Library::LoadFlags::Lazy);
 
 	private:
 		void close() noexcept;
 
-		Library         m_library;
-		PluginCreateFn  m_createFn  = nullptr;
+		Library m_library;
+		PluginCreateFn m_createFn = nullptr;
 		PluginDestroyFn m_destroyFn = nullptr;
 	};
 

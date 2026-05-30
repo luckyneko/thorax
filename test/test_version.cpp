@@ -132,7 +132,7 @@ TEST_CASE("Version - pack/unpack roundtrip preserves major.minor.patch",
 {
 	// pack() is runtime-only (the overflow check goes through the logging
 	// facade); the inverse constructor stays constexpr.
-	auto const v      = thx::Version{2, 5, 17};
+	auto const v = thx::Version{2, 5, 17};
 	auto const packed = v.pack();
 	auto const roundt = thx::Version(packed);
 	REQUIRE(roundt.major == 2);

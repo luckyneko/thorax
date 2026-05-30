@@ -49,7 +49,7 @@ namespace thx
 		constexpr explicit Version(uint32_t packed) noexcept
 			: major((packed >> 24) & 0xFFu)
 			, minor((packed >> 16) & 0xFFu)
-			, patch( packed        & 0xFFFFu)
+			, patch(packed & 0xFFFFu)
 		{
 		}
 
@@ -60,10 +60,8 @@ namespace thx
 		uint32_t pack() const noexcept
 		{
 			thx::assertThat(major <= 0xFFu && minor <= 0xFFu && patch <= 0xFFFFu,
-			    "Version::pack: component out of wire-encoding range (major/minor: 8 bits, patch: 16)");
-			return ((major & 0xFFu) << 24)
-			     | ((minor & 0xFFu) << 16)
-			     |  (patch & 0xFFFFu);
+							"Version::pack: component out of wire-encoding range (major/minor: 8 bits, patch: 16)");
+			return ((major & 0xFFu) << 24) | ((minor & 0xFFu) << 16) | (patch & 0xFFFFu);
 		}
 
 		constexpr bool operator==(Version const& o) const noexcept
@@ -73,12 +71,14 @@ namespace thx
 		constexpr bool operator!=(Version const& o) const noexcept { return !(*this == o); }
 		constexpr bool operator<(Version const& o) const noexcept
 		{
-			if (major != o.major) return major < o.major;
-			if (minor != o.minor) return minor < o.minor;
+			if (major != o.major)
+				return major < o.major;
+			if (minor != o.minor)
+				return minor < o.minor;
 			return patch < o.patch;
 		}
 		constexpr bool operator<=(Version const& o) const noexcept { return !(o < *this); }
-		constexpr bool operator>(Version const& o) const noexcept  { return  o < *this; }
+		constexpr bool operator>(Version const& o) const noexcept { return o < *this; }
 		constexpr bool operator>=(Version const& o) const noexcept { return !(*this < o); }
 
 		// Returns true if `provided` is backwards-compatible with `required`:

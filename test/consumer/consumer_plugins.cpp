@@ -7,8 +7,8 @@
  */
 
 #include <thx/plugin/plugin.h>
-#include <thx/plugins/logging/logging_service.h>
 #include <thx/plugins/io/io_service.h>
+#include <thx/plugins/logging/logging_service.h>
 
 #include <algorithm>
 #include <cstdio>
@@ -19,20 +19,20 @@ int main(int argc, char* argv[])
 {
 	// Verify the service IDs are reachable as constexpr values.
 	constexpr auto logging_id = thx::plugins::logging::ILoggingService::staticId();
-	constexpr auto io_id      = thx::plugins::io::IIOService::staticId();
+	constexpr auto io_id = thx::plugins::io::IIOService::staticId();
 
 	std::printf("logging service id: %s\n", logging_id.name());
 	std::printf("io service id:      %s\n", io_id.name());
 
 	if (argc < 2)
-		return 0;  // header-only smoke; runtime discover is optional.
+		return 0; // header-only smoke; runtime discover is optional.
 
 	std::string const plugins_dir = argv[1];
 	auto disc = thx::plugin::discover(plugins_dir);
 	if (!disc)
 	{
 		std::fprintf(stderr, "discover(%s) failed: %s\n",
-		             plugins_dir.c_str(), disc.error().message.c_str());
+					 plugins_dir.c_str(), disc.error().message.c_str());
 		return 1;
 	}
 
@@ -40,23 +40,23 @@ int main(int argc, char* argv[])
 	std::printf("discovered %zu plugin(s) in %s\n", found.size(), plugins_dir.c_str());
 	for (auto const& info : found)
 		std::printf("  %s @ %u.%u.%u  (%s)\n",
-		            info.name.c_str(),
-		            info.version.major, info.version.minor, info.version.patch,
-		            info.path.c_str());
+					info.name.c_str(),
+					info.version.major, info.version.minor, info.version.patch,
+					info.path.c_str());
 
 	// We expect to find at least the two in-tree plugins (logging + io).
 	std::vector<std::string> names;
 	names.reserve(found.size());
 	for (auto const& info : found)
 		names.push_back(info.name);
-	auto has = [&](char const* n) {
+	auto has = [&](char const* n)
+	{
 		return std::find(names.begin(), names.end(), n) != names.end();
 	};
-	if (!has("thx.plugins.logging.ILoggingService")
-	    || !has("thx.plugins.io.IIOService"))
+	if (!has("thx.plugins.logging.ILoggingService") || !has("thx.plugins.io.IIOService"))
 	{
 		std::fprintf(stderr,
-		    "discover did not find both expected plugins (logging + io)\n");
+					 "discover did not find both expected plugins (logging + io)\n");
 		return 2;
 	}
 

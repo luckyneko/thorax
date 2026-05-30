@@ -32,10 +32,10 @@ namespace
 	// shape and required() default.
 	struct EmptyPlugin : thx::plugin::IPlugin
 	{
-		thx::StringView name()    const override { return "thx.test.EmptyPlugin"; }
-		thx::Version    version() const override { return thx::Version{2, 3, 4}; }
+		thx::StringView name() const override { return "thx.test.EmptyPlugin"; }
+		thx::Version version() const override { return thx::Version{2, 3, 4}; }
 
-		bool onLoad()   override { return true; }
+		bool onLoad() override { return true; }
 		void onUnload() override {}
 	};
 
@@ -52,8 +52,8 @@ namespace
 
 	struct MultiServicePlugin : thx::plugin::IPlugin
 	{
-		thx::StringView name()    const override { return "thx.test.MultiServicePlugin"; }
-		thx::Version    version() const override { return thx::Version{1, 0, 0}; }
+		thx::StringView name() const override { return "thx.test.MultiServicePlugin"; }
+		thx::Version version() const override { return thx::Version{1, 0, 0}; }
 
 		bool onLoad() override
 		{
@@ -145,10 +145,10 @@ TEST_CASE("IPlugin - onLoad returning false does not register anything",
 {
 	struct BailingPlugin : thx::plugin::IPlugin
 	{
-		thx::StringView name()    const override { return "thx.test.Bailing"; }
-		thx::Version    version() const override { return thx::Version{1, 0, 0}; }
+		thx::StringView name() const override { return "thx.test.Bailing"; }
+		thx::Version version() const override { return thx::Version{1, 0, 0}; }
 
-		bool onLoad()   override { return false; }
+		bool onLoad() override { return false; }
 		void onUnload() override {}
 	};
 

@@ -15,53 +15,53 @@
 namespace thx
 {
 
-namespace
-{
-
-// Default sink: writes structured lines to stderr.
-// Format: [thorax][LEVEL] file:line function: message
-class StderrSink : public ILogSink
-{
-public:
-	void write(LogRecord const& r) override
+	namespace
 	{
-		static const char* const kLevel[] = {"DEBUG", "INFO", "WARN", "ERROR"};
-		int lvl = static_cast<int>(r.level);
-		fprintf(stderr, "[thorax][%s] %s:%d %s: %s\n",
-		        kLevel[lvl],
-		        r.location.file,
-		        r.location.line,
-		        r.location.function,
-		        r.message.c_str());
-	}
-};
 
-std::shared_mutex         g_sink_mutex;
-std::shared_ptr<ILogSink> g_sink = std::make_shared<StderrSink>();
+		// Default sink: writes structured lines to stderr.
+		// Format: [thorax][LEVEL] file:line function: message
+		class StderrSink : public ILogSink
+		{
+		public:
+			void write(LogRecord const& r) override
+			{
+				static const char* const kLevel[] = {"DEBUG", "INFO", "WARN", "ERROR"};
+				int lvl = static_cast<int>(r.level);
+				fprintf(stderr, "[thorax][%s] %s:%d %s: %s\n",
+						kLevel[lvl],
+						r.location.file,
+						r.location.line,
+						r.location.function,
+						r.message.c_str());
+			}
+		};
 
-} // namespace
+		std::shared_mutex g_sink_mutex;
+		std::shared_ptr<ILogSink> g_sink = std::make_shared<StderrSink>();
 
-void setLogSink(std::shared_ptr<ILogSink> sink)
-{
-	std::unique_lock lock(g_sink_mutex);
-	g_sink = std::move(sink); // nullptr → silence
-}
+	} // namespace
 
-void restoreDefaultLogSink()
-{
-	std::unique_lock lock(g_sink_mutex);
-	g_sink = std::make_shared<StderrSink>();
-}
-
-void log(LogLevel level, std::string const& message, SourceLocation location)
-{
-	std::shared_ptr<ILogSink> sink;
+	void setLogSink(std::shared_ptr<ILogSink> sink)
 	{
-		std::shared_lock lock(g_sink_mutex);
-		sink = g_sink;
+		std::unique_lock lock(g_sink_mutex);
+		g_sink = std::move(sink); // nullptr → silence
 	}
-	if (sink)
-		sink->write({level, location, message});
-}
+
+	void restoreDefaultLogSink()
+	{
+		std::unique_lock lock(g_sink_mutex);
+		g_sink = std::make_shared<StderrSink>();
+	}
+
+	void log(LogLevel level, std::string const& message, SourceLocation location)
+	{
+		std::shared_ptr<ILogSink> sink;
+		{
+			std::shared_lock lock(g_sink_mutex);
+			sink = g_sink;
+		}
+		if (sink)
+			sink->write({level, location, message});
+	}
 
 } // namespace thx

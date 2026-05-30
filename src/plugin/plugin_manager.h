@@ -11,14 +11,14 @@
 #include "library.h"
 #include "plugin/plugin_garbage.h"
 #include "plugin/plugin_handle.h"
+#include "service/service_manager.h"
+#include "thx/log.h"
 #include "thx/plugin/iplugin.h"
 #include "thx/plugin/manifest.h"
-#include "thx/plugin/plugin.h"          // PluginInfo, State, LoadSummary
+#include "thx/plugin/plugin.h" // PluginInfo, State, LoadSummary
 #include "thx/result.h"
 #include "thx/service/service_id.h"
-#include "service/service_manager.h"
 #include "thx_internal_api.h"
-#include "thx/log.h"
 
 #include <cstddef>
 #include <memory>
@@ -63,7 +63,7 @@ namespace thx::plugin
 		explicit PluginManager(thx::service::ServiceManager& sm);
 		~PluginManager();
 
-		PluginManager(PluginManager const&)            = delete;
+		PluginManager(PluginManager const&) = delete;
 		PluginManager& operator=(PluginManager const&) = delete;
 
 		// --- Lifecycle (state mutators) ------------------------------------
@@ -79,7 +79,7 @@ namespace thx::plugin
 		// untouched and silently skips already-known Discovered paths.
 		// Returns FileNotFound if the directory cannot be iterated.
 		Result<void, Error> discover(std::string const& directory,
-		                              Recursive recursive = Recursive::No);
+									 Recursive recursive = Recursive::No);
 
 		// Removes a Discovered entry. Returns InUse if the path is Opened or
 		// Loaded (caller must close() / unload() first). Idempotent on absence
@@ -154,12 +154,12 @@ namespace thx::plugin
 		// Discovers all plugins in `directory` and loads each one.
 		// Returns a summary; individual failures are also logged.
 		LoadSummary discoverAndLoad(std::string const& directory,
-		                             Recursive recursive = Recursive::No);
+									Recursive recursive = Recursive::No);
 
 		// Dry-runs the requirement check that load() would perform. Does not
 		// mutate sm.
 		static Result<void, Error> checkRequirements(thx::service::ServiceManager const& sm,
-		                                              Span<const ServiceRequirement>     reqs);
+													 Span<const ServiceRequirement> reqs);
 
 		// --- Queries ------------------------------------------------------
 
@@ -177,8 +177,8 @@ namespace thx::plugin
 
 		// Convenience aliases for the most common state checks.
 		bool isDiscovered(std::string const& path) const { return is(State::Discovered, path); }
-		bool isOpened    (std::string const& path) const { return is(State::Opened,     path); }
-		bool isLoaded    (std::string const& path) const { return is(State::Loaded,     path); }
+		bool isOpened(std::string const& path) const { return is(State::Opened, path); }
+		bool isLoaded(std::string const& path) const { return is(State::Loaded, path); }
 
 		// Filter: plugins (any state) whose manifest `provides` contains
 		// `serviceId`. Manifest data is read at discover(); no DSO interaction.
@@ -210,10 +210,10 @@ namespace thx::plugin
 		// DSO is queued for close (handle).
 		struct LoadedEntry
 		{
-			PluginManifest                       manifest;
-			PluginHandle                         handle;
+			PluginManifest manifest;
+			PluginHandle handle;
 			std::vector<thx::service::ServiceID> serviceIds;
-			std::shared_ptr<IPlugin>             plugin;
+			std::shared_ptr<IPlugin> plugin;
 		};
 
 		// Opened-but-not-Loaded entry: the DSO is mapped and an IPlugin
@@ -221,8 +221,8 @@ namespace thx::plugin
 		// rationale as LoadedEntry.
 		struct OpenedEntry
 		{
-			PluginManifest           manifest;
-			PluginHandle             handle;
+			PluginManifest manifest;
+			PluginHandle handle;
 			std::shared_ptr<IPlugin> plugin;
 		};
 
@@ -234,14 +234,14 @@ namespace thx::plugin
 		};
 
 		thx::service::ServiceManager& m_sm;
-		mutable std::recursive_mutex                     m_mutex;
+		mutable std::recursive_mutex m_mutex;
 		std::unordered_map<std::string, DiscoveredEntry> m_discovered;
-		std::unordered_map<std::string, OpenedEntry>     m_opened;
-		std::unordered_map<std::string, LoadedEntry>     m_plugins;
+		std::unordered_map<std::string, OpenedEntry> m_opened;
+		std::unordered_map<std::string, LoadedEntry> m_plugins;
 		// Sidecar paths we've already warned about for having no paired DSO.
 		// discover() only warns on first observation per path; rescans skip
 		// silently so a known-broken pair doesn't spam logs.
-		std::unordered_set<std::string>                  m_warnedMissingDso;
+		std::unordered_set<std::string> m_warnedMissingDso;
 
 		static std::string resolveCanonical(std::string const& path);
 
@@ -253,12 +253,12 @@ namespace thx::plugin
 		// manifest — caller supplies it). Used by both open() and the
 		// implicit-open path inside load(). Drains the garbage queue first.
 		Result<OpenedEntry, Error> openHandle(std::string const& canonical,
-		                                      PluginManifest manifest);
+											  PluginManifest manifest);
 
 		// Promote an OpenedEntry into a LoadedEntry by checking required(),
 		// calling onLoad, and attributing the resulting service IDs.
 		Result<LoadedEntry, Error> finalizeLoad(OpenedEntry opened,
-		                                        std::string const& canonical);
+												std::string const& canonical);
 
 		// Ensure the path has a Discovered entry by locating and parsing
 		// its sidecar manifest. No-op if the path already has a Discovered
@@ -268,8 +268,8 @@ namespace thx::plugin
 
 		// Build PluginInfo snapshots from internal state.
 		PluginInfo infoFromDiscovered(std::string const& path, DiscoveredEntry const& entry) const;
-		PluginInfo infoFromOpened    (std::string const& path, OpenedEntry     const& entry) const;
-		PluginInfo infoFromLoaded    (std::string const& path, LoadedEntry     const& entry) const;
+		PluginInfo infoFromOpened(std::string const& path, OpenedEntry const& entry) const;
+		PluginInfo infoFromLoaded(std::string const& path, LoadedEntry const& entry) const;
 	};
 
 } // namespace thx::plugin

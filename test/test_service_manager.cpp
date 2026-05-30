@@ -7,8 +7,8 @@
  */
 
 #include <catch2/catch_all.hpp>
-#include <thx/service/iservice.h>
 #include <service/service_manager.h>
+#include <thx/service/iservice.h>
 
 #include <atomic>
 #include <stdexcept>
@@ -76,7 +76,7 @@ namespace
 		return sm.registerService(
 			thx::service::ServiceID(id), ver,
 			thx::service::makeServiceFactory([=]() -> thx::service::IService*
-			{ return new TestService(id, ver, constructed, destroyed); }));
+											 { return new TestService(id, ver, constructed, destroyed); }));
 	}
 
 } // namespace
@@ -126,7 +126,7 @@ TEST_CASE("ServiceManager - empty factory rejected", "[service_manager]")
 {
 	thx::service::ServiceManager sm;
 
-	thx::service::ServiceFactory empty{};  // invoke=nullptr, etc.
+	thx::service::ServiceFactory empty{}; // invoke=nullptr, etc.
 	REQUIRE_FALSE(sm.registerService(kServiceA, kV100, empty));
 }
 
@@ -135,8 +135,8 @@ TEST_CASE("ServiceManager - factory returning null rejected", "[service_manager]
 	thx::service::ServiceManager sm;
 
 	REQUIRE_FALSE(sm.registerService(kServiceA, kV100,
-									  []() -> thx::service::IService*
-									  { return nullptr; }));
+									 []() -> thx::service::IService*
+									 { return nullptr; }));
 	REQUIRE(sm.getService<TestService>(kServiceA) == nullptr);
 }
 
@@ -148,10 +148,10 @@ TEST_CASE("ServiceManager - factory throwing releases the reservation",
 	// First call: factory throws. The reservation must not leak — a follow-up
 	// registration with the same ID must succeed.
 	REQUIRE_THROWS(sm.registerService(kServiceA, kV100,
-		[]() -> thx::service::IService*
-		{
-			throw std::runtime_error("boom");
-		}));
+									  []() -> thx::service::IService*
+									  {
+										  throw std::runtime_error("boom");
+									  }));
 
 	REQUIRE(reg(sm, "thx.test.ServiceA", kV100));
 	REQUIRE(sm.getService<TestService>(kServiceA) != nullptr);
@@ -194,14 +194,14 @@ TEST_CASE("ServiceManager - duplicate registration is rejected for every version
 	bool flag = false;
 
 	REQUIRE(sm.registerService(kServiceA, kV100, [&]() -> thx::service::IService*
-								{
+							   {
 		++construct_count;
 		return new TestService("thx.test.ServiceA", kV100, &flag); }));
 
 	// Second registration with the same ID must be rejected; the factory is
 	// never invoked.
 	REQUIRE_FALSE(sm.registerService(kServiceA, kV100, [&]() -> thx::service::IService*
-									  {
+									 {
 		++construct_count;
 		return new TestService("thx.test.ServiceA", kV100); }));
 
@@ -227,7 +227,7 @@ TEST_CASE("ServiceManager - onConstruct failure aborts registration",
 
 	bool aborted = false;
 	sm.registerService(kServiceA, kV100, [&]() -> thx::service::IService*
-						{
+					   {
 		auto* svc = new TestService("thx.test.ServiceA", kV100);
 		svc->m_constructResult = false;
 		aborted = true;
@@ -244,8 +244,8 @@ TEST_CASE("ServiceManager - onDestroy called when last registrant unregisters",
 	bool destroyed = false;
 
 	sm.registerService(kServiceA, kV100, [&]() -> thx::service::IService*
-						{ return new TestService("thx.test.ServiceA", kV100,
-												 nullptr, &destroyed); });
+					   { return new TestService("thx.test.ServiceA", kV100,
+												nullptr, &destroyed); });
 
 	REQUIRE_FALSE(destroyed);
 	sm.unregisterService(kServiceA);
@@ -259,15 +259,15 @@ TEST_CASE("ServiceManager - re-registration after unregister succeeds",
 	bool destroyed_first = false;
 
 	REQUIRE(sm.registerService(kServiceA, kV100, [&]() -> thx::service::IService*
-								{ return new TestService("thx.test.ServiceA", kV100,
-														 nullptr, &destroyed_first); }));
+							   { return new TestService("thx.test.ServiceA", kV100,
+														nullptr, &destroyed_first); }));
 	sm.unregisterService(kServiceA);
 	REQUIRE(destroyed_first);
 
 	// After unregister, the slot is free for a fresh registration.
 	REQUIRE(sm.registerService(kServiceA, kV100,
-								[]() -> thx::service::IService*
-								{ return new TestService("thx.test.ServiceA", kV100); }));
+							   []() -> thx::service::IService*
+							   { return new TestService("thx.test.ServiceA", kV100); }));
 }
 
 TEST_CASE("ServiceManager - unregister releases shared_ptr ownership after onDestroy",

@@ -14,14 +14,14 @@
 namespace
 {
 
-struct LoggingServiceImpl : examples::ILoggingService
-{
-	void log(const char* message) override
+	struct LoggingServiceImpl : examples::ILoggingService
 	{
-		std::printf("[log] %s\n", message);
-		std::fflush(stdout);
-	}
-};
+		void log(const char* message) override
+		{
+			std::printf("[log] %s\n", message);
+			std::fflush(stdout);
+		}
+	};
 
 } // namespace
 

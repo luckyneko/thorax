@@ -15,32 +15,32 @@
 namespace thx_mock
 {
 
-struct MockService : thx::service::Service<MockService>
-{
-	static constexpr thx::Version staticVersion()
+	struct MockService : thx::service::Service<MockService>
 	{
-		return thx::Version{1, 0, 0};
-	}
+		static constexpr thx::Version staticVersion()
+		{
+			return thx::Version{1, 0, 0};
+		}
 
-	virtual int ping() const = 0;
-};
+		virtual int ping() const = 0;
+	};
 
-// Additional services registered by mock_plugin_multi (used by the
-// IPlugin-multi-service tests).
-struct ServiceA : thx::service::Service<ServiceA>
-{
-	static constexpr thx::Version staticVersion()
+	// Additional services registered by mock_plugin_multi (used by the
+	// IPlugin-multi-service tests).
+	struct ServiceA : thx::service::Service<ServiceA>
 	{
-		return thx::Version{1, 0, 0};
-	}
-};
+		static constexpr thx::Version staticVersion()
+		{
+			return thx::Version{1, 0, 0};
+		}
+	};
 
-struct ServiceB : thx::service::Service<ServiceB>
-{
-	static constexpr thx::Version staticVersion()
+	struct ServiceB : thx::service::Service<ServiceB>
 	{
-		return thx::Version{1, 0, 0};
-	}
-};
+		static constexpr thx::Version staticVersion()
+		{
+			return thx::Version{1, 0, 0};
+		}
+	};
 
 } // namespace thx_mock
