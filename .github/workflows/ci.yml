@@ -2,8 +2,14 @@ name: CI
 
 on:
   push:
-    branches: [develop]
+    branches: [master, develop]
   pull_request:
+  workflow_dispatch:
+
+# Cancel superseded runs on the same ref (e.g. rapid PR pushes) to save runners.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -13,10 +19,17 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: "macOS 15 · Apple Clang · Release"
+          - name: "macOS · Apple Clang · Release"
             os: macos-15
             build_type: Release
             sanitize: "OFF"
+            packages: ""
+            cmake_extra: ""
+
+          - name: "macOS · Apple Clang · Debug + ASan/UBSan"
+            os: macos-15
+            build_type: Debug
+            sanitize: "ON"
             packages: ""
             cmake_extra: ""
 
@@ -26,13 +39,6 @@ jobs:
             sanitize: "OFF"
             packages: "gcc-9 g++-9"
             cmake_extra: "-DCMAKE_C_COMPILER=gcc-9 -DCMAKE_CXX_COMPILER=g++-9"
-
-          - name: "Linux · GCC 12 · Release"
-            os: ubuntu-22.04
-            build_type: Release
-            sanitize: "OFF"
-            packages: "gcc-12 g++-12"
-            cmake_extra: "-DCMAKE_C_COMPILER=gcc-12 -DCMAKE_CXX_COMPILER=g++-12"
 
           - name: "Linux · GCC 14 · Release"
             os: ubuntu-24.04
@@ -62,6 +68,13 @@ jobs:
             packages: "clang-18"
             cmake_extra: "-DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18"
 
+          - name: "Linux · Clang 18 · Debug + TSan"
+            os: ubuntu-24.04
+            build_type: Debug
+            sanitize: "thread"
+            packages: "clang-18"
+            cmake_extra: "-DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18"
+
           - name: "Windows · MSVC 2022 · Release"
             os: windows-2022
             build_type: Release
@@ -69,9 +82,9 @@ jobs:
             packages: ""
             cmake_extra: ""
 
-          - name: "Windows · MSVC 2025 · Release"
+          - name: "Windows · MSVC 2025 · Debug"
             os: windows-2025
-            build_type: Release
+            build_type: Debug
             sanitize: "OFF"
             packages: ""
             cmake_extra: ""
@@ -98,3 +111,45 @@ jobs:
       - name: Test
         working-directory: build
         run: ctest --output-on-failure -C ${{ matrix.build_type }}
+
+  # Cross-compiler ABI check. thorax's headline promise is that code built with
+  # one toolchain interoperates with a libthorax built by another. Build + install
+  # thorax with GCC, then build the find_package consumer (a host + a plugin
+  # loader) with Clang against that install and run it — the Clang-compiled host
+  # calls into a GCC-built libthorax across the THX_API boundary and loads the
+  # GCC-built plugins.
+  abi-cross-compiler:
+    name: "Linux · ABI · GCC libthorax ↔ Clang consumer"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install GCC + Clang
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-14 g++-14 clang-18
+
+      - name: Build & install thorax with GCC
+        run: |
+          cmake -S . -B build-host \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14 \
+            -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/_install" \
+            -DCMAKE_INSTALL_LIBDIR=lib \
+            -DTHORAX_BUILD_TESTING=OFF -DTHORAX_BUILD_EXAMPLES=OFF
+          cmake --build build-host --parallel
+          cmake --install build-host
+
+      - name: Build the consumer with Clang against the GCC install
+        run: |
+          cmake -S test/consumer -B build-consumer \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18 \
+            -DCMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/_install"
+          cmake --build build-consumer --parallel
+
+      - name: Run — Clang host loads GCC-built libthorax + plugins
+        run: |
+          export LD_LIBRARY_PATH="$GITHUB_WORKSPACE/_install/lib"
+          ./build-consumer/consumer
+          ./build-consumer/consumer_plugins "$GITHUB_WORKSPACE/_install/lib/thorax/plugins"
