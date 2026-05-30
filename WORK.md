@@ -1,161 +1,104 @@
 # WORK.md
 
-Concrete follow-up items for thorax — outstanding tasks, open questions, deferred features. Drop items as they ship; add items as they're spotted.
-
-For naming/style conventions see CLAUDE.md "Layout & conventions". For the migration history (Phases 1–6, the public/private split, and the shared-lib flip) and the design rationale behind shipped decisions, see git log.
+Outstanding tasks, open questions, and deferred features for thorax. Completed work is **not** tracked here — drop items as they ship, add items as they're spotted. For the design rationale behind shipped decisions and the migration history (Phases 1–6, the public/private split, the shared-lib flip), read `git log` on the relevant source file. For naming/style conventions see CLAUDE.md "Layout & conventions".
 
 ---
 
-## Open design questions
+## Planned work
 
-### Migrate the test suite onto the production singleton + facades (AGENTS.md #4)
+### Migrate the test suite onto the production path + consolidate (AGENTS.md #4)
 
-**What:** the bulk of the suite (`test_service_manager.cpp`, `test_diagnostics.cpp`, `test_plugin_manager.cpp`, `test_io_plugin.cpp`, `test_logging_plugin.cpp`) constructs **local** `ServiceManager` / `PluginManager(sm)` instances per `TEST_CASE` purely for clean-slate isolation. CLAUDE.md flags this as "a workaround … not the canonical design." AGENTS.md non-negotiable #4 ("tests must exercise production code, not test-only scaffolding") wants these driven through the production path instead: the `thx::service::*` / `thx::plugin::*` facades over the Registry singleton. (`test_facades.cpp` / `test_registry.cpp` already do this and are the reference shape.)
+**Goal.** Drive tests through the production path — the `thx::service::*` / `thx::plugin::*` facades over the Registry singleton — instead of constructing local `ServiceManager` / `PluginManager(sm)` instances per `TEST_CASE` for isolation. CLAUDE.md flags the local-manager idiom as "a workaround … not the canonical design"; AGENTS.md non-negotiable #4 wants tests exercising real production wiring. `test_facades.cpp` / `test_registry.cpp` are the reference shape. While doing it, consolidate: the suite has accreted duplicates, misplaced files, and a 1328-line catch-all.
 
-**Enabling primitive — now in place.** `thx::shutdown()` performs a full teardown (unload all plugins → unregister all services → drain garbage → clear name), built on the new `PluginManager::clear()` / `ServiceManager::clear()`. That gives tests a public reset between cases, so per-test isolation no longer needs a local manager — and crucially, no `THX_TESTING`-gated `resetForTesting` hook is required. Tests reset through the same lifecycle real programs use.
+**Enabling primitive — already shipped.** `thx::shutdown()` now performs a full teardown (`PluginManager::clear()` → `ServiceManager::clear()` → drain garbage → clear name), so per-test isolation needs only a public reset between cases — no `THX_TESTING`-gated `resetForTesting` hook.
 
-**The migration:**
+#### Test review (do this as part of the migration)
 
-- Rewrite the five files to register / look up via the facades against the singleton; reset with `thx::shutdown()` in teardown (a Catch2 `EventListener`, or explicit cleanup per case).
-- Each rewritten test must honour the `[lifetime]` discipline by hand: release every `ServiceHandle` into a plugin DSO before `shutdown()` / `collectGarbage()`. Local-manager teardown currently handles this automatically via scope exit; this is the main source of new fragility.
-- Once no test injects a local `ServiceManager`, the thread-local `ActiveServiceManagerScope` (`src/service/active_service_manager.h`) has only its identity (no-op) behaviour left — its non-identity redirect exists *solely* for the local-SM test pattern. **Delete the class** and have `PluginManager::load` / `unload` register straight through `m_sm` (always the Registry SM in production). This is the concrete simplification payoff. Drop `active_service_manager.h` from `test_iplugin.cpp` and remove the facade's slot check in `src/service/service.cpp`.
-- Remove the now-stale local-manager language: the `src/registry.h` comment ("Tests that need isolated state continue to construct local ServiceManager / PluginManager instances directly"), CLAUDE.md "Active ServiceManager scope" + "Test-pattern note", and the P0 #1 / P2 notes below that reference the pattern.
+**Remove / merge — redundant:**
 
-**Does this let us drop `THX_INTERNAL_API`?** No — necessary but not sufficient. Even after the migration, several internal classes are unit-tested *as units* with no public-facade equivalent: `Library` (`test_library.cpp`, the raw dlopen/dlclose layer — no facade by design), the concurrency / lock-ordering / phase-1-reservation tests on `ServiceManager`, the `[lifetime]` / recursive-mutex / garbage-ordering tests on `PluginManager`, and Registry / PluginGarbage identity in `test_registry.cpp`. Removing the macro entirely means deleting that white-box coverage — exactly the ABI/concurrency internals most worth testing. **Recommendation: keep `THX_INTERNAL_API`.** It is free in production (gated on `THX_TESTING`; ~50 vs ~108 exported symbols). The macro was never the smell; the local-manager idiom and the test-only `ActiveServiceManagerScope` are, and this migration removes both.
+- `test_diagnostics.cpp` is two files in one. Lines ~80–187 (`[log]` / `[assert]`) are genuine diagnostics — keep. Lines ~193–326 are misplaced ServiceManager / PluginManager unit tests:
+  - "ServiceManager - duplicate registration is rejected" (~L260) is a **verbatim duplicate** of the same case in `test_service_manager.cpp` — delete the diagnostics copy.
+  - The four `listServices` cases (~L244–289) are pure SM introspection already covered by `test_service_manager.cpp` + the facade's `listServices` test — delete or fold one representative into `test_service_manager.cpp`.
+  - The three `PluginManager::plugins(Loaded)` cases (~L295–326) duplicate the `plugins()` / `is()` query tests in `test_plugin_manager.cpp` — delete.
+  - The four "ServiceManager - … logs Error/Warn" cases (~L193–238) re-assert rejection semantics already covered by `test_service_manager.cpp`'s boolean-return checks; collapse to **one** "manager diagnostics route to the installed sink" smoke test.
+  - Net: `test_diagnostics.cpp` shrinks to the log/sink/assertThat surface + one routing smoke.
+- `test_service_manager.cpp`: "duplicate registration is rejected" and "second registration with any version is rejected" overlap — merge into one parameterised case.
 
-**Incidental find:** no test includes `plugin_handle.h` — `PluginHandle` is only exercised through `PluginManager` (same DSO), so its `THX_INTERNAL_API` decoration may already be vestigial and removable today, independent of this migration. Verify with `nm` before touching.
+**Relocate — misplaced:**
 
-**Status:** deferred. The `shutdown()` primitive is shipped; the migration itself is ~a day of work plus ASan re-validation, and it trades a documented, ASan-clean isolation mechanism for production-path fidelity.
+- The four `Result<int>` / `Result<void>` cases (`[result]`) at the top of `test_plugin_manager.cpp` → new **`test_result.cpp`**. `Result` is a core public type; it has no business living in the loader file.
+- The four `PluginHandle` cases (`[plugin_handle]`) in `test_plugin_manager.cpp` → new **`test_plugin_handle.cpp`**, paired with `test_library.cpp` (both are the DSO layer, both stay white-box). Shrinks the catch-all file.
+- The pure type tests in `test_service_manager.cpp` ("id()/version() match static metadata", "service_id_of - auto-derived ID …", "explicit staticId overrides auto-derived name") overlap `test_service_id.cpp` — move the type-only ones there.
 
-**Trigger:** when the local-manager idiom causes a real problem (cross-test contamination, or the P2 garbage-drain footgun biting in practice), or when test-path fidelity is explicitly prioritised.
+**Add — gaps:**
 
----
+- `thx::shutdown()` full teardown is only half-covered (the directly-registered-service path was added with the teardown work). Add: shutdown() **unloads a loaded plugin** (facade `load` → `shutdown` → assert `!isLoaded` + service gone + garbage drained); shutdown() runs `onUnload`/`onDestroy` (observe via a flag or sink); shutdown() is **idempotent** (call twice, still empty, no crash).
+- `PluginManager::clear()` / `ServiceManager::clear()` are new public primitives with no direct unit test — add focused white-box cases.
+- A start-of-case assertion that the singleton is empty (guards against cross-test bleed once everything shares it).
 
-## Priority 0 — silent footguns
+#### Migration categorisation
 
-Bugs where the code does the wrong thing without visible failure.
+**Migrate to facades + singleton (drop the local managers):**
 
-### ~~Plugin-side use of free-function facades silently misbehaves~~ — applied (shared-lib flip)
+- `test_service_manager.cpp` — the black-box majority (register/get/unregister, lifecycle hooks, CRTP, auto-ID). Route through `thx::service::*`.
+- `test_iplugin.cpp` — replace `ActiveServiceManagerScope(sm)` + local SM with facade calls (`ServicePluginShim<T>::onLoad` registers into the Registry) + shutdown() cleanup. Cleanest single example of the migration.
+- `test_io_plugin.cpp` / `test_logging_plugin.cpp` — replace local SM+PM with `thx::plugin::load` + `thx::service::getService`.
+- The facade-able bulk of `test_plugin_manager.cpp` (load/unload/query/integration/`[lifetime]` keep-alive) — via `thx::plugin::*`.
 
-**Status:** resolved structurally. `libthorax` is now SHARED; the host and every plugin DSO resolve `Registry::instance()` to the same singleton via the dynamic linker. The facade and the (severed) `ServiceManager&` parameter now agree. `IPlugin::onLoad()` takes no parameter — plugins call `thx::service::registerService<T>(...)` directly.
+**Keep white-box (local instance / internal headers — this is why `THX_INTERNAL_API` stays):**
 
-The thread-local `ActiveServiceManagerScope` in `src/service/active_service_manager.h` preserves the local-PluginManager / local-ServiceManager test pattern: during `onLoad`/`onUnload`, the facade routes through `PluginManager::m_sm` (the local one in tests, the Registry-owned one in production).
+- `test_library.cpp` (`Library` — no public facade by design).
+- `test_plugin_handle.cpp` (`PluginHandle` — ABI / createFn / destroyFn at the handle level, no facade).
+- `test_registry.cpp` (`Registry` singleton identity, `registry()`, `PluginGarbage`).
+- The PluginManager **destructor** cases ("destructor unloads remaining plugins", "destructor sweeps services left behind by onUnload") — these need a local PM to destruct; the singleton can't be destroyed.
+- ServiceManager factory-reservation edge ("factory throwing releases the reservation") if it can't be expressed cleanly through the facade's callable overload.
 
-### ~~Cross-DSO STL ABI on the service layer~~ — applied
+#### Mechanism, build impact, sequencing
 
-**Status:** the service-registration and -retrieval ABI are both free of stdlib types now.
+- **Reset between cases:** a Catch2 `EventListener` (`testCaseEnded` → `thx::shutdown()`) gives order-independent isolation for free. Centralise the `CapturingSink` / `SinkGuard` (currently defined inline in `test_diagnostics.cpp`) and the reset listener into a shared test-support header, mirroring `mock_plugin_headers`.
+- **Lifetime discipline:** every migrated case must release `ServiceHandle`s into plugin DSOs before case end — the auto-shutdown listener `dlclose`s them. This is the main new fragility; local-manager scope-exit handled it implicitly.
+- **Build:** add `test_result.cpp` + `test_plugin_handle.cpp` to the `add_executable` list in `test/CMakeLists.txt` (the latter needs `THX_MOCK_PLUGIN_PATH` + `THX_MOCK_BAD_ABI_PLUGIN_PATH`). No new ctest targets — `catch_discover_tests` picks them up.
+- **Simplification payoff:** once no test injects a local SM, **delete `ActiveServiceManagerScope`** (`src/service/active_service_manager.h`); have `PluginManager::load`/`unload` register straight through `m_sm` (always the Registry SM in production); drop `active_service_manager.h` from `test_iplugin.cpp` and the slot check in `src/service/service.cpp`. Update CLAUDE.md "Active ServiceManager scope" + "Test-pattern note" and the stale `src/registry.h` comment ("Tests that need isolated state continue to construct local … instances directly").
 
-- `ServiceFactory` is a POD `{ invoke_fn, destroy_ctx_fn, void* ctx }`. Templates in `service.h` adapt any callable; capture lives in the caller's TU heap.
-- `IService` has an intrusive atomic refcount; `ServiceHandle<T>` is a single-pointer wrapper around it (`sizeof(ServiceHandle<IService>) == sizeof(void*)` is statically asserted). The atomic ops compile to hardware instructions and have a stable ABI across compilers.
-- `getService<T>` returns `ServiceHandle<T>`. `detail::acquireServiceImpl` exports as `IService* (ServiceID)` — the wire shape is just a raw pointer with a documented "already retained" contract.
-- ServiceManager stores `unordered_map<ServiceID, ServiceHandle<IService>>` internally; no `std::shared_ptr<IService>` anywhere.
+**Phasing — each phase independently green under Release + Debug/ASan/UBSan:**
 
-Verified via `nm`: zero `std::function` or `std::shared_ptr<IService>` symbols on the libthorax export surface for service operations. 218/218 ctest Release, 216/216 Debug+ASan+UBSan.
+1. **Cleanup only (no migration, low risk):** relocate `Result` + `PluginHandle` tests; dedupe `test_diagnostics.cpp`; merge the duplicate SM cases; add the shutdown()/clear() gap tests. Shrinks and de-dupes without touching the local-manager pattern.
+2. **Migration:** add the shutdown() reset listener + shared support header; migrate `test_service_manager`, `test_iplugin`, `test_io_plugin`, `test_logging_plugin`, and the facade-able parts of `test_plugin_manager` onto the singleton; leave the white-box residue.
+3. **Payoff:** delete `ActiveServiceManagerScope`, simplify `load`/`unload`, update docs.
 
-**Remaining stdlib type in the export surface:** `thx::setLogSink(std::shared_ptr<ILogSink>)`. The log-sink mechanism still uses `shared_ptr`. Smaller surface than service registration (one sink at a time, no lifetime fan-out), and the constraint "host installs a sink, plugins call `thx::log(...)`" makes mixed-stdlib less likely to matter here. Worth a follow-up if a stricter ABI is wanted — see "Log sink ABI cleanup" below.
+**Does this retire `THX_INTERNAL_API`?** No — necessary but not sufficient. `Library`, `PluginHandle`, `Registry`/`PluginGarbage`, and the PluginManager destructor cases remain white-box with no facade equivalent. Keep the macro (free in production: gated on `THX_TESTING`, ~50 vs ~108 exported symbols). The smell was the local-manager idiom and the test-only `ActiveServiceManagerScope`; this work removes both. **Incidental:** no test includes `plugin_handle.h` *today*, but the relocated `test_plugin_handle.cpp` will, so `PluginHandle`'s export stays needed.
 
-### ~~`PluginManager` thread-safety is asymmetric to `ServiceManager`~~ — applied
-
-**Status:** resolved. PluginManager now has a coarse `mutable std::recursive_mutex` taken at the top of every public method. Concurrent reads (plugins / pluginInfo / is) and writes (load / unload / open / close / discover / forget) are serialized. Reentrant calls from inside a plugin's onLoad/onUnload (e.g., a plugin that loads a sibling) work because the lock is recursive. The deferred-dlclose garbage queue has always been independently thread-safe.
-
-Stress test in `test_plugin_manager.cpp` ([threading] tag) exercises concurrent readers against a writer that cycles unload/load; 218/218 ctest cases pass including the new test, both Release and Debug+ASan+UBSan.
-
----
-
-## Priority 1 — known bugs and trade-offs from the shared-lib flip
-
-### ~~Manifest sidecars not installed alongside in-tree plugins~~ — applied
-
-Both `thx_plugin_auto_manifest` and `thx_plugin_manifest` now take an optional `DESTINATION` argument; if passed, the sidecar is registered for `install(FILES …)` at that path. The two in-tree plugins (plugin_logging, plugin_io) opt in with `DESTINATION ${CMAKE_INSTALL_LIBDIR}/thorax/plugins`, matching where their DSOs install. New ctest step `install.consumer_discover` runs the consumer binary against the install prefix's plugins dir and verifies `discover()` finds both plugins paired with their installed DSOs.
-
-### ~~`Version::pack()` silently truncates components~~ — applied
-
-`pack()` now asserts that each component fits its wire-encoding width (major/minor: 8 bits, patch: 16) before packing. Aborts in Debug, logs at Error in Release. Dropped `constexpr` on `pack()` — the only consumers are the `thx_abi_version()` exports emitted by `THX_DEFINE_*_PLUGIN`, which run at runtime.
-
-### ~~`PluginHandle::open` returns `FileNotFound` for any open failure~~ — applied
-
-Added `ErrorCode::OpenFailed` for catch-all `dlopen`/`LoadLibrary` failures (permissions, missing transitive deps, malformed DSOs, etc.). The platform error text remains in the `message` field. `FileNotFound` is now reserved for paths that genuinely don't exist on disk — `parseManifest` (which opens via `ifstream`) and `PluginManager::resolveCanonical` (which uses `std::filesystem::canonical`) keep using it.
-
-### ~~Cross-DSO `dynamic_cast` on user service interfaces doesn't work~~ — doc applied
-
-CLAUDE.md "Service identity & lookup" documents the `static_cast` trade-off and the framework contract that the `ServiceID` determines the type. Reach for the registered-type-name-string compare option (option 3 in the original entry) only if someone actually reports a type-confusion bug from a hand-built ServiceID.
-
-### ~~`ActiveServiceManagerScope` is a thread-local back channel~~ — doc applied
-
-CLAUDE.md "Active ServiceManager scope" documents why the thread-local override exists (preserves local-PluginManager / local-ServiceManager test isolation when plugins use facades), and what the lifetime window is (the onLoad / onUnload call only). The smell is acknowledged; the trade-off is favourable enough to keep.
+**Status:** planned, not scheduled. Phase 1 is shippable on its own. Phases 2–3 trade a documented, ASan-clean isolation mechanism for production-path fidelity (~a day plus re-validation).
 
 ---
 
 ## Deferred features
 
-Things we've explicitly decided not to ship in v1 but expect to revisit.
+Explicitly not shipped yet; expected to revisit when a real consumer needs them.
 
 ### `loadAll(filter)` for topo-sorted loading
 
-**What:** a convenience function that takes a set of `PluginInfo` (typically filtered from `plugins(State::Discovered)` by provides/category), computes load order from each manifest's `requirements`/`provides`, and loads the set in dependency order.
+A convenience that takes a set of `PluginInfo` (e.g. `plugins(State::Discovered)` filtered by provides), computes load order from each manifest's `requirements`/`provides`, and loads in dependency order. Manifests already carry the data and `load(path)` exists; only the topo-sort + sweep is missing. **Trigger:** a consumer needs to load an interdependent set (e.g. "all camera drivers"). Until then hosts iterate and call `load(path)` themselves.
 
-**Status:** designed but not implemented. Manifests already carry the data; PluginManager already has the path-based `load()` primitive; only the topo-sort + sweep loop is missing.
+### Log subsystem ABI refactor
 
-**Trigger:** add when a real consumer needs to load a related set of plugins (e.g., "all camera drivers") and the set has interdependencies. Until then, hosts can iterate `plugins(State::Discovered)` and call `load(path)` themselves in the order they choose.
-
-### ~~Auto-derived manifests (`IPlugin::provides()` + `thx_emit_manifest`)~~ — applied
-
-**Status:** shipped across three commits (IPlugin::provides() ABI → thx_emit_manifest tool → thx_plugin_auto_manifest helper + plugin conversion). 215/215 ctest cases pass. 10 of 11 in-tree plugins now use the auto-derived path; `mock_plugin_bad_abi` keeps a hand-written manifest because the tool can't open a plugin that reports a deliberately-wrong ABI version.
-
-**Open follow-ups, none blocking:**
-
-- **Manifest install rule.** The in-tree `plugin_logging` / `plugin_io` are installed (via `install(TARGETS ...)`) but their `.thx.json` sidecars are not. A consumer running `discover()` on the install prefix wouldn't find them. Pre-existing bug, not introduced by Phase 5b. Worth fixing when someone actually needs `discover()` to work post-install.
-- **Runtime verification simplification (deferred).** With the manifest derived from `IPlugin` by construction, three of the four load-time checks (name/version/requires) catch *distribution-time* drift only (stale `.thx.json` shipped without its DSO, or vice versa). They're cheap; keeping them is defensible. Drop or downgrade to debug-only if the cost ever shows up.
-
-### Log subsystem refactor
-
-**What:** the log surface (`ILogSink`, `setLogSink(std::shared_ptr<ILogSink>)`, `log(level, msg, location)`, `LogRecord`) hasn't had the same ABI-hardening pass as the service layer. Specific issues:
-
-- `setLogSink` takes `std::shared_ptr<ILogSink>` — same `shared_ptr` control-block-crosses-DSO concern that drove P0 #2's ServiceHandle pattern.
-- One global sink slot, replaced wholesale by `setLogSink`. No layering, no per-plugin override, no filtering.
-- `LogRecord` is value-typed and carries `std::string` — fine on its own, but it's part of the cross-DSO call to `ILogSink::write`.
-
-**Direction (sketch):** introduce a `LogSinkHandle` with intrusive refcount mirroring `ServiceHandle`. Probably also fanout: register sinks rather than replace the singleton, so a host and the framework can both observe records. Filtering at the sink level (per-sink min level). Maybe scoped sinks (push/pop) for tests that want to capture without affecting other tests.
-
-**Status:** explicitly deferred — needs design before code. The current surface works for v1; the refactor is forward-looking. Trigger: when a real consumer needs per-plugin or per-component filtering, or hits the stdlib-mismatch concern in practice.
+The log surface hasn't had the service layer's ABI-hardening pass: `setLogSink` takes `std::shared_ptr<ILogSink>` (the control-block-crosses-DSO concern the `ServiceHandle` pattern solved); one global sink slot replaced wholesale, no fanout/filtering; `LogRecord` carries `std::string` across the `ILogSink::write` boundary. **Direction:** intrusive-refcounted `LogSinkHandle` mirroring `ServiceHandle`; register (fan-out) sinks rather than replace; per-sink min-level filtering; maybe scoped push/pop sinks for tests. Needs design before code. **Trigger:** a consumer needs per-component filtering or hits the stdlib-mismatch in practice.
 
 ### Manifest `tags` array
 
-**What:** an explicit `"tags": ["camera", "experimental"]` array on the manifest, queryable independently of `provides`. Lets a host filter "all camera plugins" across interface kinds — useful when "camera" spans multiple service interfaces (driver + tuning + capture).
+An explicit `"tags": [...]` array, queryable independently of `provides`, to group plugins that span multiple service interfaces (driver + tuning + capture). `provides` already covers "filter by interface" for free. **Trigger:** a consumer wants to group plugins that don't share a single interface.
 
-**Status:** explicitly excluded from v1. The existing `provides` field gives us "filter plugins by which interface they implement" for free; tags become useful only when that's not enough.
+### Runtime manifest-verification simplification
 
-**Trigger:** when a consumer wants to group plugins that don't share a single interface.
+With the manifest auto-derived from `IPlugin` (`thx_plugin_auto_manifest`), three of `finalizeLoad`'s four checks (name/version/requires) now only catch *distribution-time* drift (a stale `.thx.json` shipped apart from its DSO). They're cheap, so keeping them is defensible; drop or downgrade to debug-only if the cost ever shows up.
 
----
+### `RTLD_NOW`/Strict loading through PluginManager
 
-## Priority 2 — robustness papercuts
-
-Defensive items. None are bugs today; each one closes a class of future surprise.
-
-### ~~`~PluginManager` doesn't drain `PluginGarbage`~~ — documented trade-off
-
-Not a bug — the framework can't safely auto-drain in `~PluginManager` because it has no way to know whether outstanding `ServiceHandle`s into those DSOs remain. Auto-collect with live handles would `dlclose` mapped DSOs and segfault on subsequent handle release (the service's destructor lives in unmapped code).
-
-The "leak" only manifests when a test constructs a local `PluginManager`, loads plugins, then lets the PM go out of scope without calling `collectGarbage()`. ASan doesn't flag it (the queue holds the resource); the DSOs sit in the global queue until program exit. CLAUDE.md "DSO keep-alive" now documents the test pattern explicitly — tests that load plugins should drain at teardown like the `[lifetime]` cases already do.
-
-Retiring the local-PluginManager test pattern entirely (making the constructor private to Registry, tests use cleanup-based isolation against the global) is the architectural option if the issue ever becomes acute. Not currently justified.
-
-### ~~`Result<void, E>::error()` is UB when ok~~ — applied
-
-Both `error()` overloads now go through `thx::assertThat(m_error.has_value(), ...)`. Aborts in Debug, logs at Error in Release before the (now-still-UB) optional deref — at least the message surfaces in production logs. Consistent with `assertThat` use elsewhere in the codebase.
-
-### ~~Manifest JSON parser has no recursion depth limit~~ — applied
-
-`skipValue` now takes a `depth` parameter and bails with `MalformedManifest` once nesting exceeds `kSkipValueMaxDepth` (32). New test in `test_manifest.cpp` builds a manifest with a 64-deep unknown-field array and verifies the parser rejects it cleanly. Only `skipValue` recurses (the manifest's own schema is flat), so 32 is well beyond any legitimate input.
-
-### ~~`ServicePluginShim<T>::provides()` Span lifetime~~ — applied
-
-Comment on `provides()` in `iplugin.h` documents that the returned Span points at DSO static storage and must not outlive the IPlugin. `LoadedEntry` in `plugin_manager.h` got an expanded field-order comment spelling out the destruction sequence (plugin → serviceIds → handle → manifest) and the invariant that keeps everything safe.
+`Library::open` and `PluginHandle::open` already accept `LoadFlags` (Lazy/Strict; Strict → `RTLD_NOW | RTLD_LOCAL` on POSIX). `PluginManager` always passes Lazy. Wire Strict through `PluginManager::open`/`load` if a consumer wants fail-fast loading via the framework loader rather than `PluginHandle` directly.
 
 ---
 
-## Priority 3 — performance (only if measured)
+## Performance — only if measured
 
 ### `pluginInfo(path)` calls `std::filesystem::canonical` on every query
 
@@ -163,58 +106,4 @@ One stat syscall per call. Fine for occasional inspection; pricey if a UI polls.
 
 ### `finalizeLoad` snapshots `listServices()` twice
 
-Before/after diff is O(N) on registry size per load. Currently fine; becomes O(N²) for bulk loads against a large registry. Per-plugin attribution via a thread-local "current loader" tag on `registerService` would skip the diff.
-
----
-
-## Priority 4 — missing features
-
-Convenience APIs that have a clear shape but no current consumer. Add when someone asks.
-
-### ~~`RTLD_NOW` option on `Library::open`~~ — applied
-
-`Library::open` now takes an optional `LoadFlags` (`Lazy` / `Strict`). Strict maps to `RTLD_NOW | RTLD_LOCAL` on POSIX; on Windows the LoadLibrary path doesn't have a lazy/now split, so Strict and Lazy converge there. `PluginHandle::open` accepts and forwards the flag. PluginManager still defaults to Lazy — direct PluginHandle/Library users opt into Strict.
-
-Wiring it through PluginManager.open / PluginManager.load is a separate ergonomic decision; left as a follow-up if a real consumer wants fail-fast loading through the framework's loader rather than via PluginHandle directly.
-
-### ~~`reload(path)` convenience~~ — applied
-
-`PluginManager::reload(path)` + facade `thx::plugin::reload(path)`. Equivalent to `unload(path)` → `collectGarbage()` → `load(path)`, with the keep-alive precondition documented on the method's contract: callers MUST release every `ServiceHandle` into this plugin's services BEFORE calling reload, since the drain runs synchronously and dlclose's the DSO.
-
-### ~~`plugins_providing("thx.cameras.ICameraDriver")` shortcut~~ — applied
-
-`PluginManager::pluginsProviding(std::string const&)` + facade `thx::plugin::pluginsProviding(...)` return all plugins (any state) whose manifest `provides` contains the given service id. Manifest data is read at discover() — no DSO interaction.
-
-### ~~Recursive `discover(dir)`~~ — applied
-
-`discover()` and `discoverAndLoad()` now take an optional `Recursive` enum (`No` default, `Yes` walks subdirectories). Implementation factors per-entry handling into a lambda that both `directory_iterator` and `recursive_directory_iterator` feed. Default behaviour unchanged.
-
-### ~~`LoadSummary` distinguishes already-loaded from freshly-loaded~~ — applied
-
-`LoadSummary` now has an `alreadyLoaded` subset of `loaded`. `discoverAndLoad` re-enumerates the directory on every call so the summary reports all plugins present in the directory, partitioning them into freshly-loaded vs already-loaded. Test in `test_plugin_manager.cpp` covers the second-call case.
-
----
-
-## Priority 5 — minor code quality
-
-~~All items below~~ — applied (one swept commit).
-
-- ABI static_asserts on Span and StringView lock down the documented
-  `{ ptr, size_t }` layout.
-- `Service<Derived>::version()` has a static_assert that Derived's
-  staticVersion returns `thx::Version`, giving a one-line diagnostic
-  instead of a deeper template error.
-- `discover()` only warns about missing-DSO sidecars once per path
-  (tracked in `m_warnedMissingDso`); subsequent rescans skip silently.
-- `Result<T>::map` got an `&&` overload that moves the contained value
-  through `f`. Supports move-only `T`.
-- Public-/private-header split (commit `ec78cba`) already removed the
-  facade-pulls-registry.h chain. Marked applied implicitly.
-- `Library::sym` doc-comment now spells out the m_error side effect
-  that `bind()` relies on.
-
----
-
-## Other known items
-
-(None currently.)
+Before/after diff is O(N) on registry size per load — O(N²) for bulk loads against a large registry. A thread-local "current loader" tag on `registerService` would let attribution skip the diff.
