@@ -128,6 +128,10 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
 # Force C++17
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
 
+# Namespaced alias so add_subdirectory consumers can link Thorax::thorax — the
+# same target name that find_package(Thorax) consumers get from the export set.
+add_library(Thorax::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
+
 # Visibility: hide everything by default; only THX_API-decorated symbols cross
 # the boundary. Inert while the library is STATIC; live once it becomes SHARED.
 # THX_BUILDING flips THX_API to dllexport on Windows.
