@@ -14,10 +14,6 @@ Outstanding tasks, open questions, and deferred features for thorax. Completed w
 
 Explicitly not shipped yet; expected to revisit when a real consumer needs them.
 
-### `loadAll(filter)` for topo-sorted loading
-
-A convenience that takes a set of `PluginInfo` (e.g. `plugins(State::Discovered)` filtered by provides), computes load order from each manifest's `requirements`/`provides`, and loads in dependency order. Manifests already carry the data and `load(path)` exists; only the topo-sort + sweep is missing. **Trigger:** a consumer needs to load an interdependent set (e.g. "all camera drivers"). Until then hosts iterate and call `load(path)` themselves.
-
 ### Log subsystem ABI refactor
 
 The log surface hasn't had the service layer's ABI-hardening pass: `setLogSink` takes `std::shared_ptr<ILogSink>` (the control-block-crosses-DSO concern the `ServiceHandle` pattern solved); one global sink slot replaced wholesale, no fanout/filtering; `LogRecord` carries `std::string` across the `ILogSink::write` boundary. **Direction:** intrusive-refcounted `LogSinkHandle` mirroring `ServiceHandle`; register (fan-out) sinks rather than replace; per-sink min-level filtering; maybe scoped push/pop sinks for tests. Needs design before code. **Trigger:** a consumer needs per-component filtering or hits the stdlib-mismatch in practice.

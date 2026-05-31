@@ -146,6 +146,21 @@ namespace thx::plugin
 		return thx::Registry::instance().pluginManager().pluginsProviding(serviceId);
 	}
 
+	std::optional<PluginInfo> pluginByName(std::string const& name)
+	{
+		return thx::Registry::instance().pluginManager().pluginByName(name);
+	}
+
+	LoadSummary loadWithDependencies(std::string const& path)
+	{
+		return thx::Registry::instance().pluginManager().loadWithDependencies(path);
+	}
+
+	LoadSummary loadAll(Span<const PluginInfo> plugins)
+	{
+		return thx::Registry::instance().pluginManager().loadAll(plugins);
+	}
+
 	std::size_t collectGarbage() noexcept
 	{
 		return thx::Registry::instance().pluginGarbage().collect();

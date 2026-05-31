@@ -152,6 +152,28 @@ namespace thx::plugin
 	// --- Aggregate ---------------------------------------------------------
 	THX_API LoadSummary discoverAndLoad(std::string const& directory, Recursive recursive = Recursive::No);
 
+	// Load `path` plus every plugin needed to satisfy its (transitive)
+	// manifest requirements, in dependency order. Providers are resolved from
+	// the plugins the framework currently knows about (Discovered / Opened /
+	// Loaded); a requirement already satisfied by a registered service needs
+	// no plugin. If `path` isn't yet known, it is discovered implicitly (its
+	// `<basename>.thx.json` sidecar must exist, mirroring load()).
+	//
+	// Returns a LoadSummary. `failed` carries:
+	//   UnresolvedDependency — a requirement that no known plugin provides and
+	//                          that is not already registered.
+	//   DependencyCycle      — the requires/provides graph contains a cycle.
+	// A plugin whose dependency could not be resolved or loaded is itself
+	// reported in `failed` and is not loaded.
+	THX_API LoadSummary loadWithDependencies(std::string const& path);
+
+	// Load a set of plugins (e.g. plugins(State::Discovered) filtered by
+	// pluginsProviding) plus their transitive dependencies, in dependency
+	// order. Same resolution rules and summary semantics as
+	// loadWithDependencies; the whole set is topo-sorted together so
+	// inter-dependencies among the roots are ordered correctly.
+	THX_API LoadSummary loadAll(Span<const PluginInfo> plugins);
+
 	// Dry-runs the requirement check that load() would perform against the
 	// framework's internal ServiceManager.
 	THX_API Result<void, Error> checkRequirements(Span<const ServiceRequirement> reqs);
@@ -171,6 +193,21 @@ namespace thx::plugin
 	// Match is by ServiceID name (the string form), since manifest-derived
 	// service ids are stored as strings.
 	THX_API std::vector<PluginInfo> pluginsProviding(std::string const& serviceId);
+
+	// Type-deduced convenience over pluginsProviding(serviceId): looks the
+	// service up by `T`'s stable ID. `T` must derive from
+	// thx::service::Service<T> (so it exposes staticId()).
+	template <typename T>
+	inline std::vector<PluginInfo> pluginsProviding()
+	{
+		return pluginsProviding(T::staticId().name());
+	}
+
+	// First plugin (any state) whose manifest `name` equals `name`, or
+	// nullopt if none is known. Manifest data is read at discover() time, so
+	// no DSO is opened. Plugin names are not guaranteed unique; if several
+	// match, the lexicographically-first canonical path wins.
+	THX_API std::optional<PluginInfo> pluginByName(std::string const& name);
 
 	// --- Garbage queue -----------------------------------------------------
 	// Drains / queries the framework-owned deferred-dlclose queue.

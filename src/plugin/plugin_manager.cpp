@@ -15,8 +15,10 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <functional>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace thx::plugin
@@ -666,6 +668,198 @@ namespace thx::plugin
 		return summary;
 	}
 
+	// --- Dependency-resolving load ----------------------------------------------
+
+	Result<void, Error> PluginManager::resolveLoadOrder(std::vector<std::string> const& roots,
+														std::vector<std::string>& order) const
+	{
+		// Locate the manifest for a canonical path in whichever state it sits.
+		auto manifestFor = [&](std::string const& canonical) -> PluginManifest const*
+		{
+			if (auto it = m_discovered.find(canonical); it != m_discovered.end())
+				return &it->second.manifest;
+			if (auto it = m_opened.find(canonical); it != m_opened.end())
+				return &it->second.manifest;
+			if (auto it = m_plugins.find(canonical); it != m_plugins.end())
+				return &it->second.manifest;
+			return nullptr;
+		};
+
+		// Provider index: service-id string -> canonical path that provides it.
+		// On a duplicate, keep the lexicographically-smaller path so the order
+		// is deterministic, and warn (an ambiguous provider is a host-side
+		// configuration smell).
+		std::unordered_map<std::string, std::string> providerOf;
+		auto indexProvides = [&](std::string const& canonical, PluginManifest const& m)
+		{
+			for (auto const& id : m.provides)
+			{
+				auto [it, inserted] = providerOf.emplace(id, canonical);
+				if (!inserted && canonical < it->second)
+				{
+					thx::log(LogLevel::Warn,
+							 "resolveLoadOrder: service '" + id + "' is provided by both '" + it->second + "' and '" + canonical + "'; preferring '" + canonical + "'");
+					it->second = canonical;
+				}
+				else if (!inserted && it->second != canonical)
+				{
+					thx::log(LogLevel::Warn,
+							 "resolveLoadOrder: service '" + id + "' is provided by both '" + it->second + "' and '" + canonical + "'; preferring '" + it->second + "'");
+				}
+			}
+		};
+		for (auto const& [path, entry] : m_discovered)
+			indexProvides(path, entry.manifest);
+		for (auto const& [path, entry] : m_opened)
+			indexProvides(path, entry.manifest);
+		for (auto const& [path, entry] : m_plugins)
+			indexProvides(path, entry.manifest);
+
+		// Is `req` already met by a service registered in the ServiceManager?
+		// Mirrors checkRequirements: same id, compatible version.
+		auto satisfiedByRegistered = [&](ManifestRequirement const& req) -> bool
+		{
+			auto svc = m_sm.getService<IService>(ServiceID(req.id.c_str()));
+			return svc && Version::compatible(req.version, svc->version());
+		};
+
+		// 0 = white (unvisited), 1 = gray (on stack), 2 = black (resolved).
+		std::unordered_map<std::string, int> color;
+		Result<void, Error> failure = Result<void, Error>::ok();
+
+		std::function<bool(std::string const&)> visit = [&](std::string const& node) -> bool
+		{
+			auto const& c = color[node]; // inserts white (0) on first touch
+			if (c == 2)
+				return true;
+			if (c == 1)
+			{
+				// Re-entered a node still on the stack: cycle.
+				failure = Result<void, Error>::err(
+					{ErrorCode::DependencyCycle,
+					 "dependency cycle detected involving plugin '" + node + "'"});
+				return false;
+			}
+
+			color[node] = 1; // gray
+
+			if (PluginManifest const* mani = manifestFor(node))
+			{
+				for (auto const& req : mani->requirements)
+				{
+					if (satisfiedByRegistered(req))
+						continue;
+
+					auto it = providerOf.find(req.id);
+					if (it == providerOf.end())
+					{
+						failure = Result<void, Error>::err(
+							{ErrorCode::UnresolvedDependency,
+							 "plugin '" + node + "' requires service '" + req.id + "' which no known plugin provides"});
+						return false;
+					}
+
+					if (!visit(it->second))
+						return false; // propagate the recorded failure
+				}
+			}
+
+			color[node] = 2; // black
+			order.push_back(node);
+			return true;
+		};
+
+		for (auto const& root : roots)
+		{
+			if (!visit(root))
+				return failure;
+		}
+		return Result<void, Error>::ok();
+	}
+
+	LoadSummary PluginManager::loadAll(Span<const PluginInfo> roots)
+	{
+		std::lock_guard<std::recursive_mutex> lock(m_mutex);
+		LoadSummary summary;
+
+		// Canonicalise + ensure-discovered each root so resolveLoadOrder can
+		// see its manifest. A root with no resolvable sidecar fails up-front.
+		std::vector<std::string> rootPaths;
+		rootPaths.reserve(roots.size());
+		for (std::size_t i = 0; i < roots.size(); ++i)
+		{
+			auto const& info = roots[i];
+			auto canonical = resolveCanonical(info.path);
+			if (canonical.empty())
+			{
+				summary.failed.emplace_back(info.path,
+											Error{ErrorCode::FileNotFound, "loadAll: path does not exist: " + info.path});
+				continue;
+			}
+			if (auto r = ensureDiscovered(canonical); !r)
+			{
+				summary.failed.emplace_back(canonical, std::move(r.error()));
+				continue;
+			}
+			rootPaths.push_back(std::move(canonical));
+		}
+
+		std::vector<std::string> order;
+		if (auto r = resolveLoadOrder(rootPaths, order); !r)
+		{
+			thx::log(LogLevel::Warn, "loadAll: dependency resolution failed: " + r.error().message);
+			// Attribute the structural error to the first root that triggered
+			// it; callers see it in `failed`. Nothing is loaded.
+			std::string const& key = rootPaths.empty() ? std::string{} : rootPaths.front();
+			summary.failed.emplace_back(key, std::move(r.error()));
+			return summary;
+		}
+
+		for (auto const& p : order)
+		{
+			if (m_plugins.count(p))
+			{
+				summary.loaded.push_back(p);
+				summary.alreadyLoaded.push_back(p);
+				continue;
+			}
+			auto r = load(p);
+			if (r)
+			{
+				summary.loaded.push_back(p);
+			}
+			else
+			{
+				thx::log(LogLevel::Warn, "loadAll: failed to load '" + p + "': " + r.error().message);
+				summary.failed.emplace_back(p, std::move(r.error()));
+			}
+		}
+		return summary;
+	}
+
+	LoadSummary PluginManager::loadWithDependencies(std::string const& path)
+	{
+		std::lock_guard<std::recursive_mutex> lock(m_mutex);
+		LoadSummary summary;
+
+		auto canonical = resolveCanonical(path);
+		if (canonical.empty())
+		{
+			summary.failed.emplace_back(path,
+										Error{ErrorCode::FileNotFound, "loadWithDependencies: path does not exist: " + path});
+			return summary;
+		}
+		if (auto r = ensureDiscovered(canonical); !r)
+		{
+			summary.failed.emplace_back(canonical, std::move(r.error()));
+			return summary;
+		}
+
+		auto info = pluginInfo(canonical); // ensureDiscovered guarantees presence
+		PluginInfo one = std::move(*info);
+		return loadAll(Span<const PluginInfo>(&one, 1));
+	}
+
 	// --- PluginInfo construction -------------------------------------------------
 
 	namespace
@@ -824,6 +1018,31 @@ namespace thx::plugin
 			if (matches(entry.manifest.provides))
 				result.push_back(infoFromLoaded(path, entry));
 		return result;
+	}
+
+	std::optional<PluginInfo> PluginManager::pluginByName(std::string const& name) const
+	{
+		std::lock_guard<std::recursive_mutex> lock(m_mutex);
+
+		// Collect every match across the three states, then return the one with
+		// the lexicographically-smallest canonical path for a deterministic
+		// result when names collide.
+		std::optional<PluginInfo> best;
+		auto consider = [&](PluginInfo info)
+		{
+			if (info.name != name)
+				return;
+			if (!best || info.path < best->path)
+				best = std::move(info);
+		};
+
+		for (auto const& [path, entry] : m_discovered)
+			consider(infoFromDiscovered(path, entry));
+		for (auto const& [path, entry] : m_opened)
+			consider(infoFromOpened(path, entry));
+		for (auto const& [path, entry] : m_plugins)
+			consider(infoFromLoaded(path, entry));
+		return best;
 	}
 
 } // namespace thx::plugin

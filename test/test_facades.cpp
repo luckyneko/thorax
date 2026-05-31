@@ -14,6 +14,8 @@
 
 #include "mock_plugin.h"
 
+#include <filesystem>
+
 #ifndef THX_MOCK_PLUGIN_PATH
 #	error "THX_MOCK_PLUGIN_PATH not defined — set via target_compile_definitions in CMakeLists.txt"
 #endif
@@ -140,6 +142,40 @@ TEST_CASE("thx::plugin::checkRequirements operates on the Registry's ServiceMana
 	// is satisfied.
 	REQUIRE(thx::plugin::load(THX_MOCK_PLUGIN_PATH));
 	REQUIRE(thx::plugin::checkRequirements({reqs, 1}));
+
+	// Cleanup.
+	REQUIRE(thx::plugin::unload(THX_MOCK_PLUGIN_PATH));
+	thx::plugin::collectGarbage();
+}
+
+TEST_CASE("thx::plugin:: name / provides queries and loadWithDependencies via facade",
+		  "[facade][plugin][integration]")
+{
+	namespace fs = std::filesystem;
+	auto dir = fs::path(THX_MOCK_PLUGIN_PATH).parent_path().string();
+	REQUIRE(thx::plugin::discover(dir));
+
+	auto canonical = fs::canonical(THX_MOCK_PLUGIN_PATH).string();
+
+	// Type-deduced provides filter forwards to the string overload.
+	auto providers = thx::plugin::pluginsProviding<thx_mock::MockService>();
+	bool foundProvider = false;
+	for (auto const& p : providers)
+		if (p.path == canonical)
+			foundProvider = true;
+	REQUIRE(foundProvider);
+
+	// By-name lookup against the Registry-owned manager.
+	auto byName = thx::plugin::pluginByName("thx_mock.MockService");
+	REQUIRE(byName);
+	REQUIRE(byName->path == canonical);
+	REQUIRE_FALSE(thx::plugin::pluginByName("no.such.plugin"));
+
+	// loadWithDependencies on a plugin with no unmet requirement just loads it.
+	auto summary = thx::plugin::loadWithDependencies(THX_MOCK_PLUGIN_PATH);
+	REQUIRE(summary.failed.empty());
+	REQUIRE(summary.loaded.size() == 1);
+	REQUIRE(thx::service::getService<thx_mock::MockService>() != nullptr);
 
 	// Cleanup.
 	REQUIRE(thx::plugin::unload(THX_MOCK_PLUGIN_PATH));

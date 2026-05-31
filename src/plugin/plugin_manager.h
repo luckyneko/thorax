@@ -156,6 +156,15 @@ namespace thx::plugin
 		LoadSummary discoverAndLoad(std::string const& directory,
 									Recursive recursive = Recursive::No);
 
+		// Loads `path` plus its transitive manifest dependencies in dependency
+		// order. Equivalent to loadAll over the single (implicitly discovered)
+		// root. See thx::plugin::loadWithDependencies for the full contract.
+		LoadSummary loadWithDependencies(std::string const& path);
+
+		// Loads a set of plugin roots plus their transitive dependencies,
+		// topo-sorted together. See thx::plugin::loadAll for the contract.
+		LoadSummary loadAll(Span<const PluginInfo> roots);
+
 		// Dry-runs the requirement check that load() would perform. Does not
 		// mutate sm.
 		static Result<void, Error> checkRequirements(thx::service::ServiceManager const& sm,
@@ -183,6 +192,11 @@ namespace thx::plugin
 		// Filter: plugins (any state) whose manifest `provides` contains
 		// `serviceId`. Manifest data is read at discover(); no DSO interaction.
 		std::vector<PluginInfo> pluginsProviding(std::string const& serviceId) const;
+
+		// First plugin (any state) whose manifest `name` equals `name`, by
+		// lexicographically-first canonical path; nullopt if none. No DSO
+		// interaction.
+		std::optional<PluginInfo> pluginByName(std::string const& name) const;
 
 	private:
 		// Each entry carries its PluginManifest through every state transition
@@ -265,6 +279,17 @@ namespace thx::plugin
 		// / Opened / Loaded entry. Used by open()/load() to support the
 		// "load by direct path without prior discover" shortcut.
 		Result<void, Error> ensureDiscovered(std::string const& canonical);
+
+		// Topo-sort the transitive dependency closure of `roots` into load
+		// order (dependencies before dependents). Resolves each manifest
+		// requirement either to an already-registered service (skipped) or to
+		// a known plugin's canonical path via the provider index. On success
+		// `order` lists every canonical path to load, deepest dependency
+		// first. On failure returns the offending error (UnresolvedDependency
+		// or DependencyCycle) paired with the canonical path it concerns.
+		// Caller must hold m_mutex.
+		Result<void, Error> resolveLoadOrder(std::vector<std::string> const& roots,
+											 std::vector<std::string>& order) const;
 
 		// Build PluginInfo snapshots from internal state.
 		PluginInfo infoFromDiscovered(std::string const& path, DiscoveredEntry const& entry) const;

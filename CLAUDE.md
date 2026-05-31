@@ -75,7 +75,7 @@ Lifecycle hooks (free functions in `thx::`, declared in [include/thx/lifecycle.h
 Two "system-level" headers — `thx/<layer>/<layer>.h` — are the only way for consumers to reach the registry:
 
 - [thx/service/service.h](include/thx/service/service.h) — `thx::service::registerService<T>`, `unregisterService<T>`, `getService<T>`, `listServices`. The templates forward to `thx::service::detail::*Impl` exports defined in [src/service/service.cpp](src/service/service.cpp).
-- [thx/plugin/plugin.h](include/thx/plugin/plugin.h) — `thx::plugin::discover`, `forget`, `open`, `close`, `closeAllOpened`, `load`, `unload`, `discoverAndLoad`, `checkRequirements`, `plugins`/`plugins(State)`/`pluginInfo`/`is`/`isDiscovered`/`isOpened`/`isLoaded`, `collectGarbage`/`pendingGarbage`. Out-of-line in [src/plugin/plugin.cpp](src/plugin/plugin.cpp).
+- [thx/plugin/plugin.h](include/thx/plugin/plugin.h) — `thx::plugin::discover`, `forget`, `open`, `close`, `closeAllOpened`, `load`, `unload`, `discoverAndLoad`, `loadWithDependencies`, `loadAll`, `checkRequirements`, `plugins`/`plugins(State)`/`pluginInfo`/`is`/`isDiscovered`/`isOpened`/`isLoaded`/`pluginsProviding`/`pluginsProviding<T>`/`pluginByName`, `collectGarbage`/`pendingGarbage`. Out-of-line in [src/plugin/plugin.cpp](src/plugin/plugin.cpp) (`pluginsProviding<T>` is an inline header-only wrapper over the string overload).
 
 Plugin code calls the facade from inside `IPlugin::onLoad` / `onUnload`. The facade's `detail::*Impl` functions dispatch unconditionally to `Registry::instance().serviceManager()`, so a plugin's registrations land in the Registry's ServiceManager — which is exactly the `m_sm` that the loading `PluginManager` was constructed with (a `PluginManager` must be built with the Registry's ServiceManager; see its class contract in [src/plugin/plugin_manager.h](src/plugin/plugin_manager.h)). `finalizeLoad` then attributes the freshly-registered services to the plugin by diffing that same `m_sm`.
 
@@ -140,7 +140,9 @@ All state lives inside the manager — there are no move-only handle types cross
 - `forget(path)` transitions `Discovered` → `(nothing)`. Returns `InUse` if the path is `Opened` or `Loaded` (call `close()` / `unload()` first). Idempotent on absence.
 - `closeAllOpened()` is the sweep helper: drops every `Opened`-but-not-`Loaded` entry to `Discovered`. Returns the count.
 
-**Aggregate operations.** `discoverAndLoad(dir)` chains `discover` then `load` for every discovered file and returns a `LoadSummary { loaded, failed }`. `checkRequirements(sm, reqs)` is a static dry-run.
+**Aggregate operations.** `discoverAndLoad(dir)` chains `discover` then `load` for every discovered file and returns a `LoadSummary { loaded, alreadyLoaded, failed }`. `checkRequirements(sm, reqs)` is a static dry-run.
+
+**Dependency-resolving load.** `loadWithDependencies(path)` and `loadAll(Span<const PluginInfo>)` load a target (or a set of roots) *plus the transitive closure of its manifest `requires`*, in dependency order. The internal `resolveLoadOrder` builds a provider index (service-id string → providing canonical path, from the `provides` of every known manifest; ambiguous providers warn and pick the lexicographically-smaller path), then does a white/gray/black DFS over each manifest's `requirements`: a requirement already satisfied by a registered service at a compatible version is skipped, one with no known provider yields `ErrorCode::UnresolvedDependency`, and a back-edge yields `ErrorCode::DependencyCycle`. Resolution and ordering touch manifests only — no DSO is opened until the per-node `load()` runs. Both return a `LoadSummary` (a structural resolution failure is attributed to the first root and aborts the whole batch; nothing loads). `loadWithDependencies(path)` is implemented as `loadAll` over the single, implicitly-discovered root.
 
 **Queries** (all return value-typed snapshots, none mutate):
 
@@ -148,6 +150,8 @@ All state lives inside the manager — there are no move-only handle types cross
 - `plugins(State)` — filtered to one state.
 - `pluginInfo(path)` — `optional<PluginInfo>` for one path.
 - `is(State, path)` and convenience `isDiscovered`/`isOpened`/`isLoaded`.
+- `pluginsProviding(serviceId)` / `pluginsProviding<T>()` — every entry whose manifest `provides` lists the id (manifest-only, no DSO).
+- `pluginByName(name)` — `optional<PluginInfo>` for the first entry whose manifest `name` matches (lexicographically-smallest path on collision).
 
 `PluginInfo` carries `path`, `state`, `name`, `version`, `requirements`, `provides`, `services`. Fields are populated incrementally as the entry progresses; e.g. `services` is empty until `Loaded`. `requirements` is spelled out instead of `requires` to avoid the C++20 concepts keyword.
 

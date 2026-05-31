@@ -120,11 +120,45 @@ int main(int argc, char* argv[])
 }
 ```
 
-A complete, runnable version of the above lives in [examples/](examples/) (a host plus a logging and a file plugin):
+A complete, runnable version of the above lives in [examples/](examples/) (a host plus logging, file, and greeter plugins):
 ``` sh
 cmake -S . -B build
 cmake --build build --parallel
 ./build/examples/example_host ./build/examples     # host <dir-containing-plugins>
+```
+
+## Loading recipes
+
+`discoverAndLoad(dir)` loads everything in a directory, but `discover()` reads each plugin's sidecar manifest *without* opening any DSO, so a host can be selective. Three common pathways — each a focused runnable host in [examples/](examples/):
+
+**Load one plugin by name** ([examples/host_by_name](examples/host_by_name/main.cpp)):
+``` C++
+thx::plugin::discover(dir);
+if (auto p = thx::plugin::pluginByName("examples.GreeterPlugin"))
+    thx::plugin::load(p->path);
+```
+
+**Load every plugin that provides a service interface** ([examples/host_by_provides](examples/host_by_provides/main.cpp)):
+``` C++
+thx::plugin::discover(dir);
+auto providers = thx::plugin::pluginsProviding<ICameraDriver>();   // matches manifests, no dlopen
+auto summary = thx::plugin::loadAll({providers.data(), providers.size()});
+```
+
+**Load a plugin together with its dependencies** ([examples/host_with_deps](examples/host_with_deps/main.cpp)):
+``` C++
+thx::plugin::discover(dir);
+// The greeter requires ILoggingService; loadWithDependencies resolves a
+// provider from the discovered set and loads everything in dependency order.
+auto summary = thx::plugin::loadWithDependencies(greeterPath);
+```
+`loadAll` / `loadWithDependencies` topo-sort by each manifest's `requires`/`provides`, skip requirements already satisfied by a registered service, and report `UnresolvedDependency` / `DependencyCycle` per plugin in the returned `LoadSummary`.
+
+Run them with the directory that holds the built plugins:
+``` sh
+./build/examples/example_host_by_name     ./build/examples
+./build/examples/example_host_by_provides ./build/examples
+./build/examples/example_host_with_deps   ./build/examples
 ```
 
 ## API tour
@@ -132,7 +166,7 @@ cmake --build build --parallel
 **Service facade** ([thx/service/service.h](include/thx/service/service.h)) — `registerService<T>`, `unregisterService<T>`, `getService<T>`, `listServices`. Plugin code calls these from `onLoad`/`onUnload`; host code calls `getService<T>`.
 
 **Plugin facade** ([thx/plugin/plugin.h](include/thx/plugin/plugin.h)) — the full loader surface as free functions:
-`discover` / `forget`, `open` / `close` / `closeAllOpened`, `load` / `unload` / `reload`, `discoverAndLoad`, `checkRequirements`, the `plugins` / `pluginInfo` / `isLoaded` queries, and `collectGarbage` / `pendingGarbage`. Loading is a three-state lifecycle — **Discovered → Opened → Loaded** — and every state change returns a `thx::Result<…>` (no exceptions in library code).
+`discover` / `forget`, `open` / `close` / `closeAllOpened`, `load` / `unload` / `reload`, `discoverAndLoad`, `loadWithDependencies` / `loadAll`, `checkRequirements`, the `plugins` / `pluginInfo` / `isLoaded` / `pluginsProviding` / `pluginByName` queries, and `collectGarbage` / `pendingGarbage`. Loading is a three-state lifecycle — **Discovered → Opened → Loaded** — and every state change returns a `thx::Result<…>` (no exceptions in library code).
 
 **Lifecycle** ([thx/lifecycle.h](include/thx/lifecycle.h)) — `thx::initialise(name)` records an optional diagnostic name; `thx::shutdown()` tears framework state fully down (unloads plugins, unregisters services, drains the deferred-close queue). Release every `ServiceHandle` into a plugin DSO before calling it.
 

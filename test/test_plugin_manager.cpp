@@ -19,8 +19,10 @@
 // (test_reset_listener.cpp) returns the Registry to empty after every case, so
 // `sm` is a clean slate at the start of each.
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <vector>
 
 #ifndef THX_MOCK_PLUGIN_PATH
 #	error "THX_MOCK_PLUGIN_PATH not defined — set via target_compile_definitions in CMakeLists.txt"
@@ -575,6 +577,190 @@ TEST_CASE("PluginManager - IPlugin required() service missing fails the load",
 	REQUIRE_FALSE(r);
 	REQUIRE(r.error().code == thx::ErrorCode::NotLoaded);
 	REQUIRE_FALSE(loader.isLoaded(THX_MOCK_MULTI_PLUGIN_PATH));
+}
+
+// --- Dependency-resolving load -----------------------------------------------
+
+namespace
+{
+	// Index of a canonical path within a loaded-list, for ordering asserts.
+	std::ptrdiff_t indexOf(std::vector<std::string> const& v, std::string const& p)
+	{
+		auto it = std::find(v.begin(), v.end(), p);
+		return it == v.end() ? -1 : (it - v.begin());
+	}
+} // namespace
+
+TEST_CASE("PluginManager::loadWithDependencies - loads provider before dependent",
+		  "[plugin_manager][deps][integration]")
+{
+	namespace fs = std::filesystem;
+	auto tmp = fs::temp_directory_path() / "thx_test_load_deps";
+	fs::remove_all(tmp);
+	fs::create_directories(tmp);
+	auto basePath = copyPluginWithSidecar(THX_MOCK_PLUGIN_PATH, tmp);
+	auto multiPath = copyPluginWithSidecar(THX_MOCK_MULTI_PLUGIN_PATH, tmp);
+
+	auto& sm = thx::registry().serviceManager();
+	thx::plugin::PluginManager loader(sm);
+	REQUIRE(loader.discover(tmp.string()));
+
+	// multi requires MockService, which base provides. loadWithDependencies
+	// should pull base in and load it first.
+	auto summary = loader.loadWithDependencies(multiPath.string());
+	REQUIRE(summary.failed.empty());
+	REQUIRE(summary.loaded.size() == 2);
+
+	auto baseCanon = fs::canonical(basePath).string();
+	auto multiCanon = fs::canonical(multiPath).string();
+	REQUIRE(indexOf(summary.loaded, baseCanon) >= 0);
+	REQUIRE(indexOf(summary.loaded, multiCanon) >= 0);
+	REQUIRE(indexOf(summary.loaded, baseCanon) < indexOf(summary.loaded, multiCanon));
+	REQUIRE(loader.isLoaded(baseCanon));
+	REQUIRE(loader.isLoaded(multiCanon));
+
+	fs::remove_all(tmp);
+}
+
+TEST_CASE("PluginManager::loadWithDependencies - unresolved requirement fails the dependent",
+		  "[plugin_manager][deps][integration]")
+{
+	namespace fs = std::filesystem;
+	auto tmp = fs::temp_directory_path() / "thx_test_load_deps_unresolved";
+	fs::remove_all(tmp);
+	fs::create_directories(tmp);
+	// Only the dependent is present; no provider of MockService is known.
+	auto multiPath = copyPluginWithSidecar(THX_MOCK_MULTI_PLUGIN_PATH, tmp);
+
+	auto& sm = thx::registry().serviceManager();
+	thx::plugin::PluginManager loader(sm);
+	REQUIRE(loader.discover(tmp.string()));
+
+	auto summary = loader.loadWithDependencies(multiPath.string());
+	REQUIRE(summary.loaded.empty());
+	REQUIRE(summary.failed.size() == 1);
+	REQUIRE(summary.failed[0].second.code == thx::ErrorCode::UnresolvedDependency);
+	REQUIRE(summary.failed[0].second.message.find("thx_mock.MockService") != std::string::npos);
+	REQUIRE_FALSE(loader.isLoaded(fs::canonical(multiPath).string()));
+
+	fs::remove_all(tmp);
+}
+
+TEST_CASE("PluginManager::loadWithDependencies - requirement met by a registered service needs no extra load",
+		  "[plugin_manager][deps][integration]")
+{
+	namespace fs = std::filesystem;
+	auto tmp = fs::temp_directory_path() / "thx_test_load_deps_satisfied";
+	fs::remove_all(tmp);
+	fs::create_directories(tmp);
+	auto basePath = copyPluginWithSidecar(THX_MOCK_PLUGIN_PATH, tmp);
+	auto multiPath = copyPluginWithSidecar(THX_MOCK_MULTI_PLUGIN_PATH, tmp);
+
+	auto& sm = thx::registry().serviceManager();
+	thx::plugin::PluginManager loader(sm);
+	REQUIRE(loader.discover(tmp.string()));
+
+	// Load the provider up front; its MockService is now registered.
+	REQUIRE(loader.load(basePath.string()));
+
+	auto summary = loader.loadWithDependencies(multiPath.string());
+	REQUIRE(summary.failed.empty());
+	// Only multi is loaded this call — base was already satisfied, so the
+	// resolver did not re-include it.
+	REQUIRE(summary.loaded.size() == 1);
+	REQUIRE(summary.loaded[0] == fs::canonical(multiPath).string());
+
+	fs::remove_all(tmp);
+}
+
+TEST_CASE("PluginManager::loadAll - topo-sorts a set regardless of input order",
+		  "[plugin_manager][deps][integration]")
+{
+	namespace fs = std::filesystem;
+	auto tmp = fs::temp_directory_path() / "thx_test_load_all";
+	fs::remove_all(tmp);
+	fs::create_directories(tmp);
+	auto basePath = copyPluginWithSidecar(THX_MOCK_PLUGIN_PATH, tmp);
+	auto multiPath = copyPluginWithSidecar(THX_MOCK_MULTI_PLUGIN_PATH, tmp);
+
+	auto& sm = thx::registry().serviceManager();
+	thx::plugin::PluginManager loader(sm);
+	REQUIRE(loader.discover(tmp.string()));
+
+	// Pass dependent first to prove the resolver reorders by dependency.
+	auto multiInfo = loader.pluginInfo(fs::canonical(multiPath).string());
+	auto baseInfo = loader.pluginInfo(fs::canonical(basePath).string());
+	REQUIRE(multiInfo);
+	REQUIRE(baseInfo);
+	std::vector<thx::plugin::PluginInfo> roots{*multiInfo, *baseInfo};
+
+	auto summary = loader.loadAll({roots.data(), roots.size()});
+	REQUIRE(summary.failed.empty());
+	auto baseCanon = fs::canonical(basePath).string();
+	auto multiCanon = fs::canonical(multiPath).string();
+	REQUIRE(indexOf(summary.loaded, baseCanon) < indexOf(summary.loaded, multiCanon));
+
+	fs::remove_all(tmp);
+}
+
+TEST_CASE("PluginManager::loadWithDependencies - detects a dependency cycle",
+		  "[plugin_manager][deps]")
+{
+	namespace fs = std::filesystem;
+	auto tmp = fs::temp_directory_path() / "thx_test_load_cycle";
+	fs::remove_all(tmp);
+	fs::create_directories(tmp);
+
+	// Two manifests that require each other's service. The paired DSO files
+	// only need to *exist* for discover() to register the entries — the cycle
+	// is detected from the manifests alone, before any DSO is opened, so empty
+	// stub files suffice.
+	std::string const ext = thx::LIBRARY_EXTENSION;
+	auto writeCycle = [&](char const* base, char const* provides, char const* needs)
+	{
+		std::ofstream(tmp / (std::string(base) + ext)).put('\0'); // stub DSO
+		std::ofstream mf(tmp / (std::string(base) + ".thx.json"));
+		mf << "{\n  \"schema\": 1,\n  \"name\": \"" << base
+		   << "\",\n  \"version\": \"1.0.0\",\n  \"provides\": [\"" << provides
+		   << "\"],\n  \"requires\": [{\"id\": \"" << needs << "\", \"version\": \"1.0.0\"}]\n}";
+	};
+	writeCycle("cycleA", "cycle.svcA", "cycle.svcB");
+	writeCycle("cycleB", "cycle.svcB", "cycle.svcA");
+
+	auto& sm = thx::registry().serviceManager();
+	thx::plugin::PluginManager loader(sm);
+	REQUIRE(loader.discover(tmp.string()));
+
+	auto dsoA = (tmp / (std::string("cycleA") + ext)).string();
+	auto summary = loader.loadWithDependencies(dsoA);
+	REQUIRE(summary.loaded.empty());
+	REQUIRE(summary.failed.size() == 1);
+	REQUIRE(summary.failed[0].second.code == thx::ErrorCode::DependencyCycle);
+
+	fs::remove_all(tmp);
+}
+
+TEST_CASE("PluginManager::pluginByName - finds a discovered plugin by manifest name",
+		  "[plugin_manager][query][integration]")
+{
+	namespace fs = std::filesystem;
+	auto tmp = fs::temp_directory_path() / "thx_test_by_name";
+	fs::remove_all(tmp);
+	fs::create_directories(tmp);
+	auto basePath = copyPluginWithSidecar(THX_MOCK_PLUGIN_PATH, tmp);
+
+	auto& sm = thx::registry().serviceManager();
+	thx::plugin::PluginManager loader(sm);
+	REQUIRE(loader.discover(tmp.string()));
+
+	auto hit = loader.pluginByName("thx_mock.MockService");
+	REQUIRE(hit);
+	REQUIRE(hit->name == "thx_mock.MockService");
+	REQUIRE(hit->path == fs::canonical(basePath).string());
+
+	REQUIRE_FALSE(loader.pluginByName("no.such.plugin"));
+
+	fs::remove_all(tmp);
 }
 
 TEST_CASE("PluginManager::discoverAndLoad - loads real plugin from directory",
