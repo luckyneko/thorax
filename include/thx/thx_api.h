@@ -20,7 +20,7 @@
 // - Every public free function in thx::, thx::service::, thx::plugin:: that
 //   has its definition inside the library (not header-inline).
 // - Abstract interface classes whose typeinfo must agree across the boundary
-//   for dynamic_pointer_cast: IService, IPlugin, ILogSink. Marked at class
+//   for dynamic_pointer_cast: IService, IPlugin. Marked at class
 //   scope.
 // - Internal classes reached from the in-tree test binary (Registry,
 //   ServiceManager, PluginManager, PluginHandle, PluginGarbage, Library).

@@ -7,7 +7,7 @@
  */
 
 #include "service/service_manager.h"
-#include "thx/log.h"
+#include "thx/log/log.h"
 #include "thx/to_string.h"
 
 namespace thx::service
@@ -41,22 +41,29 @@ namespace thx::service
 
 		if (!factory.invoke)
 		{
-			thx::log(LogLevel::Error,
-					 std::string("registerService: null factory.invoke for '") + id.name() + "'");
+			thx::log::error(
+				std::string("registerService: null factory.invoke for '") + id.name() + "'");
 			return false;
 		}
 
 		// Phase 1: reserve the ID. If anyone else already owns it (registered or
-		// in-flight reservation) we bail before doing real work.
+		// in-flight reservation) we bail before doing real work. The diagnostic
+		// is emitted AFTER releasing the lock: thx::log::write may look up an
+		// ILogService via the ServiceManager's shared lock, which would deadlock
+		// against this exclusive lock (shared_mutex is not recursive).
+		bool duplicate = false;
 		{
 			std::unique_lock lock(m_mutex);
 			if (m_services.find(id) != m_services.end() || m_reserved.count(id))
-			{
-				thx::log(LogLevel::Warn,
-						 std::string("registerService: '") + id.name() + "' is already registered (single-owner registry)");
-				return false;
-			}
-			m_reserved.insert(id);
+				duplicate = true;
+			else
+				m_reserved.insert(id);
+		}
+		if (duplicate)
+		{
+			thx::log::warn(
+				std::string("registerService: '") + id.name() + "' is already registered (single-owner registry)");
+			return false;
 		}
 
 		// Phase 2: build the service. The lock is NOT held here, so the factory
@@ -80,8 +87,8 @@ namespace thx::service
 			if (!raw)
 			{
 				releaseReservation();
-				thx::log(LogLevel::Error,
-						 std::string("registerService: factory returned null for '") + id.name() + "'");
+				thx::log::error(
+					std::string("registerService: factory returned null for '") + id.name() + "'");
 				return false;
 			}
 			// Wrap the raw pointer; ServiceHandle's ctor retains, bringing the
@@ -95,16 +102,16 @@ namespace thx::service
 			if (service->version() != version)
 			{
 				releaseReservation();
-				thx::log(LogLevel::Error,
-						 std::string("registerService: declared version ") + toString(version) + " does not match service-reported " + toString(service->version()) + " for '" + id.name() + "'");
+				thx::log::error(
+					std::string("registerService: declared version ") + toString(version) + " does not match service-reported " + toString(service->version()) + " for '" + id.name() + "'");
 				return false;
 			}
 
 			if (!service->onConstruct())
 			{
 				releaseReservation();
-				thx::log(LogLevel::Error,
-						 std::string("registerService: onConstruct failed for '") + id.name() + "'");
+				thx::log::error(
+					std::string("registerService: onConstruct failed for '") + id.name() + "'");
 				return false;
 			}
 		}
@@ -126,6 +133,7 @@ namespace thx::service
 	bool ServiceManager::unregisterService(ServiceID id)
 	{
 		ServiceHandle<IService> to_destroy;
+		bool missing = false;
 
 		{
 			std::unique_lock lock(m_mutex);
@@ -133,13 +141,21 @@ namespace thx::service
 			auto it = m_services.find(id);
 			if (it == m_services.end())
 			{
-				thx::log(LogLevel::Warn,
-						 std::string("unregisterService: '") + id.name() + "' is not registered");
-				return false;
+				missing = true;
 			}
+			else
+			{
+				to_destroy = std::move(it->second);
+				m_services.erase(it);
+			}
+		}
 
-			to_destroy = std::move(it->second);
-			m_services.erase(it);
+		// Diagnostic emitted outside the lock (see registerService for why).
+		if (missing)
+		{
+			thx::log::warn(
+				std::string("unregisterService: '") + id.name() + "' is not registered");
+			return false;
 		}
 
 		// onDestroy runs without the registry lock so the service may safely call

@@ -74,18 +74,19 @@ add_dependencies(test-${PROJECT_NAME}
 
 if(THORAX_BUILD_PLUGINS)
     target_sources(test-${PROJECT_NAME} PRIVATE
-        test_logging_plugin.cpp
+        test_spdlog_plugin.cpp
         test_io_plugin.cpp
     )
+    # The spdlog plugin ships no public header (it implements the core
+    # thx::log::ILogService); only the io plugin contributes an include dir.
     target_include_directories(test-${PROJECT_NAME} PRIVATE
-        ${CMAKE_SOURCE_DIR}/plugins/logging/include
         ${CMAKE_SOURCE_DIR}/plugins/io/include
     )
     target_compile_definitions(test-${PROJECT_NAME} PRIVATE
-        THX_LOGGING_PLUGIN_PATH="$<TARGET_FILE:plugin_logging>"
+        THX_SPDLOG_PLUGIN_PATH="$<TARGET_FILE:plugin_spdlog>"
         THX_IO_PLUGIN_PATH="$<TARGET_FILE:plugin_io>"
     )
-    add_dependencies(test-${PROJECT_NAME} plugin_logging plugin_io)
+    add_dependencies(test-${PROJECT_NAME} plugin_spdlog plugin_io)
 endif()
 
 catch_discover_tests(test-${PROJECT_NAME} TEST_PREFIX "(${PROJECT_NAME}) ")

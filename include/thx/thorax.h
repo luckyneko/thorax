@@ -10,7 +10,8 @@
 
 // Cross-cutting primitives
 #include "thx/lifecycle.h"
-#include "thx/log.h"
+#include "thx/log/log.h"
+#include "thx/log/log_service.h"
 #include "thx/result.h"
 #include "thx/span.h"
 #include "thx/string_view.h"

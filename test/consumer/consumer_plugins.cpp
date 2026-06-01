@@ -6,9 +6,9 @@
  *  Compiled only when THX_LOGGING_INCLUDE and THX_IO_INCLUDE are found.
  */
 
+#include <thx/log/log_service.h>
 #include <thx/plugin/plugin.h>
 #include <thx/plugins/io/io_service.h>
-#include <thx/plugins/logging/logging_service.h>
 
 #include <algorithm>
 #include <cstdio>
@@ -18,7 +18,7 @@
 int main(int argc, char* argv[])
 {
 	// Verify the service IDs are reachable as constexpr values.
-	constexpr auto logging_id = thx::plugins::logging::ILoggingService::staticId();
+	constexpr auto logging_id = thx::log::ILogService::staticId();
 	constexpr auto io_id = thx::plugins::io::IIOService::staticId();
 
 	std::printf("logging service id: %s\n", logging_id.name());
@@ -53,7 +53,7 @@ int main(int argc, char* argv[])
 	{
 		return std::find(names.begin(), names.end(), n) != names.end();
 	};
-	if (!has("thx.plugins.logging.ILoggingService") || !has("thx.plugins.io.IIOService"))
+	if (!has("thx.spdlog.SpdlogService") || !has("thx.plugins.io.IIOService"))
 	{
 		std::fprintf(stderr,
 					 "discover did not find both expected plugins (logging + io)\n");

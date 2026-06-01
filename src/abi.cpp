@@ -23,14 +23,8 @@
 // and the dynamic linker's two-level lookup resolves every external reference
 // back to the library's symbol.
 
-#include "thx/log.h"
 #include "thx/plugin/iplugin.h"
 #include "thx/service/iservice.h"
-
-namespace thx
-{
-	ILogSink::~ILogSink() = default;
-}
 
 namespace thx::service
 {

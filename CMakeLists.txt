@@ -74,7 +74,13 @@ add_library(${PROJECT_NAME} SHARED
     include/thx/version.h.in
     include/thx/to_string.h
     include/thx/result.h
-    include/thx/log.h
+
+    # Public headers — log/
+    include/thx/log/log.h
+    include/thx/log/log_level.h
+    include/thx/log/log_record.h
+    include/thx/log/log_service.h
+    include/thx/log/source_location.h
 
     # Public headers — service/
     include/thx/service/iservice.h
@@ -102,7 +108,7 @@ add_library(${PROJECT_NAME} SHARED
     # Source
     src/abi.cpp
     src/thorax.cpp
-    src/log.cpp
+    src/log/log.cpp
     src/library.cpp
     src/registry.cpp
     src/service/service_manager.cpp

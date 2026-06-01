@@ -174,7 +174,7 @@ Run them with the directory that holds the built plugins:
 
 **Manifests** — `thx_plugin_auto_manifest(target)` derives the sidecar from the DSO's own `IPlugin` (recommended). [`thx_emit_manifest <dso>`](tools/thx_emit_manifest/) is the standalone tool it calls, and `thx_plugin_manifest(target NAME … VERSION … PROVIDES … REQUIRES …)` is the hand-authored fallback. At load time the live plugin is cross-checked against its manifest and any mismatch rolls the load back.
 
-**Diagnostics** — failures flow through a pluggable `thx::ILogSink` (default writes to `stderr`); swap it with `thx::setLogSink(sink)` or silence logging with `nullptr`.
+**Diagnostics** — emit with `thx::log::write(level, msg)` or the shortcuts `thx::log::debug/info/warn/error(msg)`. Logging is just a service: records are forwarded to the registered `thx::log::ILogService`, falling back to `stderr` when none is registered. Install one by registering it like any service — including from a plugin (see the in-tree spdlog plugin). A logger's identity is its plugin, so a host can list the available loggers with `pluginsProviding<thx::log::ILogService>()` and `load()` the one it wants.
 
 ## ABI & versioning
 

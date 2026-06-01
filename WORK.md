@@ -14,9 +14,11 @@ Outstanding tasks, open questions, and deferred features for thorax. Completed w
 
 Explicitly not shipped yet; expected to revisit when a real consumer needs them.
 
-### Log subsystem ABI refactor
+### Log subsystem: fan-out + per-sink filtering
 
-The log surface hasn't had the service layer's ABI-hardening pass: `setLogSink` takes `std::shared_ptr<ILogSink>` (the control-block-crosses-DSO concern the `ServiceHandle` pattern solved); one global sink slot replaced wholesale, no fanout/filtering; `LogRecord` carries `std::string` across the `ILogSink::write` boundary. **Direction:** intrusive-refcounted `LogSinkHandle` mirroring `ServiceHandle`; register (fan-out) sinks rather than replace; per-sink min-level filtering; maybe scoped push/pop sinks for tests. Needs design before code. **Trigger:** a consumer needs per-component filtering or hits the stdlib-mismatch in practice.
+The original "Log subsystem ABI refactor" shipped: `ILogSink` → a registered `thx::log::ILogService` service, `thx::log::write` forwards to it (stderr fallback when none registered), `LogRecord::message` is now a `thx::StringView`, and there are no statics — the service registry owns the logging provider. The in-tree logging plugin registers an spdlog-backed `ILogService`.
+
+Still deferred: logging is **single-owner, replaced wholesale** — one `ILogService` at a time, no fan-out, no per-level/per-destination filtering, no scoped push/pop. **Direction:** a fan-out `ILogService` (the registered one multiplexes to N child sinks) or a registry of providers; per-sink min-level filtering; maybe scoped push/pop for tests. **Trigger:** a consumer needs per-component filtering or multiple simultaneous destinations.
 
 ### Manifest `tags` array
 

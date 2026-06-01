@@ -49,7 +49,7 @@ namespace thx::plugin
 			{
 				if (sm.getService<IService>(id))
 				{
-					thx::log(LogLevel::Warn,
+					thx::log::warn(
 							 std::string("PluginManager: plugin '") + pluginName + "' left service '" + id.name() + "' registered after onUnload; force-unregistering");
 					sm.unregisterService(id);
 				}
@@ -350,7 +350,7 @@ namespace thx::plugin
 				// spams logs every iteration.
 				if (m_warnedMissingDso.insert(manifestPath).second)
 				{
-					thx::log(LogLevel::Warn,
+					thx::log::warn(
 							 "discover: sidecar '" + manifestPath + "' has no paired DSO at '" + dsoPath + "' — skipping");
 				}
 				return;
@@ -368,7 +368,7 @@ namespace thx::plugin
 			auto parsed = parseManifest(manifestPath);
 			if (!parsed)
 			{
-				thx::log(LogLevel::Error,
+				thx::log::error(
 						 "discover: failed to parse '" + manifestPath + "': " + parsed.error().message);
 				return;
 			}
@@ -585,7 +585,7 @@ namespace thx::plugin
 		LoadSummary summary;
 		if (auto r = discover(directory, recursive); !r)
 		{
-			thx::log(LogLevel::Warn,
+			thx::log::warn(
 					 "discoverAndLoad: discover failed for '" + directory + "': " + r.error().message);
 			return summary;
 		}
@@ -660,7 +660,7 @@ namespace thx::plugin
 			}
 			else
 			{
-				thx::log(LogLevel::Warn,
+				thx::log::warn(
 						 "discoverAndLoad: failed to load '" + p + "': " + r.error().message);
 				summary.failed.emplace_back(p, std::move(r.error()));
 			}
@@ -697,13 +697,13 @@ namespace thx::plugin
 				auto [it, inserted] = providerOf.emplace(id, canonical);
 				if (!inserted && canonical < it->second)
 				{
-					thx::log(LogLevel::Warn,
+					thx::log::warn(
 							 "resolveLoadOrder: service '" + id + "' is provided by both '" + it->second + "' and '" + canonical + "'; preferring '" + canonical + "'");
 					it->second = canonical;
 				}
 				else if (!inserted && it->second != canonical)
 				{
-					thx::log(LogLevel::Warn,
+					thx::log::warn(
 							 "resolveLoadOrder: service '" + id + "' is provided by both '" + it->second + "' and '" + canonical + "'; preferring '" + it->second + "'");
 				}
 			}
@@ -807,7 +807,7 @@ namespace thx::plugin
 		std::vector<std::string> order;
 		if (auto r = resolveLoadOrder(rootPaths, order); !r)
 		{
-			thx::log(LogLevel::Warn, "loadAll: dependency resolution failed: " + r.error().message);
+			thx::log::warn("loadAll: dependency resolution failed: " + r.error().message);
 			// Attribute the structural error to the first root that triggered
 			// it; callers see it in `failed`. Nothing is loaded.
 			std::string const& key = rootPaths.empty() ? std::string{} : rootPaths.front();
@@ -830,7 +830,7 @@ namespace thx::plugin
 			}
 			else
 			{
-				thx::log(LogLevel::Warn, "loadAll: failed to load '" + p + "': " + r.error().message);
+				thx::log::warn("loadAll: failed to load '" + p + "': " + r.error().message);
 				summary.failed.emplace_back(p, std::move(r.error()));
 			}
 		}

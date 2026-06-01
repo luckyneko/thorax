@@ -229,13 +229,24 @@ The manifest is built from the C++ code by construction — the `ManifestMismatc
 
 Failures return `thx::Result<T, thx::Error>` ([include/thx/result.h](include/thx/result.h)) — no exceptions in library code. `thx::Result<void, Error>` is the void specialisation. `Result<T>` exposes `valueOr(fallback)` and `map(f)`; `discoverAndLoad` is the one operation that breaks the pattern (it returns a `LoadSummary` so callers can react to partial failure).
 
-Diagnostics flow through a pluggable `thx::ILogSink` ([include/thx/log.h](include/thx/log.h)). The default sink writes structured lines to `stderr`. Replace per-process with `thx::setLogSink(sink)`; passing `nullptr` silences logging entirely. `thx::restoreDefaultLogSink()` brings the built-in stderr sink back. `ServiceManager` and `PluginManager` emit structured records with source locations for every state change and failure.
+Diagnostics live under `thx::log` ([include/thx/log/](include/thx/log/)). Emit with `thx::log::write(level, msg)` or the level shortcuts `thx::log::debug/info/warn/error(msg)`. **Logging is just a service:** `thx::log::write` forwards every record to the registered `thx::log::ILogService` (id `"thx.log.ILogService"`), falling back to a built-in `stderr` writer when none is registered. `ServiceManager` and `PluginManager` emit structured records with source locations for every state change and failure.
+
+There is **no global sink slot and no setter** — the service registry is the single source of truth. Install logging by registering an `ILogService` like any other service (`thx::service::registerService<MyLogService>()`, or ship it from a plugin via `THX_DEFINE_SERVICE_PLUGIN`); remove it by unregistering. It is single-owner like every service: exactly one `ILogService` process-wide (host *or* plugin, not both — a second registration fails the load). `thx::log::write` holds its `ServiceHandle<ILogService>` only for the duration of the call (never across calls), so a plugin-provided service can be unloaded with no dangling reference.
+
+`ILogService` is an ordinary service interface — `class ILogService : public thx::service::Service<ILogService>` with `virtual void write(LogRecord const&)`. It needs **no `abi.cpp` anchor**: `getService` resolves it by id + `static_cast`, never `dynamic_cast`. `LogRecord::message` is a `thx::StringView` valid only for the duration of `write()`; a service that retains it must copy it out. Only ABI-stable types cross `write()` (`LogLevel`, the `SourceLocation` C strings, `StringView`), so a plugin may implement it.
+
+**Deadlock note.** Because `thx::log::write` calls `getService<ILogService>()` (a `ServiceManager` *read* under a `shared_lock`), `ServiceManager` must never log while holding its own `unique_lock` (the `shared_mutex` is not recursive). Its two such diagnostics — the duplicate-registration and not-registered warnings — are deliberately emitted *after* releasing the lock. `getService` is silent on a miss, so logging before any `ILogService` is registered does not recurse.
+
+**Logger identity & selection.** A concrete logger's identity is its **plugin**, not a second service id. The registered service id stays the stable interface `thx.log.ILogService` (so `thx::log::write` finds it); the logger's own name/version is the plugin manifest. The in-tree spdlog plugin ([plugins/spdlog](plugins/spdlog)) demonstrates this: `SpdlogService` implements `ILogService` over spdlog (vendored via [cmake/addspdlog.cmake](cmake/addspdlog.cmake), linked PRIVATE + hidden-visibility so neither spdlog nor its bundled fmt reach the plugin's export table), and a custom `IPlugin` (`THX_DEFINE_PLUGIN`) gives the plugin the distinct manifest name `thx.spdlog.SpdlogService` while `provides()` advertises `thx.log.ILogService`. It ships no public header. A host **selects** a logger from the available set with the ordinary discovery flow — `discover(dir)` then `pluginsProviding<thx::log::ILogService>()` lists every logger plugin by its distinct name, and `load(chosen.path)` activates it. Single-owner ⇒ one logger at a time; switch by `unload` + `load`. Loading the plugin routes all framework diagnostics through spdlog; unloading restores the stderr fallback.
+
+Header split (mirrors `thx/service/`): `thx/log/log_level.h`, `source_location.h`, `log_record.h`, `log_service.h` (the `ILogService` interface), and `thx/log/log.h` (the emit facade: `write` + shortcuts + `assertThat`). `log.h` deliberately does **not** pull in `log_service.h` — it is the low-level "emit" surface that `result.h` / `version_type.h` depend on for `assertThat`; code that *implements or registers* the service includes `log_service.h`.
 
 There are no `THX_LOG` / `THX_ASSERT` macros. Source location is captured automatically via `__builtin_FILE`/`__builtin_LINE`/`__builtin_FUNCTION` defaults on GCC, Clang, and MSVC ≥ VS 2019 16.6 (`_MSC_VER 1926`). Call sites use the free functions directly:
 
 ```cpp
-thx::log(thx::LogLevel::Warn, "message");
-thx::assertThat(condition, "message");   // logs at Error if false; std::abort() in Debug builds only
+thx::log::warn("message");
+thx::log::write(thx::log::LogLevel::Warn, "message");   // explicit-level form
+thx::log::assertThat(condition, "message");             // logs at Error if false; std::abort() in Debug builds only
 ```
 
 `assertThat` never silently swallows its condition — it always emits the diagnostic before deciding whether to abort.
@@ -255,29 +266,30 @@ thx::assertThat(condition, "message");   // logs at Error if false; std::abort()
 ```
 include/thx/             public — installed
 ├── thorax.h, thx_api.h, lifecycle.h
-├── version_type.h, version.h.in, result.h, log.h
+├── version_type.h, version.h.in, result.h
 ├── string_view.h, span.h, to_string.h
+├── log/log.h, log_level.h, source_location.h, log_record.h, log_service.h  (emit facade + ILogService)
 ├── service/iservice.h, service_id.h, service.h        (Service<>, IService, ServiceID, facades + ServiceFactory/ServiceInfo)
 ├── plugin/iplugin.h, platform.h, manifest.h, plugin.h  (IPlugin, ServicePluginShim<>, ABI macros, manifest types, facades)
 └── rtti/type_name.h
 
 src/                     private — not installed
-├── library.h/cpp, registry.h/cpp, log.cpp, thorax.cpp, abi.cpp
+├── library.h/cpp, registry.h/cpp, log/log.cpp, thorax.cpp, abi.cpp
 ├── service/service_manager.{h,inl,cpp}                 (the ServiceManager class itself)
 ├── service/service.cpp                                  (thx::service::* facade impls)
 └── plugin/plugin_handle.{h,cpp}, plugin_garbage.{h,cpp}, plugin_manager.{h,cpp}, plugin.cpp, manifest.cpp
 
-plugins/                 in-tree plugins (logging, io); each is a SHARED lib using THX_DEFINE_SERVICE_PLUGIN (or THX_DEFINE_PLUGIN for the multi-service form)
+plugins/                 in-tree plugins (spdlog, io); each is a SHARED lib using THX_DEFINE_SERVICE_PLUGIN (or THX_DEFINE_PLUGIN for the multi-service / custom-name form)
 plugins/<name>/include/thx/plugins/<name>/<name>_service.h  the shared interface header
 examples/                example host + two example plugins; integration test runs example_host
 test/                    Catch2 unit + integration tests. Each mock plugin lives in its own subdirectory; mock_plugin/CMakeLists.txt also defines a `mock_plugin_headers` INTERFACE library that sibling mocks and the test binary link to share mock_plugin.h
 test/consumer/           standalone CMake project used by the install smoke test
 tools/<name>/            framework tools (currently just thx_emit_manifest)
-cmake/                   ThoraxConfig.cmake.in, addcatch2, thx_warnings, thx_install, thx_plugin_manifest, thx_plugin_auto_manifest
-thirdparty/              vendored Catch2 tarball (downloaded on demand by addcatch2.cmake)
+cmake/                   ThoraxConfig.cmake.in, addcatch2, addspdlog, thx_warnings, thx_install, thx_plugin_manifest, thx_plugin_auto_manifest
+thirdparty/              vendored Catch2 + spdlog tarballs (downloaded on demand by addcatch2.cmake / addspdlog.cmake)
 ```
 
-`abi.cpp` is the anchor file: it defines the out-of-line virtual destructors for `IService`, `IPlugin`, and `ILogSink` so libthorax owns their vtable + typeinfo. Without these key functions the typeinfos would be emitted as weak COMDAT in every consumer and macOS's two-level namespace would leave the addresses distinct across DSOs, breaking `dynamic_cast` from inside the library.
+`abi.cpp` is the anchor file: it defines the out-of-line virtual destructors for `IService` and `IPlugin` so libthorax owns their vtable + typeinfo. Without these key functions the typeinfos would be emitted as weak COMDAT in every consumer and macOS's two-level namespace would leave the addresses distinct across DSOs, breaking `dynamic_cast` from inside the library.
 
 Style is enforced by [.clang-format](.clang-format): Allman braces, **tabs for indent (width 4)**, no column limit, namespace contents indented, pointer-left (`int* p`), access modifiers offset −4. Match the existing files when editing.
 

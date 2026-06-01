@@ -12,7 +12,7 @@
 #include "plugin/plugin_garbage.h"
 #include "plugin/plugin_handle.h"
 #include "service/service_manager.h"
-#include "thx/log.h"
+#include "thx/log/log.h"
 #include "thx/plugin/iplugin.h"
 #include "thx/plugin/manifest.h"
 #include "thx/plugin/plugin.h" // PluginInfo, State, LoadSummary
