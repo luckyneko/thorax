@@ -16,17 +16,13 @@ Explicitly not shipped yet; expected to revisit when a real consumer needs them.
 
 ### Log subsystem: fan-out + per-sink filtering
 
-The original "Log subsystem ABI refactor" shipped: `ILogSink` → a registered `thx::log::ILogService` service, `thx::log::write` forwards to it (stderr fallback when none registered), `LogRecord::message` is now a `thx::StringView`, and there are no statics — the service registry owns the logging provider. The in-tree logging plugin registers an spdlog-backed `ILogService`.
+The original "Log subsystem ABI refactor" shipped: `ILogSink` → a registered `thx::log::ILogService` service, `thx::log::write` forwards to it (stderr fallback when none registered), `LogRecord::message` is now a `thx::StringView`, and there are no statics — the service registry owns the logging provider. The in-tree spdlog plugin registers an spdlog-backed `ILogService`.
 
 Still deferred: logging is **single-owner, replaced wholesale** — one `ILogService` at a time, no fan-out, no per-level/per-destination filtering, no scoped push/pop. **Direction:** a fan-out `ILogService` (the registered one multiplexes to N child sinks) or a registry of providers; per-sink min-level filtering; maybe scoped push/pop for tests. **Trigger:** a consumer needs per-component filtering or multiple simultaneous destinations.
 
 ### Manifest `tags` array
 
 An explicit `"tags": [...]` array, queryable independently of `provides`, to group plugins that span multiple service interfaces (driver + tuning + capture). `provides` already covers "filter by interface" for free. **Trigger:** a consumer wants to group plugins that don't share a single interface.
-
-### Runtime manifest-verification simplification
-
-With the manifest auto-derived from `IPlugin` (`thx_plugin_auto_manifest`), three of `finalizeLoad`'s four checks (name/version/requires) now only catch *distribution-time* drift (a stale `.thx.json` shipped apart from its DSO). They're cheap, so keeping them is defensible; drop or downgrade to debug-only if the cost ever shows up.
 
 ### `RTLD_NOW`/Strict loading through PluginManager
 
@@ -38,7 +34,11 @@ The docs *site* is shipped — `Doxyfile` + `.github/workflows/docs.yml` publish
 
 ---
 
-## Performance — only if measured
+## Known costs (revisit only if measured)
+
+Documented performance characteristics, not pending tasks — recorded so a future
+profiler knows where to look. Don't act on these without a measurement that says
+they matter.
 
 ### `pluginInfo(path)` calls `std::filesystem::canonical` on every query
 
