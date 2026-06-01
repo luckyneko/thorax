@@ -188,14 +188,16 @@ endif()
 # to be present.
 add_subdirectory(tools)
 
+# Plugins — added before examples so the example host_logging target can
+# reference the in-tree plugin_spdlog target (it loads it at runtime to
+# demonstrate selecting a logging backend).
+if(THORAX_BUILD_PLUGINS)
+    add_subdirectory(plugins)
+endif()
+
 # Examples
 if(THORAX_BUILD_EXAMPLES)
     add_subdirectory(examples)
-endif()
-
-# Plugins
-if(THORAX_BUILD_PLUGINS)
-    add_subdirectory(plugins)
 endif()
 
 # Tests (mock plugins, test exe, install smoke test)

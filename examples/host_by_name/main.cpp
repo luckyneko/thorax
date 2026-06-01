@@ -1,23 +1,26 @@
 /*
- *  Created by LuckyNeko on 31/05/2026.
+ *  Created by LuckyNeko on 01/06/2026.
  *  Copyright 2026 LuckyNeko
  *
  *  Distributed under the MIT Software License
  *  (See accompanying file LICENSE.md)
  */
 
-// Pathway: load a single plugin by its manifest name.
+// Pathway: select a plugin by its manifest name, then load it with its deps.
 //
 // Usage: host_by_name <plugin-dir>
 //
 // discover() reads every sidecar manifest in the directory (no DSO is opened),
-// so we can look a plugin up by name and load only that one.
+// so we can look a plugin up by name. The image-decoder plugin requires
+// IAssetService, so we use loadWithDependencies() to pull the media-core plugin
+// in automatically.
 
 #include <thx/lifecycle.h>
+#include <thx/log/log.h>
 #include <thx/plugin/plugin.h>
 #include <thx/service/service.h>
 
-#include "interfaces/logging_service.h"
+#include "interfaces/asset_service.h"
 
 #include <cstdio>
 
@@ -29,6 +32,8 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
+	thx::initialise("host_by_name");
+
 	// Populate the manifest cache for the directory. No DSO is mapped yet.
 	if (auto r = thx::plugin::discover(argv[1]); !r)
 	{
@@ -36,9 +41,9 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-	// A ServicePluginShim-based plugin reports its name as the service ID it
-	// provides — here the logging plugin's name is "examples.ILoggingService".
-	const char* wanted = examples::ILoggingService::staticId().name();
+	// A custom-IPlugin plugin carries its own manifest name (distinct from any
+	// service id). Pick the image decoder by that name.
+	const char* wanted = "examples.media.ImageDecoder";
 	auto info = thx::plugin::pluginByName(wanted);
 	if (!info)
 	{
@@ -47,23 +52,28 @@ int main(int argc, char* argv[])
 	}
 	std::printf("Found '%s' at %s\n", info->name.c_str(), info->path.c_str());
 
-	if (auto r = thx::plugin::load(info->path); !r)
+	// loadWithDependencies pulls in media-core (the decoder's required service).
+	auto summary = thx::plugin::loadWithDependencies(info->path);
+	if (!summary.failed.empty())
 	{
-		std::fprintf(stderr, "load failed: %s\n", r.error().message.c_str());
+		for (auto const& [path, err] : summary.failed)
+			std::fprintf(stderr, "load failed: %s: %s\n", path.c_str(), err.message.c_str());
+		thx::shutdown();
 		return 1;
 	}
 
 	int rc = 0;
 	{
-		auto log = thx::service::getService<examples::ILoggingService>();
-		if (log)
-			log->log("Loaded by name.");
+		auto media = thx::service::getService<examples::IAssetService>();
+		examples::AssetInfo asset;
+		if (media && media->decode("portrait.jpg", asset))
+			thx::log::info("decoded portrait.jpg via the named decoder");
 		else
 		{
-			std::fprintf(stderr, "ILoggingService not found after load\n");
+			std::fprintf(stderr, "decode failed after load-by-name\n");
 			rc = 1;
 		}
-		// Handle drops here, before shutdown() unmaps the plugin DSO.
+		// Handle drops here, before shutdown() unmaps the plugin DSOs.
 	}
 
 	thx::shutdown();

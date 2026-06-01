@@ -281,7 +281,7 @@ src/                     private — not installed
 
 plugins/                 in-tree plugins (spdlog, io); each is a SHARED lib using THX_DEFINE_SERVICE_PLUGIN (or THX_DEFINE_PLUGIN for the multi-service / custom-name form)
 plugins/<name>/include/thx/plugins/<name>/<name>_service.h  the shared interface header
-examples/                example host + two example plugins; integration test runs example_host
+examples/                a "media asset loader" suite: IAssetService + media-core/image/video decoder plugins, driven by four hosts (host, host_by_name, host_with_deps, host_logging) — one per loading pathway; integration tests run each
 test/                    Catch2 unit + integration tests. Each mock plugin lives in its own subdirectory; mock_plugin/CMakeLists.txt also defines a `mock_plugin_headers` INTERFACE library that sibling mocks and the test binary link to share mock_plugin.h
 test/consumer/           standalone CMake project used by the install smoke test
 tools/<name>/            framework tools (currently just thx_emit_manifest)

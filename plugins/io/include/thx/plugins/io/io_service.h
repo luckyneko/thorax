@@ -53,7 +53,7 @@ namespace thx::plugins::io
 		}
 
 		// Read a file using the first registered reader whose canRead() is true.
-		// Returns bytes read (â‰¥ 0), -1 if no reader accepted the path, or -2 if a
+		// Returns bytes read (>= 0), -1 if no reader accepted the path, or -2 if a
 		// reader accepted but the underlying read failed.
 		virtual int read(const char* path, char* buffer, int buffer_size) = 0;
 

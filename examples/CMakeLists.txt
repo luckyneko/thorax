@@ -4,68 +4,67 @@ include(thx_plugin_auto_manifest)
 enable_testing()
 
 # All example targets include the examples/ root so that
-# #include "interfaces/logging_service.h" resolves correctly.
+# #include "interfaces/asset_service.h" resolves correctly.
 
-add_library(example_plugin_logging SHARED
-    plugin_logging/logging_plugin.cpp
-)
-target_link_libraries(example_plugin_logging PRIVATE ${PROJECT_NAME})
-target_include_directories(example_plugin_logging PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-thx_set_warnings(example_plugin_logging)
-target_compile_options(example_plugin_logging PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fvisibility=hidden>)
-thx_plugin_auto_manifest(example_plugin_logging)
+# --- Example plugins --------------------------------------------------------
+#
+# A small "media asset loader" domain that exercises the framework end to end:
+#   - plugin_media_core    registers IAssetService (the decode dispatcher) using
+#                          the one-service shim THX_DEFINE_SERVICE_PLUGIN.
+#   - plugin_image_decoder
+#   - plugin_video_decoder each a custom IPlugin (THX_DEFINE_PLUGIN) that
+#                          requires IAssetService and *contributes* a decoder to
+#                          it — they register no service of their own.
 
-add_library(example_plugin_file SHARED
-    plugin_file/file_plugin.cpp
-)
-target_link_libraries(example_plugin_file PRIVATE ${PROJECT_NAME})
-target_include_directories(example_plugin_file PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-thx_set_warnings(example_plugin_file)
-target_compile_options(example_plugin_file PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fvisibility=hidden>)
-thx_plugin_auto_manifest(example_plugin_file)
+function(thx_add_example_plugin name src)
+    add_library(${name} SHARED ${src})
+    target_link_libraries(${name} PRIVATE ${PROJECT_NAME})
+    target_include_directories(${name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    thx_set_warnings(${name})
+    target_compile_options(${name} PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fvisibility=hidden>)
+    thx_plugin_auto_manifest(${name})
+endfunction()
 
-# A plugin with a real dependency: the greeter service emits through
-# ILoggingService and declares that requirement in IPlugin::required().
-add_library(example_plugin_greeter SHARED
-    plugin_greeter/greeter_plugin.cpp
-)
-target_link_libraries(example_plugin_greeter PRIVATE ${PROJECT_NAME})
-target_include_directories(example_plugin_greeter PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-thx_set_warnings(example_plugin_greeter)
-target_compile_options(example_plugin_greeter PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fvisibility=hidden>)
-thx_plugin_auto_manifest(example_plugin_greeter)
+thx_add_example_plugin(example_plugin_media_core    plugin_media_core/media_core_plugin.cpp)
+thx_add_example_plugin(example_plugin_image_decoder plugin_image_decoder/image_decoder_plugin.cpp)
+thx_add_example_plugin(example_plugin_video_decoder plugin_video_decoder/video_decoder_plugin.cpp)
 
 # All example plugins build into this directory; hosts are pointed at it.
-set(example_plugin_dir "$<TARGET_FILE_DIR:example_plugin_logging>")
+set(example_plugin_dir "$<TARGET_FILE_DIR:example_plugin_media_core>")
 
-# example_host — load everything in a directory (discoverAndLoad baseline).
-add_executable(example_host
-    host/main.cpp
-)
-target_link_libraries(example_host PRIVATE ${PROJECT_NAME})
-target_include_directories(example_host PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-thx_set_warnings(example_host)
-add_dependencies(example_host example_plugin_logging example_plugin_file)
+set(example_media_plugins
+    example_plugin_media_core
+    example_plugin_image_decoder
+    example_plugin_video_decoder)
 
-# Run the host with the directory that contains the built plugins.
-# $<TARGET_FILE_DIR:...> resolves correctly for both single- and multi-config
-# generators (e.g. Ninja vs MSVC).
-add_test(
-    NAME examples.host
-    COMMAND example_host "${example_plugin_dir}"
-)
+# --- Hosts ------------------------------------------------------------------
+# One focused host per loading pathway; each is a standalone, copy-pasteable
+# recipe pointed at the example plugin directory.
 
-# One focused host per loading pathway. Each is a standalone, copy-pasteable
-# recipe; all are pointed at the same plugin directory.
-foreach(pathway host_by_name host_by_provides host_with_deps)
-    add_executable(example_${pathway} ${pathway}/main.cpp)
-    target_link_libraries(example_${pathway} PRIVATE ${PROJECT_NAME})
-    target_include_directories(example_${pathway} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-    thx_set_warnings(example_${pathway})
-    add_dependencies(example_${pathway}
-        example_plugin_logging example_plugin_file example_plugin_greeter)
-    add_test(
-        NAME examples.${pathway}
-        COMMAND example_${pathway} "${example_plugin_dir}"
-    )
+# The media-domain hosts: tour (load-all), by-name, with-deps.
+foreach(pathway host host_by_name host_with_deps)
+    set(target example_${pathway})
+    if(pathway STREQUAL "host")
+        set(target example_host) # keep the historical target/test name
+    endif()
+    add_executable(${target} ${pathway}/main.cpp)
+    target_link_libraries(${target} PRIVATE ${PROJECT_NAME})
+    target_include_directories(${target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    thx_set_warnings(${target})
+    add_dependencies(${target} ${example_media_plugins})
+    add_test(NAME examples.${pathway} COMMAND ${target} "${example_plugin_dir}")
 endforeach()
+
+# host_logging demonstrates selecting a logging backend at runtime. It loads the
+# in-tree spdlog plugin, so it is only built when the plugins are available.
+if(THORAX_BUILD_PLUGINS AND TARGET plugin_spdlog)
+    add_executable(example_host_logging host_logging/main.cpp)
+    target_link_libraries(example_host_logging PRIVATE ${PROJECT_NAME})
+    target_include_directories(example_host_logging PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    thx_set_warnings(example_host_logging)
+    add_dependencies(example_host_logging plugin_spdlog)
+    add_test(
+        NAME examples.host_logging
+        COMMAND example_host_logging "$<TARGET_FILE_DIR:plugin_spdlog>"
+    )
+endif()

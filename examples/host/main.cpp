@@ -1,26 +1,55 @@
 /*
- *  Created by LuckyNeko on 25/04/2026.
+ *  Created by LuckyNeko on 01/06/2026.
  *  Copyright 2026 LuckyNeko
  *
  *  Distributed under the MIT Software License
  *  (See accompanying file LICENSE.md)
  */
 
-// Example host application demonstrating the thorax plugin framework.
+// The tour. Loads the whole media plugin set from a directory and decodes a few
+// assets through the resulting IAssetService.
 //
 // Usage: example_host <plugin-dir>
 //
-// Loads all plugins found in <plugin-dir>, then exercises the LoggingService
-// and FileService interfaces contributed by the two example plugins.
+// Note we use loadAll() (dependency-aware) rather than discoverAndLoad(): the
+// decoder plugins require IAssetService, so they must come up after the
+// media-core plugin. loadAll() resolves that order from the manifests;
+// discoverAndLoad() would load in filesystem order and fail the decoders.
 
+#include <thx/lifecycle.h>
+#include <thx/log/log.h>
 #include <thx/plugin/plugin.h>
 #include <thx/service/service.h>
 
-#include "interfaces/file_service.h"
-#include "interfaces/logging_service.h"
+#include "interfaces/asset_service.h"
 
 #include <cstdio>
-#include <fstream>
+#include <string>
+
+namespace
+{
+	const char* kindName(examples::AssetKind k)
+	{
+		switch (k)
+		{
+			case examples::AssetKind::Image:
+				return "image";
+			case examples::AssetKind::Video:
+				return "video";
+			default:
+				return "unknown";
+		}
+	}
+
+	void report(examples::IAssetService& media, const char* path)
+	{
+		examples::AssetInfo info;
+		if (media.decode(path, info))
+			thx::log::info(std::string("decoded ") + path + ": " + kindName(info.kind) + " " + std::to_string(info.width) + "x" + std::to_string(info.height) + (info.durationMs ? " " + std::to_string(info.durationMs) + "ms" : ""));
+		else
+			thx::log::warn(std::string("could not decode ") + path);
+	}
+} // namespace
 
 int main(int argc, char* argv[])
 {
@@ -30,53 +59,42 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-	// Free-function facades forward to the Registry-owned managers.
-	auto summary = thx::plugin::discoverAndLoad(argv[1]);
-	if (summary.loaded.empty())
+	thx::initialise("example_host");
+
+	if (auto r = thx::plugin::discover(argv[1]); !r)
 	{
-		std::fprintf(stderr, "discoverAndLoad: no plugins loaded from %s\n", argv[1]);
+		std::fprintf(stderr, "discover failed: %s\n", r.error().message.c_str());
+		return 1;
+	}
+
+	// Load every discovered plugin, in dependency order (core before decoders).
+	auto discovered = thx::plugin::plugins();
+	auto summary = thx::plugin::loadAll({discovered.data(), discovered.size()});
+	if (!summary.failed.empty())
+	{
 		for (auto const& [path, err] : summary.failed)
-			std::fprintf(stderr, "  %s: %s\n", path.c_str(), err.message.c_str());
+			std::fprintf(stderr, "load failed: %s: %s\n", path.c_str(), err.message.c_str());
+		thx::shutdown();
 		return 1;
 	}
+	thx::log::info("loaded " + std::to_string(summary.loaded.size()) + " plugin(s)");
 
-	auto log_svc = thx::service::getService<examples::ILoggingService>();
-	if (!log_svc)
+	int rc = 0;
 	{
-		std::fprintf(stderr, "ILoggingService not found\n");
-		return 1;
-	}
-
-	auto file_svc = thx::service::getService<examples::IFileService>();
-	if (!file_svc)
-	{
-		std::fprintf(stderr, "IFileService not found\n");
-		return 1;
-	}
-
-	log_svc->log("Services loaded.");
-
-	// Write a small probe file and read it back via FileService.
-	const char* tmp_path = "thorax_example.tmp";
-	{
-		std::ofstream f(tmp_path);
-		if (!f)
+		auto media = thx::service::getService<examples::IAssetService>();
+		if (!media)
 		{
-			std::fprintf(stderr, "Cannot write temp file\n");
-			return 1;
+			std::fprintf(stderr, "IAssetService not found after load\n");
+			rc = 1;
 		}
-		f << "Hello from thorax FileService!";
+		else
+		{
+			report(*media, "photo.png");
+			report(*media, "clip.mp4");
+			report(*media, "notes.txt"); // no decoder — expected miss
+		}
 	}
 
-	char buf[64] = {};
-	int n = file_svc->read(tmp_path, buf, static_cast<int>(sizeof(buf)));
-	if (n < 0)
-	{
-		std::fprintf(stderr, "FileService::read failed\n");
-		return 1;
-	}
-
-	log_svc->log(buf);
-	log_svc->log("Done.");
-	return 0;
+	thx::shutdown();
+	return rc;
 }

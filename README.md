@@ -120,7 +120,7 @@ int main(int argc, char* argv[])
 }
 ```
 
-A complete, runnable version of the above lives in [examples/](examples/) (a host plus logging, file, and greeter plugins):
+A complete, runnable suite lives in [examples/](examples/): a small **media asset loader** — `IAssetService` (the decode dispatcher) plus image and video decoder plugins that *contribute* to it — driven by four hosts, one per loading pathway. All output goes through the real `thx::log`.
 ``` sh
 cmake -S . -B build
 cmake --build build --parallel
@@ -129,36 +129,36 @@ cmake --build build --parallel
 
 ## Loading recipes
 
-`discoverAndLoad(dir)` loads everything in a directory, but `discover()` reads each plugin's sidecar manifest *without* opening any DSO, so a host can be selective. Three common pathways — each a focused runnable host in [examples/](examples/):
+`discoverAndLoad(dir)` loads everything in a directory, but `discover()` reads each plugin's sidecar manifest *without* opening any DSO, so a host can be selective. Each pathway below is a focused runnable host in [examples/](examples/):
 
 **Load one plugin by name** ([examples/host_by_name](examples/host_by_name/main.cpp)):
 ``` C++
 thx::plugin::discover(dir);
-if (auto p = thx::plugin::pluginByName("examples.GreeterPlugin"))
-    thx::plugin::load(p->path);
+if (auto p = thx::plugin::pluginByName("examples.media.ImageDecoder"))
+    thx::plugin::loadWithDependencies(p->path);   // pulls in the IAssetService it requires
 ```
 
-**Load every plugin that provides a service interface** ([examples/host_by_provides](examples/host_by_provides/main.cpp)):
+**Load every plugin that provides a service interface** ([examples/host_logging](examples/host_logging/main.cpp) — choosing a logger):
 ``` C++
 thx::plugin::discover(dir);
-auto providers = thx::plugin::pluginsProviding<ICameraDriver>();   // matches manifests, no dlopen
-auto summary = thx::plugin::loadAll({providers.data(), providers.size()});
+auto loggers = thx::plugin::pluginsProviding<thx::log::ILogService>();  // matches manifests, no dlopen
+thx::plugin::load(loggers.front().path);   // single-owner: one active logger
 ```
 
 **Load a plugin together with its dependencies** ([examples/host_with_deps](examples/host_with_deps/main.cpp)):
 ``` C++
 thx::plugin::discover(dir);
-// The greeter requires ILoggingService; loadWithDependencies resolves a
+// The video decoder requires IAssetService; loadWithDependencies resolves a
 // provider from the discovered set and loads everything in dependency order.
-auto summary = thx::plugin::loadWithDependencies(greeterPath);
+auto summary = thx::plugin::loadWithDependencies(decoderPath);
 ```
 `loadAll` / `loadWithDependencies` topo-sort by each manifest's `requires`/`provides`, skip requirements already satisfied by a registered service, and report `UnresolvedDependency` / `DependencyCycle` per plugin in the returned `LoadSummary`.
 
 Run them with the directory that holds the built plugins:
 ``` sh
-./build/examples/example_host_by_name     ./build/examples
-./build/examples/example_host_by_provides ./build/examples
-./build/examples/example_host_with_deps   ./build/examples
+./build/examples/example_host_by_name   ./build/examples
+./build/examples/example_host_with_deps ./build/examples
+./build/examples/example_host_logging   ./build/plugins/spdlog   # pick a logging backend
 ```
 
 ## API tour
