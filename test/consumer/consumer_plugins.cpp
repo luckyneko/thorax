@@ -1,14 +1,15 @@
 /*
- *  Smoke-test that plugin headers are correctly installed and usable, and
- *  (if argv[1] points at a plugins install dir) that discover() finds the
- *  installed sidecar manifests + their paired DSOs.
+ *  Smoke-test that the installed public headers are usable, and (if argv[1]
+ *  points at a plugins install dir) that discover() finds the installed sidecar
+ *  manifests + their paired DSOs.
  *
- *  Compiled only when THX_LOGGING_INCLUDE and THX_IO_INCLUDE are found.
+ *  Exercises the core logging and io interfaces (installed with the library)
+ *  plus plugin discovery of the in-tree spdlog and http plugins.
  */
 
+#include <thx/io/io.h>
 #include <thx/log/log_service.h>
 #include <thx/plugin/plugin.h>
-#include <thx/plugins/io/io_service.h>
 
 #include <algorithm>
 #include <cstdio>
@@ -17,12 +18,11 @@
 
 int main(int argc, char* argv[])
 {
-	// Verify the service IDs are reachable as constexpr values.
+	// Verify the core logging service id is reachable as a constexpr value, and
+	// that the io facade header is usable (open() is declared).
 	constexpr auto logging_id = thx::log::ILogService::staticId();
-	constexpr auto io_id = thx::plugins::io::IIOService::staticId();
-
 	std::printf("logging service id: %s\n", logging_id.name());
-	std::printf("io service id:      %s\n", io_id.name());
+	std::printf("io facade available: thx::io::open declared\n");
 
 	if (argc < 2)
 		return 0; // header-only smoke; runtime discover is optional.
@@ -44,7 +44,7 @@ int main(int argc, char* argv[])
 					info.version.major, info.version.minor, info.version.patch,
 					info.path.c_str());
 
-	// We expect to find at least the two in-tree plugins (logging + io).
+	// We expect to find at least the two in-tree plugins (spdlog + http).
 	std::vector<std::string> names;
 	names.reserve(found.size());
 	for (auto const& info : found)
@@ -53,10 +53,10 @@ int main(int argc, char* argv[])
 	{
 		return std::find(names.begin(), names.end(), n) != names.end();
 	};
-	if (!has("thx.spdlog.SpdlogService") || !has("thx.plugins.io.IIOService"))
+	if (!has("thx.spdlog.SpdlogService") || !has("thx.http.HttpProtocol"))
 	{
 		std::fprintf(stderr,
-					 "discover did not find both expected plugins (logging + io)\n");
+					 "discover did not find both expected plugins (spdlog + http)\n");
 		return 2;
 	}
 

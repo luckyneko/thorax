@@ -49,6 +49,7 @@ namespace thx
 		// dlclose's them).
 		reg.m_pluginManager.clear();
 		reg.m_serviceManager.clear();
+		reg.m_ioService.clear();
 		reg.m_pluginGarbage.collect();
 		reg.m_debugName.clear();
 	}

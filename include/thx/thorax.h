@@ -9,6 +9,7 @@
 #pragma once
 
 // Cross-cutting primitives
+#include "thx/io/io.h"
 #include "thx/lifecycle.h"
 #include "thx/log/log.h"
 #include "thx/log/log_service.h"

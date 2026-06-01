@@ -46,6 +46,16 @@ namespace thx
 		{
 		}
 
+		// Implicit construction from std::string — a non-owning view of its
+		// buffer, valid only while that string lives (same caveat as the
+		// const char* ctor). Mirrors std::string_view's implicit conversion and
+		// spares callers a .c_str() at every StringView-taking API.
+		StringView(std::string const& str) noexcept // NOLINT(google-explicit-constructor)
+			: m_data(str.c_str())
+			, m_size(str.size())
+		{
+		}
+
 		constexpr const char* data() const noexcept { return m_data; }
 		constexpr std::size_t size() const noexcept { return m_size; }
 		constexpr bool empty() const noexcept { return m_size == 0; }

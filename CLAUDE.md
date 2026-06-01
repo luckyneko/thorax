@@ -59,7 +59,7 @@ The common one-service-per-DSO case is handled by `thx::plugin::ServicePluginShi
 
 ### Registry
 
-`Registry` ([src/registry.h](src/registry.h), private) is the framework's only static singleton. It owns three things by value: `PluginGarbage`, `ServiceManager`, and `PluginManager` — declared in that order so destruction runs `~PluginManager` → `~ServiceManager` → `~PluginGarbage`, which is the only correct order (the manager schedules DSOs into the garbage queue at teardown, so the queue must outlive it). `Registry::instance()` constructs lazily on first call and persists until program exit.
+`Registry` ([src/registry.h](src/registry.h), private) is the framework's only static singleton. It owns four things by value: `PluginGarbage`, `ServiceManager`, `IoService`, and `PluginManager` — declared in that order so destruction runs `~PluginManager` → `~IoService` → `~ServiceManager` → `~PluginGarbage`. `PluginManager` is destroyed first because its teardown calls each plugin's `onUnload`, which may reach back into `ServiceManager` (unregister) and `IoService` (`removeHandler`) — so both must outlive it; `PluginGarbage` is declared first so it outlives everyone (the manager schedules DSOs into the garbage queue at teardown). `Registry::instance()` constructs lazily on first call and persists until program exit.
 
 Because libthorax is a shared library, *all* DSOs in the process (the host plus every loaded plugin) link against the same libthorax instance and resolve `Registry::instance()` to the same singleton. There is no "host registry vs plugin registry" — they're literally the same memory.
 
@@ -251,6 +251,18 @@ thx::log::assertThat(condition, "message");             // logs at Error if fals
 
 `assertThat` never silently swallows its condition — it always emits the diagnostic before deciding whether to abort.
 
+### Streaming I/O
+
+`thx::io` ([include/thx/io/](include/thx/io/)) opens an address in read or write mode and hands back a stream. Emit with `thx::io::open(address, Mode) -> Result<StreamHandle, Error>`; the address is `scheme://rest` (`file:///tmp/x`, `http://host/path`, …) and a bare path with no scheme means a local file. Header split mirrors `thx/log/`: `thx/io/mode.h` (`Mode`, `Whence`), `stream.h` (`IStream` + the move-only `StreamHandle`), `protocol.h` (`IProtocol`), and `io.h` (the `open`/`addHandler`/`removeHandler` facade).
+
+**Dispatch is by scheme.** An `IProtocol` reports the scheme(s) it serves (`schemes()`) and opens streams (`open()`); the dispatcher keys a scheme→handler index and routes to the first match. Handlers are *contributed*, not single-owner: a plugin calls `thx::io::addHandler(std::make_shared<MyProtocol>())` in `onLoad` and `removeHandler` in `onUnload`; the dispatcher holds a `weak_ptr` and evicts it when the plugin drops its `shared_ptr` (same model as the logging backends). A built-in `file://` handler ships in the core, so file streaming works with zero plugins.
+
+**The dispatcher is Registry-owned infrastructure, NOT a registered service.** This is the key difference from logging. `thx::io::IoService` ([src/io/io_service.h](src/io/io_service.h), private) is owned by the `Registry` by value and reached via the `thx::io::*` facade — *not* via `ServiceManager`. Logging's single sink fits single-owner service registration; I/O's many-coexisting-handlers contributor pattern does not. Critically, if the dispatcher were a service that a handler plugin's `onLoad`-time `addHandler` auto-registered, `finalizeLoad`'s before/after service diff would attribute it to the plugin and fail manifest verification (the plugin's `provides` wouldn't list it). Keeping it off `ServiceManager` sidesteps that entirely.
+
+**Streams cross the DSO boundary.** `StreamHandle` is move-only and single-pointer (`sizeof == sizeof(void*)`); its destructor runs `delete` through `IStream`'s virtual destructor, so the concrete `operator delete` executes in the DSO that created the stream (the same mechanism that keeps `ServiceHandle`'s release allocator-safe). `IStream::read`/`write` take `thx::Span`; only ABI-stable types cross. **DSO-lifetime caveat:** a plugin-provided stream's vtable lives in the plugin, so an open `StreamHandle` into (e.g.) the http plugin must be dropped before that plugin is unloaded — the same rule as holding a `ServiceHandle` across `unload`. File streams come from libthorax (always mapped) and are exempt.
+
+The in-tree http plugin ([plugins/http](plugins/http)) is the example handler: an `http://` `IProtocol` over cpp-httplib (vendored via [cmake/addhttplib.cmake](cmake/addhttplib.cmake), header-only, linked PRIVATE + hidden-visibility so nothing reaches its export table). Read-only for now; https/TLS, write, sockets, and `s3://` are deferred handlers the architecture leaves room for.
+
 ### Versioning
 
 [thx::Version](include/thx/version_type.h) is a three-component numeric version (`major.minor.patch`) with `constexpr` comparison. It is intentionally *not* full semver — there are no pre-release or build-metadata fields. The framework may grow them back if a real consumer needs them; for now the simpler shape keeps the type trivially layout-compatible across compilers, which matters because it crosses the DSO boundary by value. `thx::THORAX_VERSION` is generated from the CMake project version into [include/thx/version.h.in](include/thx/version.h.in). `Version::pack()` packs major/minor/patch into a `uint32_t` (8/8/16 bits) for crossing the C plugin ABI; the `Version(uint32_t)` constructor is the inverse. The packed form is a deliberate wire encoding, not a property of `Version`'s in-memory layout. `Version::compatible(required, provided)` is the static method used both by `PluginHandle::open()` to gate `thx_abi_version()` and by `PluginManager` to check each `ServiceRequirement` reported by `IPlugin::required()`.
@@ -269,6 +281,7 @@ include/thx/             public — installed
 ├── version_type.h, version.h.in, result.h
 ├── string_view.h, span.h, to_string.h
 ├── log/log.h, log_level.h, source_location.h, log_record.h, log_service.h  (emit facade + ILogService)
+├── io/io.h, mode.h, stream.h, protocol.h               (open facade, IStream/StreamHandle, IProtocol)
 ├── service/iservice.h, service_id.h, service.h        (Service<>, IService, ServiceID, facades + ServiceFactory/ServiceInfo)
 ├── plugin/iplugin.h, platform.h, manifest.h, plugin.h  (IPlugin, ServicePluginShim<>, ABI macros, manifest types, facades)
 └── rtti/type_name.h
@@ -279,14 +292,14 @@ src/                     private — not installed
 ├── service/service.cpp                                  (thx::service::* facade impls)
 └── plugin/plugin_handle.{h,cpp}, plugin_garbage.{h,cpp}, plugin_manager.{h,cpp}, plugin.cpp, manifest.cpp
 
-plugins/                 in-tree plugins (spdlog, io); each is a SHARED lib using THX_DEFINE_SERVICE_PLUGIN (or THX_DEFINE_PLUGIN for the multi-service / custom-name form)
+plugins/                 in-tree plugins (spdlog logging, http io handler); each is a SHARED lib using THX_DEFINE_SERVICE_PLUGIN (or THX_DEFINE_PLUGIN for the multi-service / custom-name / contributor form)
 plugins/<name>/include/thx/plugins/<name>/<name>_service.h  the shared interface header
 examples/                a "media asset loader" suite: IAssetService + media-core/image/video decoder plugins, driven by four hosts (host, host_by_name, host_with_deps, host_logging) — one per loading pathway; integration tests run each
 test/                    Catch2 unit + integration tests. Each mock plugin lives in its own subdirectory; mock_plugin/CMakeLists.txt also defines a `mock_plugin_headers` INTERFACE library that sibling mocks and the test binary link to share mock_plugin.h
 test/consumer/           standalone CMake project used by the install smoke test
 tools/<name>/            framework tools (currently just thx_emit_manifest)
-cmake/                   ThoraxConfig.cmake.in, addcatch2, addspdlog, thx_warnings, thx_install, thx_plugin_manifest, thx_plugin_auto_manifest
-thirdparty/              vendored Catch2 + spdlog tarballs (downloaded on demand by addcatch2.cmake / addspdlog.cmake)
+cmake/                   ThoraxConfig.cmake.in, addcatch2, addspdlog, addhttplib, thx_warnings, thx_install, thx_plugin_manifest, thx_plugin_auto_manifest
+thirdparty/              vendored Catch2 + spdlog + cpp-httplib tarballs (downloaded on demand by addcatch2 / addspdlog / addhttplib.cmake)
 ```
 
 `abi.cpp` is the anchor file: it defines the out-of-line virtual destructors for `IService` and `IPlugin` so libthorax owns their vtable + typeinfo. Without these key functions the typeinfos would be emitted as weak COMDAT in every consumer and macOS's two-level namespace would leave the addresses distinct across DSOs, breaking `dynamic_cast` from inside the library.

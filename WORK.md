@@ -20,6 +20,12 @@ The original "Log subsystem ABI refactor" shipped: `ILogSink` → a registered `
 
 Still deferred: logging is **single-owner, replaced wholesale** — one `ILogService` at a time, no fan-out, no per-level/per-destination filtering, no scoped push/pop. **Direction:** a fan-out `ILogService` (the registered one multiplexes to N child sinks) or a registry of providers; per-sink min-level filtering; maybe scoped push/pop for tests. **Trigger:** a consumer needs per-component filtering or multiple simultaneous destinations.
 
+### IO subsystem: more handlers + write/seek breadth
+
+The streaming `thx::io` subsystem shipped: a Registry-owned `IoService` dispatches `open(address, Mode)` by URI scheme to contributed `IProtocol` handlers (held weak; `addHandler`/`removeHandler` via the `thx::io::*` facade), with a built-in `file://` handler in the core and a move-only `StreamHandle`. The in-tree http plugin contributes an `http://` handler over cpp-httplib.
+
+Still deferred (add handlers/capabilities when a consumer needs them): **https/TLS** (needs OpenSSL — kept out of the default build), **http write** (PUT/POST — read-only today), **network sockets** (`tcp://`), and **`s3://`/other proprietary** schemes. Also no streaming back-pressure / async; `read`/`write` are synchronous. **Trigger:** a consumer needs one of these schemes or non-blocking I/O.
+
 ### Manifest `tags` array
 
 An explicit `"tags": [...]` array, queryable independently of `provides`, to group plugins that span multiple service interfaces (driver + tuning + capture). `provides` already covers "filter by interface" for free. **Trigger:** a consumer wants to group plugins that don't share a single interface.
