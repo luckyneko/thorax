@@ -108,12 +108,14 @@ TEST_CASE("io - writing a read-only stream fails", "[io]")
 		REQUIRE(w.value()->write(bytesOf("data")) == 4);
 	}
 
-	auto opened = thx::io::open("file://" + path, thx::io::Mode::Read);
-	REQUIRE(opened);
-	auto& s = opened.value();
-	REQUIRE_FALSE(s->canWrite());
-	std::uint8_t b = 'x';
-	REQUIRE(s->write({&b, 1}) < 0);
+	{
+		auto opened = thx::io::open("file://" + path, thx::io::Mode::Read);
+		REQUIRE(opened);
+		auto& s = opened.value();
+		REQUIRE_FALSE(s->canWrite());
+		std::uint8_t b = 'x';
+		REQUIRE(s->write({&b, 1}) < 0);
+	} // stream closes here
 
 	std::filesystem::remove(path);
 }
@@ -128,16 +130,18 @@ TEST_CASE("io - seek and tell on a file stream", "[io]")
 		REQUIRE(w.value()->write(bytesOf("0123456789")) == 10);
 	}
 
-	auto opened = thx::io::open("file://" + path, thx::io::Mode::Read);
-	REQUIRE(opened);
-	auto& s = opened.value();
-	REQUIRE(s->canSeek());
-	REQUIRE(s->seek(5, thx::io::Whence::Begin) == 5);
-	REQUIRE(s->tell() == 5);
+	{
+		auto opened = thx::io::open("file://" + path, thx::io::Mode::Read);
+		REQUIRE(opened);
+		auto& s = opened.value();
+		REQUIRE(s->canSeek());
+		REQUIRE(s->seek(5, thx::io::Whence::Begin) == 5);
+		REQUIRE(s->tell() == 5);
 
-	std::uint8_t buf[4] = {};
-	REQUIRE(s->read({buf, sizeof(buf)}) == 4);
-	REQUIRE(std::memcmp(buf, "5678", 4) == 0);
+		std::uint8_t buf[4] = {};
+		REQUIRE(s->read({buf, sizeof(buf)}) == 4);
+		REQUIRE(std::memcmp(buf, "5678", 4) == 0);
+	} // stream closes here
 
 	std::filesystem::remove(path);
 }

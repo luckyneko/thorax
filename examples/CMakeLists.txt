@@ -22,6 +22,17 @@ function(thx_add_example_plugin name src)
     target_include_directories(${name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     thx_set_warnings(${name})
     target_compile_options(${name} PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fvisibility=hidden>)
+    # On Windows the root CMakeLists co-locates every runtime artifact in bin/,
+    # so the test mock plugins land in the same directory example_host would
+    # otherwise scan with loadAll() — and the intentionally-failing mocks would
+    # break the load. Give the example plugins their own subdirectory so the
+    # host discovers only them, mirroring the per-target isolation Unix gets for
+    # free from its default build layout. thorax.dll is still resolved from the
+    # host exe's directory (bin/) by Windows' default DLL search.
+    if(WIN32)
+        set_target_properties(${name} PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/example_plugins")
+    endif()
     thx_plugin_auto_manifest(${name})
 endfunction()
 

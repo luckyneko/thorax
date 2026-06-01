@@ -31,7 +31,10 @@ namespace
 	using namespace thx::io; // IStream, IProtocol, StreamHandle, Mode, Whence
 
 	// An in-memory, seekable read stream over a fetched HTTP response body.
-	class HttpStream : public IStream
+	// Qualify thx::io::IStream explicitly: on Windows the cpp-httplib include
+	// pulls in the Windows SDK, whose global COM ::IStream would otherwise make
+	// the unqualified name ambiguous against the one from `using namespace thx::io`.
+	class HttpStream : public thx::io::IStream
 	{
 	public:
 		explicit HttpStream(std::string body)

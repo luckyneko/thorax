@@ -619,6 +619,8 @@ TEST_CASE("PluginManager::loadWithDependencies - loads provider before dependent
 	REQUIRE(loader.isLoaded(baseCanon));
 	REQUIRE(loader.isLoaded(multiCanon));
 
+	loader.clear();
+	thx::plugin::collectGarbage();
 	fs::remove_all(tmp);
 }
 
@@ -670,6 +672,8 @@ TEST_CASE("PluginManager::loadWithDependencies - requirement met by a registered
 	REQUIRE(summary.loaded.size() == 1);
 	REQUIRE(summary.loaded[0] == fs::canonical(multiPath).string());
 
+	loader.clear();
+	thx::plugin::collectGarbage();
 	fs::remove_all(tmp);
 }
 
@@ -700,6 +704,8 @@ TEST_CASE("PluginManager::loadAll - topo-sorts a set regardless of input order",
 	auto multiCanon = fs::canonical(multiPath).string();
 	REQUIRE(indexOf(summary.loaded, baseCanon) < indexOf(summary.loaded, multiCanon));
 
+	loader.clear();
+	thx::plugin::collectGarbage();
 	fs::remove_all(tmp);
 }
 
