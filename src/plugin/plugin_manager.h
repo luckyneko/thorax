@@ -202,8 +202,7 @@ namespace thx::plugin
 		// Each entry carries its PluginManifest through every state transition
 		// so callers can query the static declaration regardless of where the
 		// plugin sits in the lifecycle. The manifest is also what
-		// `finalizeLoad` cross-checks against the live IPlugin at load time
-		// (see Phase 5 Commit 3).
+		// `finalizeLoad` cross-checks against the live IPlugin at load time.
 
 		// Loaded entry: owns the DSO + IPlugin plus the service IDs it
 		// registered.

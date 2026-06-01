@@ -1,4 +1,4 @@
-﻿/*
+/*
  *  Created by LuckyNeko on 25/04/2026.
  *  Copyright 2026 LuckyNeko
  *

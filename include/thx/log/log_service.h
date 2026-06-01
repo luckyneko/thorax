@@ -38,6 +38,13 @@ namespace thx::log
 		// Consume one diagnostic record. See LogRecord for the message-lifetime
 		// contract. Only ABI-stable types cross this boundary (LogLevel,
 		// SourceLocation's C strings, StringView), so a plugin may implement it.
+		//
+		// THREAD SAFETY: implementations MUST be thread-safe. thx::log::write()
+		// resolves the service per call and may be invoked concurrently from any
+		// thread — including from inside ServiceManager / PluginManager while they
+		// hold their own locks — so write() must not assume serialised calls and
+		// must not call back into the logging facade. (The in-tree spdlog service
+		// uses spdlog's `_mt` sinks, which are internally synchronised.)
 		virtual void write(LogRecord const& record) = 0;
 	};
 

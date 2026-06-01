@@ -29,9 +29,9 @@ namespace thx
 		NotLoaded,
 		VersionMismatch,
 		RegistrationFailed,
-		InUse,			   // operation rejected because the target is still in active use
-		MalformedManifest, // sidecar JSON could not be parsed or has wrong shape
-		ManifestMismatch,  // manifest's declared name/version/requires/provides disagrees with the live IPlugin
+		InUse,				  // operation rejected because the target is still in active use
+		MalformedManifest,	  // sidecar JSON could not be parsed or has wrong shape
+		ManifestMismatch,	  // manifest's declared name/version/requires/provides disagrees with the live IPlugin
 		UnresolvedDependency, // a plugin requires a service that no known plugin provides and which is not already registered
 		DependencyCycle,	  // the requires/provides graph among the plugins being resolved contains a cycle
 	};
@@ -140,13 +140,13 @@ namespace thx
 		E& error()
 		{
 			thx::log::assertThat(m_error.has_value(),
-							"Result<void, E>::error() called on an ok Result");
+								 "Result<void, E>::error() called on an ok Result");
 			return *m_error;
 		}
 		E const& error() const
 		{
 			thx::log::assertThat(m_error.has_value(),
-							"Result<void, E>::error() called on an ok Result");
+								 "Result<void, E>::error() called on an ok Result");
 			return *m_error;
 		}
 

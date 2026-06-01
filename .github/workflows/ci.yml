@@ -153,3 +153,21 @@ jobs:
           export LD_LIBRARY_PATH="$GITHUB_WORKSPACE/_install/lib"
           ./build-consumer/consumer
           ./build-consumer/consumer_plugins "$GITHUB_WORKSPACE/_install/lib/thorax/plugins"
+
+  # Style gate. The repo is formatted with a pinned clang-format; this fails the
+  # build on any drift. Pinned because clang-format's output varies by major
+  # version — bump the version here and reformat the tree in the same commit.
+  format:
+    name: "clang-format"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang-format
+        run: pipx install clang-format==22.1.5
+
+      - name: Check formatting
+        run: >
+          find src include plugins tools examples test
+          -type f \( -name '*.h' -o -name '*.cpp' -o -name '*.inl' \)
+          -print0 | xargs -0 clang-format --dry-run -Werror
