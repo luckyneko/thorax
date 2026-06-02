@@ -79,3 +79,23 @@ if(THORAX_BUILD_PLUGINS AND TARGET plugin_log_spdlog)
         COMMAND example_host_logging "$<TARGET_FILE_DIR:plugin_log_spdlog>"
     )
 endif()
+
+# host_io demonstrates the io subsystem: discover the io plugins, load the
+# file:// handler with its IIoService provider dependency, then round-trip a
+# file through thx::io::open. io is not core, so this is only built when the io
+# plugins are available, and it needs the io interface headers the provider owns.
+if(THORAX_BUILD_PLUGINS AND TARGET plugin_io_service)
+    add_executable(example_host_io host_io/main.cpp)
+    target_link_libraries(example_host_io PRIVATE ${PROJECT_NAME})
+    target_include_directories(example_host_io PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_SOURCE_DIR}/plugins/io/service/include)
+    thx_set_warnings(example_host_io)
+    add_dependencies(example_host_io plugin_io_service plugin_io_file)
+    add_test(
+        NAME examples.host_io
+        COMMAND example_host_io
+                "$<TARGET_FILE_DIR:plugin_io_service>"
+                "$<TARGET_FILE_DIR:plugin_io_file>"
+    )
+endif()
