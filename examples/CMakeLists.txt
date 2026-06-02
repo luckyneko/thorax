@@ -86,10 +86,9 @@ endif()
 # plugins are available, and it needs the io interface headers the provider owns.
 if(THORAX_BUILD_PLUGINS AND TARGET plugin_io_service)
     add_executable(example_host_io host_io/main.cpp)
-    target_link_libraries(example_host_io PRIVATE ${PROJECT_NAME})
-    target_include_directories(example_host_io PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
-        ${CMAKE_SOURCE_DIR}/plugins/io/service/include)
+    # io_interface brings the io headers + the libthorax link.
+    target_link_libraries(example_host_io PRIVATE io_interface)
+    target_include_directories(example_host_io PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     thx_set_warnings(example_host_io)
     add_dependencies(example_host_io plugin_io_service plugin_io_file)
     add_test(

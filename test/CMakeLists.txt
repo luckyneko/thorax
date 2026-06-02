@@ -79,13 +79,10 @@ if(THORAX_BUILD_PLUGINS)
         test_http_plugin.cpp
     )
     # io is not part of core: its tests load the io provider + handler plugins
-    # and include the io interface headers the provider owns (under
-    # plugins/io/service/include). The http test also needs httplib to run a
-    # loopback server (header-only; the target comes from the http plugin's
-    # addhttplib include).
-    target_include_directories(test-${PROJECT_NAME} PRIVATE
-        ${CMAKE_SOURCE_DIR}/plugins/io/service/include)
-    target_link_libraries(test-${PROJECT_NAME} httplib::httplib)
+    # and include the io interface headers via the io_interface INTERFACE
+    # library. The http test also needs httplib to run a loopback server
+    # (header-only; the target comes from the http plugin's addhttplib include).
+    target_link_libraries(test-${PROJECT_NAME} io_interface httplib::httplib)
     target_compile_definitions(test-${PROJECT_NAME} PRIVATE
         THX_SPDLOG_PLUGIN_PATH="$<TARGET_FILE:plugin_log_spdlog>"
         THX_IO_SERVICE_PLUGIN_PATH="$<TARGET_FILE:plugin_io_service>"

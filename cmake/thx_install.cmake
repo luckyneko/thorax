@@ -37,11 +37,12 @@ if(THORAX_BUILD_PLUGINS)
         RUNTIME DESTINATION ${CMAKE_INSTALL_LIBDIR}/thorax/plugins
     )
     # The spdlog plugin implements the core thx::log::ILogService (installed with
-    # the library). The io subsystem is NOT core: the io provider plugin owns the
-    # public io interface headers (IIoService / IProtocol / IStream / the facade)
-    # under plugins/io/service/include — install them alongside the library's
-    # headers so consumers still include <thx/io/io.h>.
-    install(DIRECTORY ${CMAKE_SOURCE_DIR}/plugins/io/service/include/thx/
+    # the library). The io subsystem is NOT core: the io_interface library owns
+    # the public io interface headers (IIoService / IProtocol / IStream / the
+    # error domain / the facade) under plugins/io/interface/include — install
+    # them alongside the library's headers so consumers still include
+    # <thx/io/io.h>.
+    install(DIRECTORY ${CMAKE_SOURCE_DIR}/plugins/io/interface/include/thx/
             DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/thx
             FILES_MATCHING
                 PATTERN "*.h"

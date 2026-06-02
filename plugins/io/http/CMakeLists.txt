@@ -6,12 +6,12 @@ include(addhttplib)
 add_library(plugin_io_http SHARED
     src/http_plugin.cpp
 )
-# httplib is header-only and linked PRIVATE; compiled into this plugin's TU
-# (already -fvisibility=hidden), so it never reaches the export table.
-target_link_libraries(plugin_io_http PRIVATE ${PROJECT_NAME} httplib::httplib)
-target_include_directories(plugin_io_http PRIVATE ${THX_IO_INCLUDE_DIR})
+# io_interface brings the io headers and the libthorax link. httplib is
+# header-only and linked PRIVATE; compiled into this plugin's TU (already
+# -fvisibility=hidden), so it never reaches the export table.
+target_link_libraries(plugin_io_http PRIVATE io_interface httplib::httplib)
 # No public header: the plugin implements the io IProtocol interface and
-# requires the IIoService provider (both from plugins/io/service/include).
+# requires the IIoService provider (resolved at runtime via getService).
 thx_set_warnings(plugin_io_http)
 target_compile_options(plugin_io_http PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fvisibility=hidden>)
 thx_plugin_auto_manifest(plugin_io_http
