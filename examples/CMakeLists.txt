@@ -68,14 +68,14 @@ endforeach()
 
 # host_logging demonstrates selecting a logging backend at runtime. It loads the
 # in-tree spdlog plugin, so it is only built when the plugins are available.
-if(THORAX_BUILD_PLUGINS AND TARGET plugin_spdlog)
+if(THORAX_BUILD_PLUGINS AND TARGET plugin_log_spdlog)
     add_executable(example_host_logging host_logging/main.cpp)
     target_link_libraries(example_host_logging PRIVATE ${PROJECT_NAME})
     target_include_directories(example_host_logging PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     thx_set_warnings(example_host_logging)
-    add_dependencies(example_host_logging plugin_spdlog)
+    add_dependencies(example_host_logging plugin_log_spdlog)
     add_test(
         NAME examples.host_logging
-        COMMAND example_host_logging "$<TARGET_FILE_DIR:plugin_spdlog>"
+        COMMAND example_host_logging "$<TARGET_FILE_DIR:plugin_log_spdlog>"
     )
 endif()

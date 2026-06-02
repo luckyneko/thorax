@@ -83,10 +83,10 @@ if(THORAX_BUILD_PLUGINS)
     # plugin's addhttplib include).
     target_link_libraries(test-${PROJECT_NAME} httplib::httplib)
     target_compile_definitions(test-${PROJECT_NAME} PRIVATE
-        THX_SPDLOG_PLUGIN_PATH="$<TARGET_FILE:plugin_spdlog>"
-        THX_HTTP_PLUGIN_PATH="$<TARGET_FILE:plugin_http>"
+        THX_SPDLOG_PLUGIN_PATH="$<TARGET_FILE:plugin_log_spdlog>"
+        THX_HTTP_PLUGIN_PATH="$<TARGET_FILE:plugin_io_http>"
     )
-    add_dependencies(test-${PROJECT_NAME} plugin_spdlog plugin_http)
+    add_dependencies(test-${PROJECT_NAME} plugin_log_spdlog plugin_io_http)
 endif()
 
 catch_discover_tests(test-${PROJECT_NAME} TEST_PREFIX "(${PROJECT_NAME}) ")

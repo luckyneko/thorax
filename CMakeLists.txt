@@ -197,7 +197,7 @@ endif()
 add_subdirectory(tools)
 
 # Plugins — added before examples so the example host_logging target can
-# reference the in-tree plugin_spdlog target (it loads it at runtime to
+# reference the in-tree plugin_log_spdlog target (it loads it at runtime to
 # demonstrate selecting a logging backend).
 if(THORAX_BUILD_PLUGINS)
     add_subdirectory(plugins)
