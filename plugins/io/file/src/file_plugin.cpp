@@ -101,7 +101,7 @@ namespace
 			return {kSchemes, 1};
 		}
 
-		Result<StreamHandle, Error> open(StringView address, Mode mode) override
+		Result<StreamHandle, thx::io::Error> open(StringView address, Mode mode) override
 		{
 			// Strip a leading "file://" if present; otherwise treat the whole
 			// address as a local path.
@@ -135,10 +135,10 @@ namespace
 
 			std::fstream file(path, flags);
 			if (!file.is_open())
-				return Result<StreamHandle, Error>::err(
-					{ErrorCode::OpenFailed, "file: cannot open '" + path + "'"});
+				return Result<StreamHandle, thx::io::Error>::err(
+					{thx::io::ErrorCode::OpenFailed, "file: cannot open '" + path + "'"});
 
-			return Result<StreamHandle, Error>::ok(
+			return Result<StreamHandle, thx::io::Error>::ok(
 				StreamHandle(new FileStream(std::move(file), canRead, canWrite)));
 		}
 	};

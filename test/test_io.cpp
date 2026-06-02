@@ -106,7 +106,7 @@ TEST_CASE("io - unknown scheme yields NoHandler", "[io]")
 	loadFileIo();
 	auto opened = thx::io::open("ftp://example.com/x", thx::io::Mode::Read);
 	REQUIRE_FALSE(opened);
-	REQUIRE(opened.error().code == thx::ErrorCode::NoHandler);
+	REQUIRE(opened.error().code == thx::io::ErrorCode::NoHandler);
 }
 
 TEST_CASE("io - open with no provider loaded yields NoHandler", "[io]")
@@ -114,7 +114,7 @@ TEST_CASE("io - open with no provider loaded yields NoHandler", "[io]")
 	// No plugin loaded: the facade can't resolve an IIoService.
 	auto opened = thx::io::open("file:///tmp/whatever", thx::io::Mode::Read);
 	REQUIRE_FALSE(opened);
-	REQUIRE(opened.error().code == thx::ErrorCode::NoHandler);
+	REQUIRE(opened.error().code == thx::io::ErrorCode::NoHandler);
 }
 
 TEST_CASE("io - opening a missing file fails", "[io]")
@@ -123,7 +123,7 @@ TEST_CASE("io - opening a missing file fails", "[io]")
 	auto opened = thx::io::open("file://" + tmpPath("thx_io_does_not_exist.bin"),
 								thx::io::Mode::Read);
 	REQUIRE_FALSE(opened);
-	REQUIRE(opened.error().code == thx::ErrorCode::OpenFailed);
+	REQUIRE(opened.error().code == thx::io::ErrorCode::OpenFailed);
 }
 
 TEST_CASE("io - writing a read-only stream fails", "[io]")

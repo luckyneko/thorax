@@ -52,7 +52,7 @@ namespace
 	class IoServiceImpl : public thx::io::IIoService
 	{
 	public:
-		Result<StreamHandle, Error> open(StringView address, Mode mode) override
+		Result<StreamHandle, thx::io::Error> open(StringView address, Mode mode) override
 		{
 			std::string scheme = schemeOf(address);
 
@@ -69,8 +69,8 @@ namespace
 			}
 
 			if (!handler)
-				return Result<StreamHandle, Error>::err(
-					{ErrorCode::NoHandler, "no I/O handler registered for scheme '" + scheme + "'"});
+				return Result<StreamHandle, thx::io::Error>::err(
+					{thx::io::ErrorCode::NoHandler, "no I/O handler registered for scheme '" + scheme + "'"});
 
 			// Dispatch without the lock held so a handler may call back in.
 			return handler->open(address, mode);

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "thx/io/io_error.h"
 #include "thx/io/mode.h"
 #include "thx/io/stream.h"
 #include "thx/result.h"

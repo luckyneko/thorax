@@ -80,5 +80,5 @@ TEST_CASE("HttpPlugin - write mode is unsupported", "[http_plugin]")
 	REQUIRE(thx::plugin::load(THX_HTTP_PLUGIN_PATH));
 	auto opened = thx::io::open("http://127.0.0.1:1/x", thx::io::Mode::Write);
 	REQUIRE_FALSE(opened);
-	REQUIRE(opened.error().code == thx::ErrorCode::Unsupported);
+	REQUIRE(opened.error().code == thx::io::ErrorCode::Unsupported);
 }

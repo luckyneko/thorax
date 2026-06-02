@@ -34,9 +34,6 @@ namespace thx
 		ManifestMismatch,	  // manifest's declared name/version/requires/provides disagrees with the live IPlugin
 		UnresolvedDependency, // a plugin requires a service that no known plugin provides and which is not already registered
 		DependencyCycle,	  // the requires/provides graph among the plugins being resolved contains a cycle
-		NoHandler,			  // thx::io: no protocol handler is registered for the address's scheme
-		Unsupported,		  // operation not supported (e.g. writing a read-only stream, or an unsupported open mode)
-		IoError,			  // thx::io: a read/write/seek operation failed
 	};
 
 	// Lightweight error descriptor returned (not thrown) by fallible operations.

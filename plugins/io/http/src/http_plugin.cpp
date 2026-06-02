@@ -88,18 +88,18 @@ namespace
 			return {kSchemes, 1};
 		}
 
-		Result<StreamHandle, Error> open(thx::StringView address, Mode mode) override
+		Result<StreamHandle, thx::io::Error> open(thx::StringView address, Mode mode) override
 		{
 			if (mode != Mode::Read)
-				return Result<StreamHandle, Error>::err(
-					{thx::ErrorCode::Unsupported, "http: only Read mode is supported"});
+				return Result<StreamHandle, thx::io::Error>::err(
+					{thx::io::ErrorCode::Unsupported, "http: only Read mode is supported"});
 
 			// Split "http://host[:port]/path".
 			std::string url(address.data(), address.size());
 			const std::string prefix = "http://";
 			if (url.compare(0, prefix.size(), prefix) != 0)
-				return Result<StreamHandle, Error>::err(
-					{thx::ErrorCode::NoHandler, "http: address is not http://"});
+				return Result<StreamHandle, thx::io::Error>::err(
+					{thx::io::ErrorCode::NoHandler, "http: address is not http://"});
 			std::string rest = url.substr(prefix.size());
 
 			auto slash = rest.find('/');
@@ -118,14 +118,14 @@ namespace
 			client.set_keep_alive(false);
 			auto res = client.Get(path.c_str());
 			if (!res)
-				return Result<StreamHandle, Error>::err(
-					{thx::ErrorCode::IoError, "http: GET failed for '" + url + "'"});
+				return Result<StreamHandle, thx::io::Error>::err(
+					{thx::io::ErrorCode::IoError, "http: GET failed for '" + url + "'"});
 			if (res->status != 200)
-				return Result<StreamHandle, Error>::err(
-					{thx::ErrorCode::IoError, "http: GET '" + url + "' returned status " + std::to_string(res->status)});
+				return Result<StreamHandle, thx::io::Error>::err(
+					{thx::io::ErrorCode::IoError, "http: GET '" + url + "' returned status " + std::to_string(res->status)});
 
 			thx::log::info("http: fetched '" + url + "' (" + std::to_string(res->body.size()) + " bytes)");
-			return Result<StreamHandle, Error>::ok(StreamHandle(new HttpStream(std::move(res->body))));
+			return Result<StreamHandle, thx::io::Error>::ok(StreamHandle(new HttpStream(std::move(res->body))));
 		}
 	};
 
