@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Thorax is a C++17 cross-platform plugin framework. The core is a shared library (`libthorax.dylib` / `libthorax.so` / `thorax.dll`) plus optional in-tree plugins. Plugins are shared libraries (`.dylib`/`.so`/`.dll`) loaded at runtime through the internal `PluginManager` (reached via the `thx::plugin::*` facade functions) and registered with the internal `ServiceManager` (reached via `thx::service::*` facades). The library is built with hidden visibility; only `THX_API`-decorated symbols cross the boundary. Both managers live behind the public-header facades — neither class appears on the public API surface.
+Thorax is a C++17 cross-platform plugin framework. The core is a shared library (`libthorax.dylib` / `.so` / `thorax.dll`) plus optional in-tree plugins. Plugins are shared libraries loaded at runtime through the internal `PluginManager` and registered with the internal `ServiceManager`; both managers are private, reached only through the `thx::plugin::*` / `thx::service::*` public-header facades — neither appears on the public API surface. The library is built with hidden visibility; only `THX_API`-decorated symbols cross the boundary.
 
 This file is the authoritative description of current architecture, contracts, and conventions. For *why* a piece is shaped the way it is, check git log on the corresponding source file. Outstanding work and deferred features live in [WORK.md](WORK.md).
 
@@ -68,7 +68,7 @@ The `Registry` class itself is private (in `src/`); consumers never see it. Publ
 Lifecycle hooks (free functions in `thx::`, declared in [include/thx/lifecycle.h](include/thx/lifecycle.h)):
 
 - `thx::initialise(debugName)` — records an optional human-readable name. Returns `true` if this call set the name, `false` if a previous `initialise()` already did. Calling `initialise()` is *not* required.
-- `thx::shutdown()` — tears the framework's owned state down to empty: unloads every loaded plugin (`PluginManager::clear()` → each `IPlugin::onUnload`), unregisters every remaining service (`ServiceManager::clear()` → each `IService::onDestroy`), drains the deferred-close queue, and clears the debug name — in that order (unload schedules DSOs into the queue, so the drain must come last, mirroring the `~PluginManager` → `~ServiceManager` → `~PluginGarbage` destruction order). Does **not** destroy the Registry — only the empty singleton shell persists until program exit. Idempotent; safe to call multiple times. Callers MUST release any `ServiceHandle<IService>` references into plugin DSOs before invoking it, because `shutdown()` `dlclose`s those DSOs and a later release of a dangling handle runs the service destructor in unmapped code. `PluginManager::clear()` / `ServiceManager::clear()` are the reusable teardown primitives — `clear()` is the body of `~PluginManager`, exposed so `shutdown()` can reset the Registry-owned manager in place.
+- `thx::shutdown()` — tears the framework's owned state down to empty: unloads every loaded plugin (`PluginManager::clear()` → each `IPlugin::onUnload`), unregisters every remaining service (`ServiceManager::clear()` → each `IService::onDestroy`), drains the deferred-close queue, and clears the debug name — in that order (unload schedules DSOs into the queue, so the drain comes last, mirroring the destruction order above). Does **not** destroy the Registry — only the empty singleton shell persists until program exit. Idempotent. Callers MUST release any `ServiceHandle<IService>` references into plugin DSOs before invoking it, because `shutdown()` `dlclose`s those DSOs and a later release of a dangling handle runs the service destructor in unmapped code. `clear()` is the body of `~PluginManager` / `~ServiceManager`, exposed as a reusable teardown primitive so `shutdown()` can reset the Registry-owned managers in place.
 
 ### Free-function facades
 
@@ -80,8 +80,6 @@ Two "system-level" headers — `thx/<layer>/<layer>.h` — are the only way for 
 Plugin code calls the facade from inside `IPlugin::onLoad` / `onUnload`. The facade's `detail::*Impl` functions dispatch unconditionally to `Registry::instance().serviceManager()`, so a plugin's registrations land in the Registry's ServiceManager — which is exactly the `m_sm` that the loading `PluginManager` was constructed with (a `PluginManager` must be built with the Registry's ServiceManager; see its class contract in [src/plugin/plugin_manager.h](src/plugin/plugin_manager.h)). `finalizeLoad` then attributes the freshly-registered services to the plugin by diffing that same `m_sm`.
 
 **`#include` policy.** Service authors writing an interface type `IFooService : thx::service::Service<IFooService>` should `#include "thx/service/iservice.h"` — the CRTP base `Service<>` is paired with `IService` there. Host code calling the facade functions includes `thx/service/service.h` and `thx/plugin/plugin.h`. The umbrella `thx/thorax.h` brings in everything public.
-
-Outside the load/unload window the override is null and the facade dispatches through Registry. Plugin code that calls the facade *after* `onLoad` returns (e.g. from a service method) will register against the global Registry, not whatever `PluginManager` loaded the plugin. This is rarely what you want and is mostly relevant for tests.
 
 ### ServiceManager
 
@@ -124,7 +122,7 @@ DSO loading is layered: [thx::Library](src/library.h) is the generic RAII wrappe
 
 [thx::plugin::PluginManager](src/plugin/plugin_manager.h) tracks every plugin it knows about by canonical path across three lifecycle states:
 
-- **Discovered** — filesystem entry has been seen (and, when Phase 5 manifests land, its sidecar parsed). No DSO interaction yet.
+- **Discovered** — sidecar manifest seen and parsed; the DSO has not been touched.
 - **Opened** — DSO mapped, `IPlugin` instantiated, ready for load. `onLoad` has NOT been called.
 - **Loaded** — `onLoad` succeeded, services registered.
 
@@ -132,7 +130,7 @@ All state lives inside the manager — there are no move-only handle types cross
 
 **State mutators** (each returns `Result<void, Error>`):
 
-- `discover(dir)` populates `Discovered` entries from a filesystem scan of `LIBRARY_EXTENSION` files. Idempotent: re-scanning leaves existing `Opened`/`Loaded` entries untouched and silently skips already-known `Discovered` paths. Returns `FileNotFound` if the directory can't be iterated.
+- `discover(dir)` populates `Discovered` entries by scanning `*.thx.json` sidecars and pairing each with its DSO (see *Sidecar manifests* below). Idempotent: re-scanning leaves existing `Opened`/`Loaded` entries untouched and silently skips already-known `Discovered` paths. Returns `FileNotFound` if the directory can't be iterated.
 - `open(path)` transitions to `Opened`: opens the DSO, ABI-checks it, instantiates the `IPlugin`. Allowed source states: `(nothing)` (opens directly), `Discovered`, `Opened` (no-op), `Loaded` (no-op — Loaded supersedes Opened). Drains the deferred-close queue as a side effect.
 - `load(path)` transitions to `Loaded`: checks `required()`, calls `onLoad`, registers services. Implicitly opens if the entry isn't already `Opened`. No-op when already `Loaded`.
 - `close(path)` transitions `Opened` → `Discovered`. The IPlugin is destroyed and the DSO queued for deferred close. No-op on any other state.
@@ -170,7 +168,7 @@ The class lives separately from `PluginManager` because the queue has to outlive
 
 `PluginManager::~PluginManager` calls `onUnload` for every still-loaded plugin and clears its entries, but does **not** drain `PluginGarbage`. The framework can't auto-drain: it has no way to know whether outstanding `ServiceHandle`s into those DSOs remain, and calling `dlclose` while a handle is still alive segfaults on the handle's eventual release (the service's destructor lives in unmapped code). Drain explicitly when no service references into those DSOs remain.
 
-**Test-pattern note.** [test/test_plugin_manager.cpp](test/test_plugin_manager.cpp) white-box unit-tests the `PluginManager` class by constructing local instances (needed for the destructor / lifetime / threading cases). Each is bound to the Registry's ServiceManager (`auto& sm = thx::registry().serviceManager()`), so loads register into the production ServiceManager and the `ActiveServiceManagerScope` redirect is no longer needed. Per-case isolation comes from the reset listener ([test/test_reset_listener.cpp](test/test_reset_listener.cpp)), which calls `thx::shutdown()` after every case to unload plugins, unregister services, and drain `PluginGarbage`. The `[lifetime]` cases that hold a `ServiceHandle` across `unload` still drop it before draining within the case. Plugin-behaviour and facade tests ([test/test_facades.cpp](test/test_facades.cpp), the io/logging plugin tests) drive the `thx::plugin::*` / `thx::service::*` facades against the singleton directly.
+**Test-pattern note.** [test/test_plugin_manager.cpp](test/test_plugin_manager.cpp) white-box unit-tests the `PluginManager` class by constructing local instances (needed for the destructor / lifetime / threading cases). Each is bound to the Registry's ServiceManager (`auto& sm = thx::registry().serviceManager()`), so loads register into the production ServiceManager. Per-case isolation comes from the reset listener ([test/test_reset_listener.cpp](test/test_reset_listener.cpp)), which calls `thx::shutdown()` after every case to unload plugins, unregister services, and drain `PluginGarbage`. The `[lifetime]` cases that hold a `ServiceHandle` across `unload` still drop it before draining within the case. Plugin-behaviour and facade tests ([test/test_facades.cpp](test/test_facades.cpp), the io/logging plugin tests) drive the `thx::plugin::*` / `thx::service::*` facades against the singleton directly.
 
 ### Sidecar manifests
 
@@ -269,7 +267,7 @@ The in-tree http plugin ([plugins/http](plugins/http)) is the example handler: a
 
 ## Layout & conventions
 
-**Public vs private headers.** The library is built with hidden visibility; only decorated symbols cross the `libthorax` boundary. Public headers live under `include/thx/` and are installed; private headers live in `src/` and are not. The in-tree test binary reaches private headers via `target_include_directories(... PRIVATE ${CMAKE_SOURCE_DIR}/src)`; the `thx_emit_manifest` tool is a regular external consumer of the public API.
+**Public vs private headers.** Public headers live under `include/thx/` and are installed; private headers live in `src/` and are not. The in-tree test binary reaches private headers via `target_include_directories(... PRIVATE ${CMAKE_SOURCE_DIR}/src)`; the `thx_emit_manifest` tool is a regular external consumer of the public API.
 
 **Two export macros.**
 - `THX_API` (in [include/thx/thx_api.h](include/thx/thx_api.h)) — part of the stable wire ABI. Always emits a visibility attribute.
