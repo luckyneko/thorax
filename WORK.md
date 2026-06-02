@@ -20,36 +20,11 @@ The original "Log subsystem ABI refactor" shipped: `ILogSink` → a registered `
 
 Still deferred: logging is **single-owner, replaced wholesale** — one `ILogService` at a time, no fan-out, no per-level/per-destination filtering, no scoped push/pop. **Direction:** a fan-out `ILogService` (the registered one multiplexes to N child sinks) or a registry of providers; per-sink min-level filtering; maybe scoped push/pop for tests. **Trigger:** a consumer needs per-component filtering or multiple simultaneous destinations.
 
-### IO subsystem: extract from core (design-approved, not yet implemented)
+### IO subsystem: more handlers + write/seek breadth
 
-**Decision (2026-06-02):** `io` does not belong in libthorax core. The framework never opens a stream for its own operation — confirmed: nothing under `src/` consumes `thx::io` (only the `Registry` wiring and `shutdown()`'s `clear()` touch it, plus two shared `ErrorCode`s and some illustrative comment/test strings). Per the single-criterion scope rule (CLAUDE.md "Scope & inclusion criteria"), `io` is consumer-tier: it should be a set of plugins built on the **public** API, where it becomes the flagship contributor-pattern showcase instead of privileged core code.
+`io` was extracted from libthorax core (2026-06-02) and now ships entirely as plugins under `plugins/io/`: the `IIoService` provider (`plugin_io_service`, the scheme dispatcher, a registered single-owner service), plus `file://` (`plugin_io_file`) and `http://` (`plugin_io_http`) handler plugins that `require` the provider and contribute via `getService<IIoService>()` + `addHandler`. The facade (`thx::io::open` / `addHandler` / `removeHandler`) is header-only over `getService<IIoService>()`. See CLAUDE.md "Streaming I/O" for the shipped shape.
 
-**Target shape.** The dispatcher needs one process-wide instance reachable from handler plugin DSOs; thorax's only such mechanism is `ServiceManager`, so the dispatcher becomes a **registered single-owner service** `IIoService : thx::service::Service<IIoService>` — *explicitly provided*, not auto-provisioned. That removes the original reason `io` was kept off `ServiceManager`: with an explicit provider, the `finalizeLoad` before/after service diff is clean (the provider's manifest `provides: ["thx.io.IIoService"]` matches; handler plugins register nothing, they `getService<IIoService>()` + `addHandler`).
-
-Three sub-decisions are settled (2026-06-02): **file is its own plugin** (not bundled), **plugins-only** (no static front-end), and **io gets its own error domain**.
-
-- **io provider plugin** — registers `IIoService`; manifest name e.g. `thx.io.IoService`, `provides: ["thx.io.IIoService"]`. Ships no built-in handler.
-- **file handler** — its own `io/file/` plugin: a `file://` `IProtocol`, `requires` the `IIoService` provider, contributes via `getService<IIoService>()` + `addHandler` in `onLoad`. Not bundled into the provider — the provider is a pure dispatcher.
-- **http handler** — the existing cpp-httplib plugin, likewise `requires: [{id: "thx.io.IIoService", …}]` and contributing via `getService` + `addHandler`. Dependency ordering loads the provider first / unloads it last — using thorax's own mechanism instead of the hardcoded `Registry` member order.
-- **facade is header-only, no libthorax export.** `thx::io::open` / `addHandler` / `removeHandler` become inline free functions in `thx/io/io.h` over `getService<IIoService>()` (today's `src/io/io.cpp` is already a trivial forwarder, so nothing is lost). Plugins-only confirmed viable: a host gets file/http I/O purely by loading the plugins (`discoverAndLoad` resolves provider→handlers in dependency order); with no provider loaded, `open()` returns an io-domain "no service" error. The contributor handshake passes `shared_ptr<IProtocol>` across the DSO boundary (provider holds `weak_ptr`) — same shape as today's `addHandler` and the same model logging backends use; no new ABI risk, just relocated from libthorax to the provider plugin.
-- **interface headers** (`io.h`, `mode.h`, `stream.h`, `protocol.h`, plus an `io_service.h` exposing the `IIoService` interface) move out of core `include/` into the io provider's `include/thx/io/…`; consumers keep `#include <thx/io/io.h>` unchanged.
-- **own error domain.** Define `thx::io::Error` / `thx::io::ErrorCode` in the io headers; io APIs return `Result<StreamHandle, thx::io::Error>` (`Result<T, E = Error>` is already generic — no core change). Remove `NoHandler` and `IoError` from core `result.h`; review whether `Unsupported` (whose only documented uses are io stream cases — read-only write, bad open mode) is io-only and should move too. Keeps core's `ErrorCode` to framework-machinery codes only.
-
-**Core deletions this enables:** `src/io/`, `include/thx/io/`, the `m_ioService` `Registry` member + its destruction-order comments in `registry.h`, the `IoService::clear()` call in `shutdown()`, the `THX_API thx::io::*` exports, the io-specific `ErrorCode`s, and the whole "NOT a registered service, here's why" exemption.
-
-**Layout under the new taxonomy** (CLAUDE.md "Plugin & subsystem taxonomy"): nested source folders, flat qualified artifact names. This extraction also renames the two existing flat plugins:
-
-```
-plugins/
-  log/spdlog/      target plugin_log_spdlog   (was plugins/spdlog → plugin_spdlog)
-  io/service/      target plugin_io_service   (IIoService provider; pure dispatcher, no built-in handler)
-  io/file/         target plugin_io_file      (file:// handler; requires plugin_io_service)
-  io/http/         target plugin_io_http      (was plugins/http → plugin_http; requires plugin_io_service)
-```
-
-Tests to migrate: `test/test_io.cpp` (currently exercises the in-core built-in file handler) and `test/test_http_plugin.cpp` move to driving the provider+handler plugins via the public facade.
-
-**Still deferred regardless of where io lives** (add when a consumer needs them): **https/TLS** (needs OpenSSL — out of the default build), **http write** (PUT/POST — read-only today), **network sockets** (`tcp://`), **`s3://`/other proprietary** schemes, and **async / back-pressure** (`read`/`write` are synchronous).
+Still deferred (add handlers/capabilities when a consumer needs them): **https/TLS** (needs OpenSSL — out of the default build), **http write** (PUT/POST — read-only today), **network sockets** (`tcp://`), **`s3://`/other proprietary** schemes, and **async / back-pressure** (`read`/`write` are synchronous). **Trigger:** a consumer needs one of these schemes or non-blocking I/O.
 
 ### Manifest `tags` array
 

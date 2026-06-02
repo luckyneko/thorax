@@ -14,7 +14,7 @@
 
 // The media-asset example domain. One service, IAssetService, decodes an asset
 // by dispatching to registered IAssetDecoder *contributors* — the provider /
-// contribution pattern (the core thx::io subsystem uses the same shape: an
+// contribution pattern (the thx::io subsystem uses the same shape: an
 // IProtocol per scheme). A "core" plugin registers IAssetService; decoder plugins do not
 // register a service of their own — they look the service up and call
 // addDecoder(), so each format handler is a separate, independently-loadable

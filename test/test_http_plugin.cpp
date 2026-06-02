@@ -20,11 +20,15 @@
 #ifndef THX_HTTP_PLUGIN_PATH
 #	error "THX_HTTP_PLUGIN_PATH not defined — set via target_compile_definitions in CMakeLists.txt"
 #endif
+#ifndef THX_IO_SERVICE_PLUGIN_PATH
+#	error "THX_IO_SERVICE_PLUGIN_PATH not defined — set via target_compile_definitions"
+#endif
 
-// The http plugin contributes an http:// IProtocol to the core thx::io service.
-// We run a cpp-httplib server on a loopback port (fully in-process, no external
-// network), load the plugin, and read the served payload back through
-// thx::io::open. The per-case reset listener unloads the plugin afterwards; the
+// The http plugin contributes an http:// IProtocol to the IIoService dispatcher,
+// so the io provider must be loaded first (the http plugin requires it). We run
+// a cpp-httplib server on a loopback port (fully in-process, no external
+// network), load both plugins, and read the served payload back through
+// thx::io::open. The per-case reset listener unloads the plugins afterwards; the
 // StreamHandle is dropped before that so no stream dtor runs in an unmapped DSO.
 
 TEST_CASE("HttpPlugin - reads an http:// resource through thx::io", "[http_plugin]")
@@ -42,6 +46,7 @@ TEST_CASE("HttpPlugin - reads an http:// resource through thx::io", "[http_plugi
 	while (!server.is_running())
 		std::this_thread::yield();
 
+	REQUIRE(thx::plugin::load(THX_IO_SERVICE_PLUGIN_PATH));
 	REQUIRE(thx::plugin::load(THX_HTTP_PLUGIN_PATH));
 
 	{
@@ -71,6 +76,7 @@ TEST_CASE("HttpPlugin - reads an http:// resource through thx::io", "[http_plugi
 
 TEST_CASE("HttpPlugin - write mode is unsupported", "[http_plugin]")
 {
+	REQUIRE(thx::plugin::load(THX_IO_SERVICE_PLUGIN_PATH));
 	REQUIRE(thx::plugin::load(THX_HTTP_PLUGIN_PATH));
 	auto opened = thx::io::open("http://127.0.0.1:1/x", thx::io::Mode::Write);
 	REQUIRE_FALSE(opened);

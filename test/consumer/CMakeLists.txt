@@ -6,8 +6,9 @@ find_package(Thorax REQUIRED)
 add_executable(consumer main.cpp)
 target_link_libraries(consumer PRIVATE Thorax::thorax)
 
-# The in-tree plugins (spdlog, http) ship no public headers — they implement the
-# core thx::log::ILogService / thx::io::IProtocol interfaces, which are installed
-# with the library. So this consumer needs only core headers and always builds.
+# The in-tree plugins ship no public headers — they implement the core
+# thx::log::ILogService interface (installed with the library) or the thx::io
+# interfaces (installed by the io provider plugin to the same thx/io/ include
+# path). So this consumer needs only installed headers and always builds.
 add_executable(consumer_plugins consumer_plugins.cpp)
 target_link_libraries(consumer_plugins PRIVATE Thorax::thorax)

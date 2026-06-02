@@ -21,10 +21,9 @@ namespace thx::io
 	// (thx::Span, primitives), so a plugin may implement it.
 	//
 	// LIFETIME / DSO caveat: a stream's vtable + destructor live in whatever DSO
-	// created it. For a plugin-provided stream (e.g. http), the owning
-	// StreamHandle must be dropped before that plugin is unloaded — the same
-	// rule as holding a ServiceHandle across unload. File streams come from
-	// libthorax (always mapped) and are exempt.
+	// created it. Every stream comes from a handler plugin (file, http, …), so
+	// the owning StreamHandle must be dropped before that plugin is unloaded —
+	// the same rule as holding a ServiceHandle across unload.
 	//
 	// As a pure interface with an inline virtual destructor it needs no abi.cpp
 	// anchor: StreamHandle owns it by IStream* and never dynamic_casts.

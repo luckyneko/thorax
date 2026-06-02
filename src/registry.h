@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "io/io_service.h"
 #include "plugin/plugin_garbage.h"
 #include "plugin/plugin_manager.h"
 #include "service/service_manager.h"
@@ -23,10 +22,9 @@ namespace thx
 	// Registry owns:
 	//   - the PluginGarbage queue (deferred-dlclose queue for plugin DSOs);
 	//   - the ServiceManager (process-wide service registry);
-	//   - the IoService (streaming-I/O dispatcher + built-in file handler);
 	//   - the PluginManager (loaded plugins, indexed by canonical path).
 	//
-	// All three members are accessible by reference and have stable addresses
+	// All members are accessible by reference and have stable addresses
 	// across the lifetime of the singleton — callers may take and hold
 	// references freely. The class is intentionally non-copyable / non-movable.
 	//
@@ -49,7 +47,6 @@ namespace thx
 		thx::service::ServiceManager& serviceManager() noexcept { return m_serviceManager; }
 		thx::plugin::PluginManager& pluginManager() noexcept { return m_pluginManager; }
 		thx::plugin::PluginGarbage& pluginGarbage() noexcept { return m_pluginGarbage; }
-		thx::io::IoService& ioService() noexcept { return m_ioService; }
 
 		// Optional human-readable name set via thx::initialise(). Used for
 		// diagnostics; has no effect on framework behaviour. Empty until
@@ -73,12 +70,8 @@ namespace thx
 		//   - m_serviceManager must be initialised before m_pluginManager
 		//     because m_pluginManager's constructor takes m_serviceManager by
 		//     reference.
-		//   - m_ioService must be initialised before m_pluginManager so it
-		//     outlives it: a plugin's onUnload may call thx::io::removeHandler
-		//     (reaching m_ioService) as the PluginManager tears down.
 		thx::plugin::PluginGarbage m_pluginGarbage;
 		thx::service::ServiceManager m_serviceManager;
-		thx::io::IoService m_ioService;
 		thx::plugin::PluginManager m_pluginManager;
 		std::string m_debugName;
 	};

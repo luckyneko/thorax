@@ -28,7 +28,6 @@ add_executable(test-${PROJECT_NAME}
     test_emit_manifest.cpp
     test_plugin_manager.cpp
     test_diagnostics.cpp
-    test_io.cpp
     test_iplugin.cpp
     test_registry.cpp
     test_facades.cpp
@@ -76,17 +75,25 @@ add_dependencies(test-${PROJECT_NAME}
 if(THORAX_BUILD_PLUGINS)
     target_sources(test-${PROJECT_NAME} PRIVATE
         test_spdlog_plugin.cpp
+        test_io.cpp
         test_http_plugin.cpp
     )
-    # Neither in-tree plugin ships a public header. The http test needs httplib
-    # to run a loopback server (header-only; the target comes from the http
-    # plugin's addhttplib include).
+    # io is not part of core: its tests load the io provider + handler plugins
+    # and include the io interface headers the provider owns (under
+    # plugins/io/service/include). The http test also needs httplib to run a
+    # loopback server (header-only; the target comes from the http plugin's
+    # addhttplib include).
+    target_include_directories(test-${PROJECT_NAME} PRIVATE
+        ${CMAKE_SOURCE_DIR}/plugins/io/service/include)
     target_link_libraries(test-${PROJECT_NAME} httplib::httplib)
     target_compile_definitions(test-${PROJECT_NAME} PRIVATE
         THX_SPDLOG_PLUGIN_PATH="$<TARGET_FILE:plugin_log_spdlog>"
+        THX_IO_SERVICE_PLUGIN_PATH="$<TARGET_FILE:plugin_io_service>"
+        THX_IO_FILE_PLUGIN_PATH="$<TARGET_FILE:plugin_io_file>"
         THX_HTTP_PLUGIN_PATH="$<TARGET_FILE:plugin_io_http>"
     )
-    add_dependencies(test-${PROJECT_NAME} plugin_log_spdlog plugin_io_http)
+    add_dependencies(test-${PROJECT_NAME}
+        plugin_log_spdlog plugin_io_service plugin_io_file plugin_io_http)
 endif()
 
 catch_discover_tests(test-${PROJECT_NAME} TEST_PREFIX "(${PROJECT_NAME}) ")

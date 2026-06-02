@@ -7,15 +7,18 @@
  */
 
 // An http:// handler for the thx::io subsystem, built on cpp-httplib. It
-// contributes an IProtocol to the core IIOService (registering no service of
-// its own — the contributor pattern, like the media decoders), so once loaded
+// requires the io provider (IIoService) and contributes an http:// IProtocol to
+// it via addHandler() — registering no service of its own (the contributor
+// pattern, like the media decoders) — so once both are loaded
 // thx::io::open("http://…", Read) routes here. Read-only for now; write (PUT/
 // POST) and https (TLS) are deferred.
 
 #include <thx/io/io.h>
+#include <thx/io/io_service.h>
 #include <thx/io/protocol.h>
 #include <thx/io/stream.h>
 #include <thx/log/log.h>
+#include <thx/plugin/iplugin.h>
 #include <thx/plugin/platform.h>
 
 #include <httplib.h>
@@ -131,6 +134,13 @@ namespace
 	public:
 		thx::StringView name() const override { return "thx.http.HttpProtocol"; }
 		thx::Version version() const override { return thx::Version{1, 0, 0}; }
+
+		thx::Span<const thx::plugin::ServiceRequirement> required() const override
+		{
+			static const thx::plugin::ServiceRequirement kReqs[] = {
+				{thx::io::IIoService::staticId(), thx::io::IIoService::staticVersion()}};
+			return {kReqs, 1};
+		}
 
 		bool onLoad() override
 		{

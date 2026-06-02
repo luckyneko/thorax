@@ -9,18 +9,34 @@
 #include <catch2/catch_all.hpp>
 #include <thx/io/io.h>
 #include <thx/io/stream.h>
+#include <thx/plugin/plugin.h>
 
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
 #include <string>
 
-// Core thx::io tests — exercise the built-in file:// handler that ships in the
-// core, with no plugin loaded. The per-case reset listener (thx::shutdown())
-// unregisters the auto-provisioned IIOService between cases.
+// io tests — io is not part of core, so these load the io provider plugin
+// (IIoService) plus the file:// handler plugin, then exercise file streaming
+// through the thx::io facade. The per-case reset listener (thx::shutdown())
+// unloads both plugins and unregisters the IIoService between cases.
+
+#ifndef THX_IO_SERVICE_PLUGIN_PATH
+#	error "THX_IO_SERVICE_PLUGIN_PATH not defined — set via target_compile_definitions"
+#endif
+#ifndef THX_IO_FILE_PLUGIN_PATH
+#	error "THX_IO_FILE_PLUGIN_PATH not defined — set via target_compile_definitions"
+#endif
 
 namespace
 {
+	// Load the IIoService provider then the file:// handler (which requires it).
+	void loadFileIo()
+	{
+		REQUIRE(thx::plugin::load(THX_IO_SERVICE_PLUGIN_PATH));
+		REQUIRE(thx::plugin::load(THX_IO_FILE_PLUGIN_PATH));
+	}
+
 	std::string tmpPath(const char* name)
 	{
 		return (std::filesystem::temp_directory_path() / name).string();
@@ -34,6 +50,7 @@ namespace
 
 TEST_CASE("io - file:// write then read round-trip", "[io]")
 {
+	loadFileIo();
 	auto path = tmpPath("thx_io_rt.bin");
 	std::filesystem::remove(path);
 	const std::string addr = "file://" + path;
@@ -64,6 +81,7 @@ TEST_CASE("io - file:// write then read round-trip", "[io]")
 
 TEST_CASE("io - a bare path defaults to the file handler", "[io]")
 {
+	loadFileIo();
 	auto path = tmpPath("thx_io_bare.bin");
 	std::filesystem::remove(path);
 
@@ -85,13 +103,23 @@ TEST_CASE("io - a bare path defaults to the file handler", "[io]")
 
 TEST_CASE("io - unknown scheme yields NoHandler", "[io]")
 {
+	loadFileIo();
 	auto opened = thx::io::open("ftp://example.com/x", thx::io::Mode::Read);
+	REQUIRE_FALSE(opened);
+	REQUIRE(opened.error().code == thx::ErrorCode::NoHandler);
+}
+
+TEST_CASE("io - open with no provider loaded yields NoHandler", "[io]")
+{
+	// No plugin loaded: the facade can't resolve an IIoService.
+	auto opened = thx::io::open("file:///tmp/whatever", thx::io::Mode::Read);
 	REQUIRE_FALSE(opened);
 	REQUIRE(opened.error().code == thx::ErrorCode::NoHandler);
 }
 
 TEST_CASE("io - opening a missing file fails", "[io]")
 {
+	loadFileIo();
 	auto opened = thx::io::open("file://" + tmpPath("thx_io_does_not_exist.bin"),
 								thx::io::Mode::Read);
 	REQUIRE_FALSE(opened);
@@ -100,6 +128,7 @@ TEST_CASE("io - opening a missing file fails", "[io]")
 
 TEST_CASE("io - writing a read-only stream fails", "[io]")
 {
+	loadFileIo();
 	auto path = tmpPath("thx_io_ro.bin");
 	std::filesystem::remove(path);
 	{
@@ -122,6 +151,7 @@ TEST_CASE("io - writing a read-only stream fails", "[io]")
 
 TEST_CASE("io - seek and tell on a file stream", "[io]")
 {
+	loadFileIo();
 	auto path = tmpPath("thx_io_seek.bin");
 	std::filesystem::remove(path);
 	{
