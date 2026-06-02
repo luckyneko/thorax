@@ -51,6 +51,9 @@ else ()
 			target_include_directories(spdlog SYSTEM INTERFACE ${_spdlog_inc})
 		endif()
 
+		# spdlog is linked into a shared plugin DSO â it must be PIC.
+		set_target_properties(spdlog PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 		# Compile spdlog (and its bundled fmt) with hidden visibility so its
 		# symbols — including weak template instantiations — are NOT re-exported
 		# by the consuming plugin DSO. The plugin's three thx_* entry points are
