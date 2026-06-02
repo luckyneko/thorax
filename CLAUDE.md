@@ -10,6 +10,30 @@ Thorax is a C++17 cross-platform plugin framework. The core is a shared library 
 
 This file is the authoritative description of current architecture, contracts, and conventions. For *why* a piece is shaped the way it is, check git log on the corresponding source file. Outstanding work and deferred features live in [WORK.md](WORK.md).
 
+## Scope & inclusion criteria
+
+Thorax is a plugin framework, not a general foundation/runtime library. To keep that identity sharp — and libthorax's ABI surface small and permanent — the rule for **libthorax core** is single and strict:
+
+> A subsystem belongs in core only if the framework needs it for its own operation.
+
+A *demonstration* of how to use the framework does not qualify, however canonical — its whole value is exercising the public API, which it does better as an in-tree plugin / example / module than as privileged core code (core gives it `Registry` access, `ServiceManager` exemptions, and lifecycle hooks no real consumer can use, making it a *worse* example). Everything that isn't framework-self-machinery is a **plugin** (loaded at runtime), a **sibling module**, or an **example**, built on thorax like any other consumer. When in doubt, the default is "not core."
+
+Applying the test:
+
+- **`log`** — in. The framework logs its own state changes (`ServiceManager` / `PluginManager` diagnostics), so it needs the emit facade + the `ILogService` interface + a small stderr fallback in core. The concrete backend (spdlog) is a plugin.
+- **`io`** — out (consumer-tier). The framework never opens a stream for its own purposes — confirmed: nothing under `src/` consumes `thx::io`. Its value is as the canonical *contributor-pattern* showcase (a single-owner dispatcher service + many `weak_ptr` handlers), which is precisely a thing to build *on* thorax. It currently still lives in core for historical reasons; extraction to an `IIoService` provider plugin + handler plugins is tracked in [WORK.md](WORK.md).
+- **memory management, threading, …** — out, same tier as `io`. Neither is framework-self-machinery. The framework already meets both concerns as **ABI discipline rather than exposed subsystems**: the "allocate / free on the same side" rule + the intrusive refcount (keeping `shared_ptr`'s control block off the boundary) for memory; the managers' internal `shared_mutex` / `recursive_mutex` for threading. If you want public interfaces for them, build them as plugins / modules on thorax — uniform with `io`, never in core.
+
+### Plugin & subsystem taxonomy
+
+A consumer-tier subsystem is named so that its **folder path, build-target/DSO name, and manifest identity stay parallel**, and so that providers of the *same* subsystem group together (today `log`→spdlog; tomorrow `io`→service/file/http, `memory`→…). Three namespaces, each with a job:
+
+- **Source folder — nested by subsystem:** `plugins/<subsystem>/<component>/` (e.g. `plugins/log/spdlog/`, `plugins/io/service/`, `plugins/io/http/`). Nesting captures the "these belong to one subsystem" relationship that a flat dir loses, and scales (`plugins/io/s3/` later).
+- **Build target & DSO filename — flat but fully qualified:** `plugin_<subsystem>_<component>` (e.g. `plugin_log_spdlog`, `plugin_io_http`). DSOs flatten into one install/runtime dir, so the *filename* must carry the full qualifier — folder structure can't disambiguate once installed. Qualifying also avoids collisions (two subsystems could each ship a `file` or `memory` component).
+- **Public interface include path — by subsystem, stable across the move:** consumers keep including `<thx/io/io.h>` even though the headers live in the io provider's tree (`plugins/io/service/include/thx/io/…`) rather than core's `include/`. Vendor-specific plugin headers (where a plugin ships its own interface) still follow the existing `thx/plugins/<name>/…` convention; a first-class subsystem interface like `io` keeps its `thx/<subsystem>/` path.
+
+So the user-floated options resolve to **both, each where it fits**: nested folders (`io/http`) for organisation, flat qualified names (`plugin_io_http`) for artifacts. The current flat `plugins/spdlog`→`plugin_spdlog` / `plugins/http`→`plugin_http` layout is the pre-taxonomy state and is renamed under this scheme as part of the `io` extraction.
+
 ## Build & test
 
 In-source builds are forbidden by `CMakeLists.txt` — always build into a separate `build/` dir.
