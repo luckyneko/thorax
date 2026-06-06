@@ -85,6 +85,8 @@ add_library(${PROJECT_NAME} SHARED
     # Public headers — service/
     include/thx/service/iservice.h
     include/thx/service/service.h
+    include/thx/service/service_factory.h
+    include/thx/service/service_handle.h
     include/thx/service/service_id.h
 
     # Public headers — plugin/

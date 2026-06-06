@@ -10,7 +10,7 @@
 #include "registry.h"
 #include "service/service_manager.h"
 
-namespace thx::service::detail
+namespace thx::service
 {
 
 	// All facade operations target the one process-wide ServiceManager owned by the
@@ -18,17 +18,17 @@ namespace thx::service::detail
 	// these same facades; it is constructed with the Registry's ServiceManager, so
 	// its m_sm is this same instance.)
 
-	bool registerServiceImpl(ServiceID id, Version version, ServiceFactory factory)
+	bool registerService(ServiceID id, Version version, ServiceFactory factory)
 	{
 		return thx::Registry::instance().serviceManager().registerService(std::move(id), version, std::move(factory));
 	}
 
-	bool unregisterServiceImpl(ServiceID id)
+	bool unregisterService(ServiceID id)
 	{
 		return thx::Registry::instance().serviceManager().unregisterService(std::move(id));
 	}
 
-	IService* acquireServiceImpl(ServiceID id)
+	IService* acquireService(ServiceID id)
 	{
 		// getService<IService> returns a ServiceHandle<IService> whose ctor already
 		// incremented the refcount. detach() hands the raw pointer out without
@@ -36,9 +36,9 @@ namespace thx::service::detail
 		return thx::Registry::instance().serviceManager().getService<IService>(std::move(id)).detach();
 	}
 
-	std::vector<ServiceInfo> listServicesImpl()
+	std::vector<ServiceInfo> listServices()
 	{
 		return thx::Registry::instance().serviceManager().listServices();
 	}
 
-} // namespace thx::service::detail
+} // namespace thx::service

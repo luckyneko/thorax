@@ -35,7 +35,7 @@ namespace
 	};
 } // namespace
 
-TEST_CASE("thx::service:: facades round-trip register / get / unregister",
+TEST_CASE("thx::service facades - round-trip register / get / unregister",
 		  "[facade][service]")
 {
 	using namespace thx::service;
@@ -53,7 +53,7 @@ TEST_CASE("thx::service:: facades round-trip register / get / unregister",
 	REQUIRE(getService<FacadeProbe>() == nullptr);
 }
 
-TEST_CASE("thx::service::listServices reflects the Registry-owned manager",
+TEST_CASE("thx::service::listServices - reflects the Registry-owned manager",
 		  "[facade][service]")
 {
 	// Register a single service via the facade and confirm it appears in
@@ -75,7 +75,7 @@ TEST_CASE("thx::service::listServices reflects the Registry-owned manager",
 	REQUIRE(thx::service::unregisterService<FacadeProbe>());
 }
 
-TEST_CASE("thx::plugin:: facades cover the load lifecycle",
+TEST_CASE("thx::plugin facades - cover the load lifecycle",
 		  "[facade][plugin][integration]")
 {
 	// Sanity: nothing loaded.
@@ -113,7 +113,7 @@ TEST_CASE("thx::plugin:: facades cover the load lifecycle",
 	thx::plugin::collectGarbage();
 }
 
-TEST_CASE("thx::plugin::open then load work through the facade",
+TEST_CASE("thx::plugin::open / load - work through the facade",
 		  "[facade][plugin][integration]")
 {
 	REQUIRE(thx::plugin::open(THX_MOCK_PLUGIN_PATH));
@@ -126,7 +126,7 @@ TEST_CASE("thx::plugin::open then load work through the facade",
 	thx::plugin::collectGarbage();
 }
 
-TEST_CASE("thx::plugin::checkRequirements operates on the Registry's ServiceManager",
+TEST_CASE("thx::plugin::checkRequirements - operates on the Registry's ServiceManager",
 		  "[facade][plugin]")
 {
 	thx::plugin::ServiceRequirement reqs[] = {
@@ -148,7 +148,7 @@ TEST_CASE("thx::plugin::checkRequirements operates on the Registry's ServiceMana
 	thx::plugin::collectGarbage();
 }
 
-TEST_CASE("thx::plugin:: name / provides queries and loadWithDependencies via facade",
+TEST_CASE("thx::plugin facades - name / provides queries and loadWithDependencies",
 		  "[facade][plugin][integration]")
 {
 	namespace fs = std::filesystem;
