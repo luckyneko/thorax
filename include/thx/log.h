@@ -89,19 +89,4 @@ namespace thx
 							std::string const& message,
 							rtti::SourceLocation location = rtti::SourceLocation::current());
 
-	// Logs message at Error level if condition is false.
-	// Debug builds also call std::abort(); Release builds only log.
-	// The condition is always evaluated — never silently swallowed.
-	inline void assertThat(bool condition,
-						   std::string const& message,
-						   rtti::SourceLocation location = rtti::SourceLocation::current())
-	{
-		if (condition)
-			return;
-		logMessage(LogLevel::Error, message, location);
-#if !defined(NDEBUG)
-		std::abort();
-#endif
-	}
-
 } // namespace thx

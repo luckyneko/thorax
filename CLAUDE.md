@@ -252,7 +252,7 @@ The manifest is built from the C++ code by construction — the `ManifestMismatc
 
 Failures return `thx::Result<T, thx::Error>` ([include/thx/result.h](include/thx/result.h)) — no exceptions in library code. `thx::Result<void, Error>` is the void specialisation. `Result<T>` exposes `valueOr(fallback)` and `map(f)`; `discoverAndLoad` is the one operation that breaks the pattern (it returns a `LoadSummary` so callers can react to partial failure). `Result<T, E>` is generic over the error type, and core's `thx::ErrorCode` is confined to framework-machinery codes — a consumer-tier subsystem brings its own error domain (e.g. `thx::io::Error` / `thx::io::ErrorCode` in [plugins/io/interface/include/thx/io/io_error.h](plugins/io/interface/include/thx/io/io_error.h), returned as `Result<StreamHandle, thx::io::Error>`).
 
-Core's logging is deliberately small, and everything in it lives flat in the `thx::` namespace — the `thx::log` name is left to the consumer-tier subsystem (below), so core's emit function is `thx::logMessage`, not `thx::log`. The header [include/thx/log.h](include/thx/log.h) is: `thx::logMessage(level, msg)`, `thx::assertThat`, and the ABI-stable `thx::LogLevel` / `thx::LogRecord` (the latter carries a `thx::rtti::SourceLocation` from [thx/rtti/source_location.h](include/thx/rtti/source_location.h)). There are **no level shortcuts** (`debug`/`info`/`warn`/`error`) in core — callers spell out `thx::logMessage(thx::LogLevel::Warn, msg)`. (`thx/log.h` is pulled into nearly every TU transitively, via `result.h` / `version_type.h` which call `thx::assertThat`; that ubiquity is exactly why `thx::log` cannot be a core function and stay free as the subsystem namespace.) Core needs to log its own state changes (`ServiceManager` / `PluginManager` diagnostics), and nothing more — there is **no formatting layer, no per-level filtering, no fan-out** in core. The richer, service-based logging is **not core**; it is a consumer-tier subsystem under [plugins/log/](plugins/log/), structured exactly like `io` (see "Streaming I/O" and "Scope & inclusion criteria").
+Core's logging is deliberately small, and everything in it lives flat in the `thx::` namespace — the `thx::log` name is left to the consumer-tier subsystem (below), so core's emit function is `thx::logMessage`, not `thx::log`. The header [include/thx/log.h](include/thx/log.h) is: `thx::logMessage(level, msg)` and the ABI-stable `thx::LogLevel` / `thx::LogRecord` (the latter carries a `thx::rtti::SourceLocation` from [thx/rtti/source_location.h](include/thx/rtti/source_location.h)). There are **no level shortcuts** (`debug`/`info`/`warn`/`error`) in core — callers spell out `thx::logMessage(thx::LogLevel::Warn, msg)`. (Core's emit function is `logMessage`, not `log`, so the `thx::log` name stays free for the consumer-tier subsystem's namespace — the two never collide.) Core needs to log its own state changes (`ServiceManager` / `PluginManager` diagnostics), and nothing more — there is **no formatting layer, no per-level filtering, no fan-out** in core. The richer, service-based logging is **not core**; it is a consumer-tier subsystem under [plugins/log/](plugins/log/), structured exactly like `io` (see "Streaming I/O" and "Scope & inclusion criteria").
 
 **Core sink — a C function pointer.** `thx::logMessage` forwards every record to a single process-wide sink: `using LogSink = void (*)(LogRecord const&, void* userdata)`, installed via `thx::setSink(sink, userdata)`, with a built-in `stderr` writer as the fallback when none is installed. It is a plain function pointer plus `void*` (not a `std::function`, not a registered service) precisely because it crosses the libthorax DSO boundary — it must have a stable layout and allocate nothing. Only ABI-stable types appear in `LogRecord` (`LogLevel`, `SourceLocation`'s C strings, `StringView`), so a plugin compiled against a different STL can implement it. The slot is mutex-guarded: `setSink` never races an in-flight `logMessage()`, so a plugin clearing the sink in `onUnload` is guaranteed no call is mid-flight into its about-to-be-unmapped code. `LogRecord::message` is a `thx::StringView` valid only for the duration of the sink call; a sink that retains it must copy it out. A sink **MUST NOT** call back into the logging facade — the mutex is not recursive (re-entry deadlocks).
 
@@ -270,16 +270,13 @@ So to route framework logging through spdlog a host loads `plugin_log_service` +
 There are no `THX_LOG` / `THX_ASSERT` macros. Source location is captured automatically via `__builtin_FILE`/`__builtin_LINE`/`__builtin_FUNCTION` defaults on GCC, Clang, and MSVC ≥ VS 2019 16.6 (`_MSC_VER 1926`). Call sites use the free functions directly:
 
 ```cpp
-// core (<thx/log.h>) — the emit function + assert, flat in thx::
+// core (<thx/log.h>) — the emit function, flat in thx::
 thx::logMessage(thx::LogLevel::Warn, "message");   // level + message; routes through the sink/bridge
-thx::assertThat(condition, "message");             // logs at Error if false; std::abort() in Debug builds only
 
 // consumer-tier facade (<thx/log/log.h>) — the thx::log subsystem, mirrors thx::io
 thx::log::write(thx::log::LogLevel::Warn, "message");
 thx::log::warn("message");                          // debug/info/warn/error shortcuts
 ```
-
-`assertThat` never silently swallows its condition — it always emits the diagnostic before deciding whether to abort.
 
 ### Streaming I/O
 
@@ -314,7 +311,7 @@ include/thx/             public — installed
 ├── thorax.h, thx_api.h, lifecycle.h
 ├── version_type.h, version.h.in, result.h
 ├── string_view.h, span.h, to_string.h
-├── log.h                                              (core emit: logMessage()/assertThat + LogLevel/LogRecord + the LogSink slot, all flat in thx::; the thx::log namespace/ILogService/facade are NOT here — see plugins/log)
+├── log.h                                              (core emit: logMessage() + LogLevel/LogRecord + the LogSink slot, all flat in thx::; the thx::log namespace/ILogService/facade are NOT here — see plugins/log)
 ├── service/iservice.h, service_id.h, service.h        (Service<>, IService, ServiceID, facades + ServiceFactory/ServiceInfo)
 ├── plugin/iplugin.h, platform.h, manifest.h, plugin.h  (IPlugin, ServicePluginShim<>, ABI macros, manifest types, facades)
 └── rtti/type_name.h, source_location.h                (TypeName; thx::rtti::SourceLocation — used by LogRecord)
@@ -345,7 +342,7 @@ Style is enforced by [.clang-format](.clang-format): Allman braces, **tabs for i
 
 **Naming policy.** Settled during the Phase 2 / style refactor; new code must conform:
 
-- **Methods / free functions:** camelCase. (`registerService`, `discoverAndLoad`, `collectGarbage`, `assertThat`, `toString`, ...)
+- **Methods / free functions:** camelCase. (`registerService`, `discoverAndLoad`, `collectGarbage`, `logMessage`, `toString`, ...)
 - **Private member variables:** `m_` prefix + camelCase tail. (`m_handle`, `m_plugin`, `m_createFn`, `m_sm`, ...)
 - **Public struct fields:** camelCase, no `m_` prefix. (`PluginInfo::pluginName`, `LoadedEntry::serviceIds`, ...)
 - **Type names:** PascalCase. (`PluginManager`, `OpenedEntry`, ...)

@@ -132,39 +132,6 @@ TEST_CASE("log - setSink(nullptr) restores the fallback", "[log]")
 }
 
 // ---------------------------------------------------------------------------
-// assertThat
-// ---------------------------------------------------------------------------
-
-TEST_CASE("assertThat - true condition does not log", "[assert]")
-{
-	SinkGuard g;
-	thx::assertThat(true, "should not appear");
-	REQUIRE(g.cap.records.empty());
-}
-
-#if defined(NDEBUG)
-TEST_CASE("assertThat - false condition logs Error in release build", "[assert]")
-{
-	SinkGuard g;
-	thx::assertThat(false, "intentional failure");
-
-	REQUIRE(g.cap.records.size() == 1);
-	REQUIRE(g.cap.records[0].level == thx::LogLevel::Error);
-	REQUIRE(g.cap.records[0].message == "intentional failure");
-}
-
-TEST_CASE("assertThat - captures source location on failure", "[assert]")
-{
-	SinkGuard g;
-	int expected_line = __LINE__ + 1;
-	thx::assertThat(false, "location check");
-
-	REQUIRE(!g.cap.records.empty());
-	REQUIRE(g.cap.records[0].location.line == expected_line);
-}
-#endif
-
-// ---------------------------------------------------------------------------
 // ServiceManager diagnostics flow through the installed sink — and doing so
 // does NOT deadlock. ServiceManager emits its duplicate-registration / null-
 // factory diagnostics *after* releasing its registry lock, precisely so a sink

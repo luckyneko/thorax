@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include "thx/log.h"
-
 #include <cstdint>
 
 namespace thx
@@ -59,8 +57,6 @@ namespace thx
 		// constexpr was theoretical anyway.
 		uint32_t pack() const noexcept
 		{
-			thx::assertThat(major <= 0xFFu && minor <= 0xFFu && patch <= 0xFFFFu,
-								 "Version::pack: component out of wire-encoding range (major/minor: 8 bits, patch: 16)");
 			return ((major & 0xFFu) << 24) | ((minor & 0xFFu) << 16) | (patch & 0xFFFFu);
 		}
 
