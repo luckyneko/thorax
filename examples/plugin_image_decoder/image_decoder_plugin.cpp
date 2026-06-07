@@ -18,7 +18,7 @@
 
 #include "interfaces/asset_service.h"
 
-#include <thx/log/log.h>
+#include <thx/log.h>
 #include <thx/plugin/platform.h>
 #include <thx/service/service.h>
 
@@ -62,7 +62,7 @@ namespace
 				out.height = 600;
 			}
 			out.durationMs = 0;
-			thx::log::info(std::string("ImageDecoder: decoded '") + path + "'");
+			thx::logMessage(thx::LogLevel::Info, std::string("ImageDecoder: decoded '") + path + "'");
 			return true;
 		}
 	};
@@ -79,12 +79,12 @@ namespace
 			if (!media)
 			{
 				// required() guarantees this is present; guard defensively anyway.
-				thx::log::error("ImageDecoder: IAssetService not available at load");
+				thx::logMessage(thx::LogLevel::Error, "ImageDecoder: IAssetService not available at load");
 				return false;
 			}
 			m_decoder = std::make_shared<ImageDecoder>();
 			media->addDecoder(m_decoder);
-			thx::log::info("ImageDecoder: registered (.png/.jpg/.jpeg)");
+			thx::logMessage(thx::LogLevel::Info, "ImageDecoder: registered (.png/.jpg/.jpeg)");
 			return true;
 		}
 

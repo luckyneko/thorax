@@ -17,7 +17,7 @@
 #include <thx/io/io_service.h>
 #include <thx/io/protocol.h>
 #include <thx/io/stream.h>
-#include <thx/log/log.h>
+#include <thx/log.h>
 #include <thx/plugin/iplugin.h>
 #include <thx/plugin/platform.h>
 
@@ -124,7 +124,7 @@ namespace
 				return Result<StreamHandle, thx::io::Error>::err(
 					{thx::io::ErrorCode::IoError, "http: GET '" + url + "' returned status " + std::to_string(res->status)});
 
-			thx::log::info("http: fetched '" + url + "' (" + std::to_string(res->body.size()) + " bytes)");
+			thx::logMessage(thx::LogLevel::Info, "http: fetched '" + url + "' (" + std::to_string(res->body.size()) + " bytes)");
 			return Result<StreamHandle, thx::io::Error>::ok(StreamHandle(new HttpStream(std::move(res->body))));
 		}
 	};

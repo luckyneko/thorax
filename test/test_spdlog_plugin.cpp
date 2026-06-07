@@ -7,7 +7,6 @@
  */
 
 #include <catch2/catch_all.hpp>
-#include <thx/log/log.h>
 #include <thx/log/log_service.h>
 #include <thx/plugin/plugin.h>
 #include <thx/service/service.h>
@@ -19,21 +18,22 @@
 #	error "THX_SPDLOG_PLUGIN_PATH not defined — set via target_compile_definitions in CMakeLists.txt"
 #endif
 
-// The spdlog plugin registers an spdlog-backed thx::log::ILogService under the
-// stable interface id, while carrying its own selection identity in its plugin
-// manifest ("thx.spdlog.SpdlogService"). Once loaded, thx::log::* forwards every
-// diagnostic to it; unloaded, logging falls back to the built-in stderr writer.
-// The test-wide reset listener unloads the plugin (and unregisters the service)
-// after each case.
+// The spdlog plugin is a *backend*: it registers an spdlog-backed
+// thx::log::ILogService (the interface now lives in log_interface, not core)
+// under the stable interface id, carrying its own selection identity in its
+// plugin manifest ("thx.spdlog.SpdlogService"). Core diagnostics only reach it
+// once plugin_log_service bridges core's LogSink to the registered ILogService
+// (see test_log_service.cpp); these cases exercise the backend's own service
+// registration. The reset listener unloads the plugin after each case.
 
 namespace
 {
 	constexpr const char* kPluginName = "thx.spdlog.SpdlogService";
 }
 
-TEST_CASE("SpdlogPlugin - loads and registers an ILogService", "[spdlog_plugin]")
+TEST_CASE("spdlog backend - loads and registers an ILogService", "[spdlog_plugin]")
 {
-	// Nothing registered up front: logging uses the stderr fallback.
+	// Nothing registered up front.
 	REQUIRE(thx::service::getService<thx::log::ILogService>() == nullptr);
 
 	REQUIRE(thx::plugin::load(THX_SPDLOG_PLUGIN_PATH));
@@ -43,21 +43,21 @@ TEST_CASE("SpdlogPlugin - loads and registers an ILogService", "[spdlog_plugin]"
 	REQUIRE(svc->id() == thx::log::ILogService::staticId());
 }
 
-TEST_CASE("SpdlogPlugin - thx::log routes through the plugin's service", "[spdlog_plugin]")
+TEST_CASE("spdlog backend - the registered service accepts records", "[spdlog_plugin]")
 {
 	REQUIRE(thx::plugin::load(THX_SPDLOG_PLUGIN_PATH));
-	REQUIRE(thx::service::getService<thx::log::ILogService>() != nullptr);
+	auto svc = thx::service::getService<thx::log::ILogService>();
+	REQUIRE(svc != nullptr);
 
-	// These now route to the plugin's spdlog logger (stderr). We can't capture
-	// spdlog's output in-process, so we assert the calls are safe end-to-end —
-	// host → libthorax → plugin DSO → spdlog — under the sanitizers.
-	REQUIRE_NOTHROW(thx::log::debug("debug via spdlog"));
-	REQUIRE_NOTHROW(thx::log::info("info via spdlog"));
-	REQUIRE_NOTHROW(thx::log::warn("warn via spdlog"));
-	REQUIRE_NOTHROW(thx::log::error("error via spdlog"));
+	// Call the service directly (host → libthorax → plugin DSO → spdlog). We
+	// can't capture spdlog's stderr output in-process, so we assert the path is
+	// safe end-to-end under the sanitizers.
+	thx::log::LogRecord rec{thx::log::LogLevel::Info, thx::rtti::SourceLocation::current(),
+							thx::StringView{"direct to the backend"}};
+	REQUIRE_NOTHROW(svc->write(rec));
 }
 
-TEST_CASE("SpdlogPlugin - unloading restores the stderr fallback", "[spdlog_plugin]")
+TEST_CASE("spdlog backend - unloading unregisters the service", "[spdlog_plugin]")
 {
 	REQUIRE(thx::plugin::load(THX_SPDLOG_PLUGIN_PATH));
 	REQUIRE(thx::service::getService<thx::log::ILogService>() != nullptr);
@@ -65,15 +65,9 @@ TEST_CASE("SpdlogPlugin - unloading restores the stderr fallback", "[spdlog_plug
 	REQUIRE(thx::plugin::unload(THX_SPDLOG_PLUGIN_PATH));
 
 	REQUIRE(thx::service::getService<thx::log::ILogService>() == nullptr);
-	REQUIRE_NOTHROW(thx::log::info("back to stderr fallback"));
 }
 
-// ---------------------------------------------------------------------------
-// Selection flow (Option A): a host discovers the loggers that provide
-// ILogService and picks one by its distinct plugin identity, then loads it.
-// ---------------------------------------------------------------------------
-
-TEST_CASE("SpdlogPlugin - discoverable as an ILogService provider by name", "[spdlog_plugin]")
+TEST_CASE("spdlog backend - discoverable as an ILogService provider by name", "[spdlog_plugin]")
 {
 	namespace fs = std::filesystem;
 	auto dir = fs::path(THX_SPDLOG_PLUGIN_PATH).parent_path().string();
@@ -90,14 +84,14 @@ TEST_CASE("SpdlogPlugin - discoverable as an ILogService provider by name", "[sp
 			found = true;
 	REQUIRE(found);
 
-	// Pick it by name and load by its path; thx::log then routes to it.
+	// Pick it by name and load by its path.
 	auto chosen = thx::plugin::pluginByName(kPluginName);
 	REQUIRE(chosen.has_value());
 	REQUIRE(thx::plugin::load(chosen->path));
 	REQUIRE(thx::service::getService<thx::log::ILogService>() != nullptr);
 }
 
-TEST_CASE("SpdlogPlugin - single-owner: a host ILogService blocks the plugin's",
+TEST_CASE("spdlog backend - single-owner: a host ILogService blocks the plugin's",
 		  "[spdlog_plugin]")
 {
 	// Register a host-side ILogService first; the plugin's onLoad registration
@@ -118,7 +112,8 @@ TEST_CASE("SpdlogPlugin - single-owner: a host ILogService blocks the plugin's",
 	// load() should fail because onLoad's registerService hits the duplicate id.
 	REQUIRE_FALSE(thx::plugin::load(THX_SPDLOG_PLUGIN_PATH));
 
-	// Our service is still the registered one and still receives diagnostics.
-	thx::log::info("still ours");
-	REQUIRE(host->count >= 1);
+	// Our service is still the registered one.
+	auto svc = thx::service::getService<thx::log::ILogService>();
+	REQUIRE(svc != nullptr);
+	REQUIRE(svc.get() == static_cast<thx::log::ILogService*>(host));
 }

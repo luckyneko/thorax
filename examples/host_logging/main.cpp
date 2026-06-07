@@ -6,22 +6,24 @@
  *  (See accompanying file LICENSE.md)
  */
 
-// Pathway: choose a logging backend at runtime.
+// Pathway: route framework logging through a plugin-provided backend.
 //
-// Usage: host_logging <plugin-dir>   (a dir containing logger plugins)
+// Usage: host_logging <plugin-dir> [more-dirs...]
 //
-// Logging in thorax is just a service: thx::log::* forwards to the registered
-// thx::log::ILogService, falling back to stderr when none is registered. A
-// logger's identity is its plugin, so the available loggers are exactly the
-// plugins that *provide* ILogService — discoverable without loading any DSO.
-// This host emits a line (stderr fallback), then discovers + selects + loads a
-// logger plugin, and emits again (now routed through it).
+// libthorax core logs through a plain thx::LogSink (stderr by default).
+// The richer, service-based logging is NOT core: thx.log.ILogService lives in
+// log_interface, a *backend* plugin (e.g. spdlog) implements & registers it, and
+// the plugin_log_service *bridge* installs a LogSink that forwards every core
+// diagnostic to that registered ILogService. The bridge `requires` ILogService,
+// so loadWithDependencies(bridge) pulls a backend in and loads it first — the
+// same shape host_io uses for the io provider/handler. This host emits a line
+// (stderr fallback), then loads the bridge + a backend and emits again (now
+// routed through the backend).
 
 #include <thx/lifecycle.h>
-#include <thx/log/log.h>
+#include <thx/log.h>
 #include <thx/log/log_service.h>
 #include <thx/plugin/plugin.h>
-#include <thx/service/service.h>
 
 #include <cstdio>
 
@@ -29,51 +31,66 @@ int main(int argc, char* argv[])
 {
 	if (argc < 2)
 	{
-		std::fprintf(stderr, "Usage: %s <plugin-dir>\n", argv[0]);
+		std::fprintf(stderr, "Usage: %s <plugin-dir> [more-dirs...]\n", argv[0]);
 		return 1;
 	}
 
 	thx::initialise("host_logging");
 
-	// No logger registered yet — this goes to the built-in stderr fallback.
-	thx::log::info("before: routed to the stderr fallback");
+	// No bridge loaded yet — this goes to core's built-in stderr fallback.
+	thx::logMessage(thx::LogLevel::Info, "before: routed to the stderr fallback");
 
-	if (auto r = thx::plugin::discover(argv[1]); !r)
+	// Discover every plugin directory passed on the command line. The in-tree
+	// log plugins build into per-component dirs; an install co-locates them.
+	for (int i = 1; i < argc; ++i)
 	{
-		std::fprintf(stderr, "discover failed: %s\n", r.error().message.c_str());
-		return 1;
+		if (auto r = thx::plugin::discover(argv[i]); !r)
+		{
+			std::fprintf(stderr, "discover(%s) failed: %s\n", argv[i], r.error().message.c_str());
+			thx::shutdown();
+			return 1;
+		}
 	}
 
-	// The available loggers are the plugins that provide ILogService. No DSO is
-	// mapped to enumerate them — this reads the discovered manifests.
+	// The available logger backends are the plugins that provide ILogService. No
+	// DSO is mapped to enumerate them — this reads the discovered manifests.
 	auto loggers = thx::plugin::pluginsProviding<thx::log::ILogService>();
-	std::printf("available loggers (%zu):\n", loggers.size());
+	std::printf("available logger backends (%zu):\n", loggers.size());
 	for (auto const& l : loggers)
 		std::printf("  %s @ %u.%u.%u\n", l.name.c_str(), l.version.major, l.version.minor, l.version.patch);
-
 	if (loggers.empty())
 	{
-		std::fprintf(stderr, "no ILogService providers discovered in %s\n", argv[1]);
+		std::fprintf(stderr, "no ILogService backend discovered\n");
 		thx::shutdown();
 		return 1;
 	}
 
-	// Pick one (here: the first) and load it. Single-owner — one active logger.
-	auto const& chosen = loggers.front();
-	std::printf("selecting '%s'\n", chosen.name.c_str());
-	if (auto r = thx::plugin::load(chosen.path); !r)
+	// Load the bridge *with its dependencies*: it requires an ILogService, so
+	// loadWithDependencies pulls a backend in and loads it first, then activates
+	// the LogSink that routes core diagnostics through it.
+	auto bridge = thx::plugin::pluginByName("thx.log.LogService");
+	if (!bridge)
 	{
-		std::fprintf(stderr, "load failed: %s\n", r.error().message.c_str());
+		std::fprintf(stderr, "no log bridge (thx.log.LogService) discovered\n");
 		thx::shutdown();
 		return 1;
 	}
+	auto summary = thx::plugin::loadWithDependencies(bridge->path);
+	if (!summary.failed.empty())
+	{
+		for (auto const& [p, err] : summary.failed)
+			std::fprintf(stderr, "load failed: %s: %s\n", p.c_str(), err.message.c_str());
+		thx::shutdown();
+		return 1;
+	}
+	std::printf("loaded %zu plugin(s) (bridge + its logger backend)\n", summary.loaded.size());
 
 	int rc = thx::service::getService<thx::log::ILogService>() ? 0 : 1;
 	if (rc != 0)
 		std::fprintf(stderr, "ILogService not registered after load\n");
 
-	// Now routed through the chosen logger (e.g. spdlog), not the fallback.
-	thx::log::info("after: routed through the loaded logger");
+	// Now routed through the loaded backend (e.g. spdlog), not the fallback.
+	thx::logMessage(thx::LogLevel::Info, "after: routed through the loaded logger backend");
 
 	thx::shutdown();
 	return rc;

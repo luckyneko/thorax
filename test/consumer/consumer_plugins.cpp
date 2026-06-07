@@ -3,8 +3,9 @@
  *  points at a plugins install dir) that discover() finds the installed sidecar
  *  manifests + their paired DSOs.
  *
- *  Exercises the core logging and io interfaces (installed with the library)
- *  plus plugin discovery of the in-tree spdlog and http plugins.
+ *  Exercises the consumer-tier log and io interfaces (the ILogService / io
+ *  headers installed alongside the library by their interface libraries) plus
+ *  plugin discovery of the in-tree spdlog and http plugins.
  */
 
 #include <thx/io/io.h>
@@ -18,8 +19,8 @@
 
 int main(int argc, char* argv[])
 {
-	// Verify the core logging service id is reachable as a constexpr value, and
-	// that the io facade header is usable (open() is declared).
+	// Verify the log service id is reachable as a constexpr value, and that the
+	// io facade header is usable (open() is declared).
 	constexpr auto logging_id = thx::log::ILogService::staticId();
 	std::printf("logging service id: %s\n", logging_id.name());
 	std::printf("io facade available: thx::io::open declared\n");

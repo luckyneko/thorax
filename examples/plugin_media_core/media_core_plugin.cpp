@@ -17,7 +17,7 @@
 
 #include "interfaces/asset_service.h"
 
-#include <thx/log/log.h>
+#include <thx/log.h>
 #include <thx/plugin/platform.h>
 
 #include <algorithm>
@@ -62,7 +62,7 @@ namespace
 				if (d->canDecode(path) && d->decode(path, out))
 					return true;
 			}
-			thx::log::warn(std::string("IAssetService: no decoder accepted '") + path + "'");
+			thx::logMessage(thx::LogLevel::Warn, std::string("IAssetService: no decoder accepted '") + path + "'");
 			return false;
 		}
 

@@ -16,7 +16,7 @@
 // in automatically.
 
 #include <thx/lifecycle.h>
-#include <thx/log/log.h>
+#include <thx/log.h>
 #include <thx/plugin/plugin.h>
 #include <thx/service/service.h>
 
@@ -67,7 +67,7 @@ int main(int argc, char* argv[])
 		auto media = thx::service::getService<examples::IAssetService>();
 		examples::AssetInfo asset;
 		if (media && media->decode("portrait.jpg", asset))
-			thx::log::info("decoded portrait.jpg via the named decoder");
+			thx::logMessage(thx::LogLevel::Info, "decoded portrait.jpg via the named decoder");
 		else
 		{
 			std::fprintf(stderr, "decode failed after load-by-name\n");

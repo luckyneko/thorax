@@ -6,21 +6,25 @@
  *  (See accompanying file LICENSE.md)
  */
 
-// Demonstrates implementing the framework's logging service with spdlog. The
-// plugin registers a single thx::log::ILogService; once loaded, every
-// thx::log::write() / debug() / info() / warn() / error() call across the whole
-// process (host + libthorax internals + other plugins) is routed here. Unload
-// the plugin and logging falls back to the built-in stderr writer.
+// Demonstrates implementing the log subsystem's service interface with spdlog.
+// The plugin registers a single thx::log::ILogService (from log_interface, NOT
+// core). It does not touch core's LogSink itself — plugin_log_service installs
+// the sink that forwards core diagnostics to whatever ILogService is registered,
+// so loading this backend alongside that bridge routes every core diagnostic and
+// every thx::log::write() / debug() / info() / warn() / error() call across the
+// whole process (host + libthorax internals + other plugins) here.
+// (loadWithDependencies(bridge) pulls this backend in.) Unload and logging falls
+// back to the built-in stderr writer.
 //
 // Identity split (see CLAUDE.md "Errors & logging"): the *service* is registered
-// under the stable interface id "thx.log.ILogService" so thx::log::write() finds
-// it via getService<ILogService>(); the *logger's own* name/version is the
-// plugin's manifest identity ("thx.spdlog.SpdlogService" below). A host chooses a
-// logger by discovering the plugins that provide ILogService and loading the one
-// it wants — pluginsProviding<ILogService>() lists them by their distinct plugin
-// names. Single-owner: one logger is active at a time.
+// under the stable interface id "thx.log.ILogService"; the *logger's own*
+// name/version is the plugin's manifest identity ("thx.spdlog.SpdlogService"
+// below). A host chooses a logger by discovering the plugins that provide
+// ILogService — pluginsProviding<ILogService>() lists them by their distinct
+// plugin names. Single-owner: one logger is active at a time.
 
 #include <thx/log/log_service.h>
+#include <thx/plugin/iplugin.h>
 #include <thx/plugin/platform.h>
 #include <thx/service/service.h>
 
@@ -83,7 +87,7 @@ namespace
 	// Custom IPlugin so the logger carries its own name/version (its selection
 	// identity) distinct from the interface id it registers under. SpdlogService
 	// registers under thx.log.ILogService (inherited via Service<ILogService>),
-	// which is what thx::log::write() looks up; the plugin advertises that id in
+	// which is what the log facade looks up; the plugin advertises that id in
 	// provides() so pluginsProviding<ILogService>() discovers it by name.
 	struct SpdlogPlugin : thx::plugin::IPlugin
 	{

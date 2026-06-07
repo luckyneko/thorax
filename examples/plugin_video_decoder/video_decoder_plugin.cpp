@@ -14,7 +14,7 @@
 
 #include "interfaces/asset_service.h"
 
-#include <thx/log/log.h>
+#include <thx/log.h>
 #include <thx/plugin/platform.h>
 #include <thx/service/service.h>
 
@@ -46,7 +46,7 @@ namespace
 			out.width = 1280;
 			out.height = 720;
 			out.durationMs = 12000; // pretend every clip is 12s
-			thx::log::info(std::string("VideoDecoder: decoded '") + path + "'");
+			thx::logMessage(thx::LogLevel::Info, std::string("VideoDecoder: decoded '") + path + "'");
 			return true;
 		}
 	};
@@ -62,12 +62,12 @@ namespace
 			auto media = thx::service::getService<examples::IAssetService>();
 			if (!media)
 			{
-				thx::log::error("VideoDecoder: IAssetService not available at load");
+				thx::logMessage(thx::LogLevel::Error, "VideoDecoder: IAssetService not available at load");
 				return false;
 			}
 			m_decoder = std::make_shared<VideoDecoder>();
 			media->addDecoder(m_decoder);
-			thx::log::info("VideoDecoder: registered (.mp4/.mov)");
+			thx::logMessage(thx::LogLevel::Info, "VideoDecoder: registered (.mp4/.mov)");
 			return true;
 		}
 

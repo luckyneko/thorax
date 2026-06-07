@@ -75,12 +75,9 @@ add_library(${PROJECT_NAME} SHARED
     include/thx/to_string.h
     include/thx/result.h
 
-    # Public headers — log/
-    include/thx/log/log.h
-    include/thx/log/log_level.h
-    include/thx/log/log_record.h
-    include/thx/log/log_service.h
-    include/thx/log/source_location.h
+    # Public header — log (the emit facade + LogSink; ILogService is NOT core,
+    # it lives in plugins/log/interface)
+    include/thx/log.h
 
     # Public headers — service/
     include/thx/service/iservice.h
@@ -110,7 +107,7 @@ add_library(${PROJECT_NAME} SHARED
     # Source
     src/abi.cpp
     src/thorax.cpp
-    src/log/log.cpp
+    src/log.cpp
     src/library.cpp
     src/registry.cpp
     src/service/service_manager.cpp

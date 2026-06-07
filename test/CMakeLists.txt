@@ -75,22 +75,25 @@ add_dependencies(test-${PROJECT_NAME}
 if(THORAX_BUILD_PLUGINS)
     target_sources(test-${PROJECT_NAME} PRIVATE
         test_spdlog_plugin.cpp
+        test_log_service.cpp
         test_io.cpp
         test_http_plugin.cpp
     )
-    # io is not part of core: its tests load the io provider + handler plugins
-    # and include the io interface headers via the io_interface INTERFACE
-    # library. The http test also needs httplib to run a loopback server
-    # (header-only; the target comes from the http plugin's addhttplib include).
-    target_link_libraries(test-${PROJECT_NAME} io_interface httplib::httplib)
+    # Neither io nor the service-based logging is part of core: these tests load
+    # the relevant provider/handler plugins and include their interface headers
+    # via the io_interface / log_interface INTERFACE libraries. The http test
+    # also needs httplib to run a loopback server (header-only; the target comes
+    # from the http plugin's addhttplib include).
+    target_link_libraries(test-${PROJECT_NAME} io_interface log_interface httplib::httplib)
     target_compile_definitions(test-${PROJECT_NAME} PRIVATE
         THX_SPDLOG_PLUGIN_PATH="$<TARGET_FILE:plugin_log_spdlog>"
+        THX_LOG_SERVICE_PLUGIN_PATH="$<TARGET_FILE:plugin_log_service>"
         THX_IO_SERVICE_PLUGIN_PATH="$<TARGET_FILE:plugin_io_service>"
         THX_IO_FILE_PLUGIN_PATH="$<TARGET_FILE:plugin_io_file>"
         THX_HTTP_PLUGIN_PATH="$<TARGET_FILE:plugin_io_http>"
     )
     add_dependencies(test-${PROJECT_NAME}
-        plugin_log_spdlog plugin_io_service plugin_io_file plugin_io_http)
+        plugin_log_spdlog plugin_log_service plugin_io_service plugin_io_file plugin_io_http)
 endif()
 
 catch_discover_tests(test-${PROJECT_NAME} TEST_PREFIX "(${PROJECT_NAME}) ")

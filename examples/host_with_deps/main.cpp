@@ -17,7 +17,7 @@
 // order — so the media-core plugin comes up first.
 
 #include <thx/lifecycle.h>
-#include <thx/log/log.h>
+#include <thx/log.h>
 #include <thx/plugin/plugin.h>
 #include <thx/service/service.h>
 
@@ -66,7 +66,7 @@ int main(int argc, char* argv[])
 		auto media = thx::service::getService<examples::IAssetService>();
 		examples::AssetInfo asset;
 		if (media && media->decode("trailer.mp4", asset))
-			thx::log::info("decoded trailer.mp4 after dependency-ordered load");
+			thx::logMessage(thx::LogLevel::Info, "decoded trailer.mp4 after dependency-ordered load");
 		else
 		{
 			std::fprintf(stderr, "decode failed after loadWithDependencies\n");

@@ -19,7 +19,7 @@
 // so a host can discover the dispatcher provider by name.
 
 #include <thx/io/io_service.h>
-#include <thx/log/log.h>
+#include <thx/log.h>
 #include <thx/plugin/platform.h>
 #include <thx/service/service.h>
 
@@ -87,7 +87,7 @@ namespace
 				auto it = m_byScheme.find(key);
 				if (it != m_byScheme.end() && !it->second.expired())
 				{
-					thx::log::warn("io: scheme '" + key + "' already has a handler; ignoring duplicate");
+					thx::logMessage(thx::LogLevel::Warn, "io: scheme '" + key + "' already has a handler; ignoring duplicate");
 					continue;
 				}
 				m_byScheme[key] = handler;

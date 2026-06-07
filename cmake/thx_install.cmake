@@ -31,18 +31,21 @@ if(THORAX_BUILD_PLUGINS)
     # suffix swap. On Windows a SHARED lib's .dll is the RUNTIME artifact, so it
     # must target the same plugins dir as the LIBRARY (.so/.dylib) does on Unix
     # — not the global bin/, which would split the DLL from its manifest.
-    install(TARGETS plugin_log_spdlog plugin_io_service plugin_io_file plugin_io_http
+    install(TARGETS plugin_log_service plugin_log_spdlog plugin_io_service plugin_io_file plugin_io_http
         EXPORT  ThoraxTargets
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/thorax/plugins
         RUNTIME DESTINATION ${CMAKE_INSTALL_LIBDIR}/thorax/plugins
     )
-    # The spdlog plugin implements the core thx::log::ILogService (installed with
-    # the library). The io subsystem is NOT core: the io_interface library owns
-    # the public io interface headers (IIoService / IProtocol / IStream / the
-    # error domain / the facade) under plugins/io/interface/include — install
-    # them alongside the library's headers so consumers still include
+    # Neither the log subsystem nor io is core. Each ships an interface
+    # library owning its public headers under plugins/<subsystem>/interface/
+    # include — log_interface owns <thx/log/log.h>, <thx/log/log_record.h> and
+    # <thx/log/log_service.h> (ILogService, which plugin_log_spdlog implements and
+    # plugin_log_service bridges to), io_interface owns <thx/io/*.h>. Install both
+    # alongside the library's headers so consumers still include <thx/log/log.h> /
     # <thx/io/io.h>.
-    install(DIRECTORY ${CMAKE_SOURCE_DIR}/plugins/io/interface/include/thx/
+    install(DIRECTORY
+                ${CMAKE_SOURCE_DIR}/plugins/log/interface/include/thx/
+                ${CMAKE_SOURCE_DIR}/plugins/io/interface/include/thx/
             DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/thx
             FILES_MATCHING
                 PATTERN "*.h"

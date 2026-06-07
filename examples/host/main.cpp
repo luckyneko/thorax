@@ -17,7 +17,7 @@
 // discoverAndLoad() would load in filesystem order and fail the decoders.
 
 #include <thx/lifecycle.h>
-#include <thx/log/log.h>
+#include <thx/log.h>
 #include <thx/plugin/plugin.h>
 #include <thx/service/service.h>
 
@@ -45,9 +45,9 @@ namespace
 	{
 		examples::AssetInfo info;
 		if (media.decode(path, info))
-			thx::log::info(std::string("decoded ") + path + ": " + kindName(info.kind) + " " + std::to_string(info.width) + "x" + std::to_string(info.height) + (info.durationMs ? " " + std::to_string(info.durationMs) + "ms" : ""));
+			thx::logMessage(thx::LogLevel::Info, std::string("decoded ") + path + ": " + kindName(info.kind) + " " + std::to_string(info.width) + "x" + std::to_string(info.height) + (info.durationMs ? " " + std::to_string(info.durationMs) + "ms" : ""));
 		else
-			thx::log::warn(std::string("could not decode ") + path);
+			thx::logMessage(thx::LogLevel::Warn, std::string("could not decode ") + path);
 	}
 } // namespace
 
@@ -77,7 +77,7 @@ int main(int argc, char* argv[])
 		thx::shutdown();
 		return 1;
 	}
-	thx::log::info("loaded " + std::to_string(summary.loaded.size()) + " plugin(s)");
+	thx::logMessage(thx::LogLevel::Info, "loaded " + std::to_string(summary.loaded.size()) + " plugin(s)");
 
 	int rc = 0;
 	{

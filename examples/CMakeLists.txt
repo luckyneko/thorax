@@ -66,17 +66,20 @@ foreach(pathway host host_by_name host_with_deps)
     add_test(NAME examples.${pathway} COMMAND ${target} "${example_plugin_dir}")
 endforeach()
 
-# host_logging demonstrates selecting a logging backend at runtime. It loads the
-# in-tree spdlog plugin, so it is only built when the plugins are available.
-if(THORAX_BUILD_PLUGINS AND TARGET plugin_log_spdlog)
+# host_logging demonstrates routing framework logging through a plugin backend:
+# load the plugin_log_service bridge with its ILogService backend dependency
+# (the in-tree spdlog plugin). log_interface brings the ILogService header.
+if(THORAX_BUILD_PLUGINS AND TARGET plugin_log_service)
     add_executable(example_host_logging host_logging/main.cpp)
-    target_link_libraries(example_host_logging PRIVATE ${PROJECT_NAME})
+    target_link_libraries(example_host_logging PRIVATE log_interface)
     target_include_directories(example_host_logging PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     thx_set_warnings(example_host_logging)
-    add_dependencies(example_host_logging plugin_log_spdlog)
+    add_dependencies(example_host_logging plugin_log_service plugin_log_spdlog)
     add_test(
         NAME examples.host_logging
-        COMMAND example_host_logging "$<TARGET_FILE_DIR:plugin_log_spdlog>"
+        COMMAND example_host_logging
+                "$<TARGET_FILE_DIR:plugin_log_service>"
+                "$<TARGET_FILE_DIR:plugin_log_spdlog>"
     )
 endif()
 

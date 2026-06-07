@@ -7,8 +7,7 @@
  */
 
 #include <catch2/catch_all.hpp>
-#include <thx/log/log.h>
-#include <thx/log/log_service.h>
+#include <thx/log.h>
 #include <thx/service/service.h>
 
 #include <string>
@@ -21,27 +20,21 @@
 namespace
 {
 
-	// Capturing logging service. Registered like any other service; thx::log::*
-	// forwards to it. LogRecord::message is a non-owning StringView valid only
-	// during write(), so we copy it into our own std::string storage.
-	struct CapturingService : thx::log::ILogService
+	// Capturing log sink. thx::logMessage() forwards every record to the installed
+	// LogSink; this one copies each into std::string storage (LogRecord::message
+	// is a non-owning StringView valid only during the sink call).
+	struct Capture
 	{
 		struct Record
 		{
-			thx::log::LogLevel level;
-			thx::log::SourceLocation location;
+			thx::LogLevel level;
+			thx::rtti::SourceLocation location;
 			std::string message;
 		};
 
 		std::vector<Record> records;
 
-		void write(thx::log::LogRecord const& r) override
-		{
-			records.push_back({r.level, r.location,
-							   std::string(r.message.data(), r.message.size())});
-		}
-
-		bool hasLevel(thx::log::LogLevel lvl) const
+		bool hasLevel(thx::LogLevel lvl) const
 		{
 			for (auto const& r : records)
 				if (r.level == lvl)
@@ -50,81 +43,92 @@ namespace
 		}
 	};
 
+	void captureSink(thx::LogRecord const& r, void* userdata)
+	{
+		auto* cap = static_cast<Capture*>(userdata);
+		cap->records.push_back({r.level, r.location,
+								std::string(r.message.data(), r.message.size())});
+	}
+
+	// RAII: installs a Capture as the process-wide sink and restores the built-in
+	// stderr fallback on scope exit — crucially *before* the Capture is destroyed,
+	// so no later emit can touch freed storage.
+	struct SinkGuard
+	{
+		Capture cap;
+		SinkGuard() { thx::setSink(&captureSink, &cap); }
+		~SinkGuard() { thx::setSink(nullptr, nullptr); }
+	};
+
 	// A throwaway service used to provoke a duplicate-registration diagnostic.
 	struct DummyService : thx::service::Service<DummyService>
 	{
 		static constexpr thx::Version staticVersion() { return thx::Version{1, 0, 0}; }
 	};
 
-	// Registers a CapturingService as the process-wide ILogService and returns a
-	// raw pointer to it. The pointer stays valid until the service is
-	// unregistered (the per-test reset listener calls thx::shutdown()). Only one
-	// ILogService may be registered at a time (single-owner registry).
-	CapturingService* installCapture()
-	{
-		CapturingService* cap = nullptr;
-		bool ok = thx::service::registerService<CapturingService>(
-			[&]() -> thx::service::IService*
-			{
-				cap = new CapturingService();
-				return cap;
-			});
-		REQUIRE(ok);
-		REQUIRE(cap != nullptr);
-		return cap;
-	}
-
 } // namespace
 
 // ---------------------------------------------------------------------------
-// thx::log::write forwards to a registered ILogService
+// thx::logMessage() forwards to the installed sink
 // ---------------------------------------------------------------------------
 
-TEST_CASE("log - record reaches the registered service", "[log]")
+TEST_CASE("log - record reaches the installed sink", "[log]")
 {
-	auto* cap = installCapture();
-	thx::log::write(thx::log::LogLevel::Info, "hello from test");
+	SinkGuard g;
+	thx::logMessage(thx::LogLevel::Info, "hello from test");
 
-	REQUIRE(cap->records.size() == 1);
-	REQUIRE(cap->records[0].level == thx::log::LogLevel::Info);
-	REQUIRE(cap->records[0].message == "hello from test");
+	REQUIRE(g.cap.records.size() == 1);
+	REQUIRE(g.cap.records[0].level == thx::LogLevel::Info);
+	REQUIRE(g.cap.records[0].message == "hello from test");
 }
 
 TEST_CASE("log - level shortcuts map to the right LogLevel", "[log]")
 {
-	auto* cap = installCapture();
-	thx::log::debug("d");
-	thx::log::info("i");
-	thx::log::warn("w");
-	thx::log::error("e");
+	SinkGuard g;
+	thx::logMessage(thx::LogLevel::Debug, "d");
+	thx::logMessage(thx::LogLevel::Info, "i");
+	thx::logMessage(thx::LogLevel::Warn, "w");
+	thx::logMessage(thx::LogLevel::Error, "e");
 
-	REQUIRE(cap->records.size() == 4);
-	REQUIRE(cap->records[0].level == thx::log::LogLevel::Debug);
-	REQUIRE(cap->records[1].level == thx::log::LogLevel::Info);
-	REQUIRE(cap->records[2].level == thx::log::LogLevel::Warn);
-	REQUIRE(cap->records[3].level == thx::log::LogLevel::Error);
-	REQUIRE(cap->records[3].message == "e");
+	REQUIRE(g.cap.records.size() == 4);
+	REQUIRE(g.cap.records[0].level == thx::LogLevel::Debug);
+	REQUIRE(g.cap.records[1].level == thx::LogLevel::Info);
+	REQUIRE(g.cap.records[2].level == thx::LogLevel::Warn);
+	REQUIRE(g.cap.records[3].level == thx::LogLevel::Error);
+	REQUIRE(g.cap.records[3].message == "e");
 }
 
 TEST_CASE("log - captures call-site source location", "[log]")
 {
-	auto* cap = installCapture();
+	SinkGuard g;
 	int expected_line = __LINE__ + 1;
-	thx::log::debug("location check");
+	thx::logMessage(thx::LogLevel::Debug, "location check");
 
-	REQUIRE(!cap->records.empty());
-	auto const& loc = cap->records[0].location;
+	REQUIRE(!g.cap.records.empty());
+	auto const& loc = g.cap.records[0].location;
 	REQUIRE(loc.line == expected_line);
 	REQUIRE(std::string(loc.file).find("test_diagnostics") != std::string::npos);
 	REQUIRE(std::string(loc.function).size() > 0);
 }
 
-TEST_CASE("log - no registered service falls back to stderr without crashing", "[log]")
+TEST_CASE("log - no installed sink falls back to stderr without crashing", "[log]")
 {
-	REQUIRE(thx::service::getService<thx::log::ILogService>() == nullptr);
+	thx::setSink(nullptr, nullptr); // ensure the built-in fallback is active
 	// Goes to the built-in stderr writer; we can't capture it, only assert the
 	// call is safe.
-	REQUIRE_NOTHROW(thx::log::info("this goes to stderr"));
+	REQUIRE_NOTHROW(thx::logMessage(thx::LogLevel::Info, "this goes to stderr"));
+}
+
+TEST_CASE("log - setSink(nullptr) restores the fallback", "[log]")
+{
+	{
+		SinkGuard g;
+		thx::logMessage(thx::LogLevel::Info, "captured");
+		REQUIRE(g.cap.records.size() == 1);
+	}
+	// Guard out of scope: the sink is cleared. A further emit must not reach the
+	// (now destroyed) capture, and must be safe.
+	REQUIRE_NOTHROW(thx::logMessage(thx::LogLevel::Info, "after guard"));
 }
 
 // ---------------------------------------------------------------------------
@@ -133,61 +137,65 @@ TEST_CASE("log - no registered service falls back to stderr without crashing", "
 
 TEST_CASE("assertThat - true condition does not log", "[assert]")
 {
-	auto* cap = installCapture();
-	thx::log::assertThat(true, "should not appear");
-	REQUIRE(cap->records.empty());
+	SinkGuard g;
+	thx::assertThat(true, "should not appear");
+	REQUIRE(g.cap.records.empty());
 }
 
 #if defined(NDEBUG)
 TEST_CASE("assertThat - false condition logs Error in release build", "[assert]")
 {
-	auto* cap = installCapture();
-	thx::log::assertThat(false, "intentional failure");
+	SinkGuard g;
+	thx::assertThat(false, "intentional failure");
 
-	REQUIRE(cap->records.size() == 1);
-	REQUIRE(cap->records[0].level == thx::log::LogLevel::Error);
-	REQUIRE(cap->records[0].message == "intentional failure");
+	REQUIRE(g.cap.records.size() == 1);
+	REQUIRE(g.cap.records[0].level == thx::LogLevel::Error);
+	REQUIRE(g.cap.records[0].message == "intentional failure");
 }
 
 TEST_CASE("assertThat - captures source location on failure", "[assert]")
 {
-	auto* cap = installCapture();
+	SinkGuard g;
 	int expected_line = __LINE__ + 1;
-	thx::log::assertThat(false, "location check");
+	thx::assertThat(false, "location check");
 
-	REQUIRE(!cap->records.empty());
-	REQUIRE(cap->records[0].location.line == expected_line);
+	REQUIRE(!g.cap.records.empty());
+	REQUIRE(g.cap.records[0].location.line == expected_line);
 }
 #endif
 
 // ---------------------------------------------------------------------------
-// ServiceManager diagnostics route through the registered service — and doing
-// so does NOT deadlock, even though ServiceManager logs its own diagnostics.
-// The duplicate-registration warn is emitted after the registry lock is
-// released precisely so the forwarding getService<ILogService>() can take its
-// shared lock without re-entering the exclusive lock.
+// ServiceManager diagnostics flow through the installed sink — and doing so
+// does NOT deadlock. ServiceManager emits its duplicate-registration / null-
+// factory diagnostics *after* releasing its registry lock, precisely so a sink
+// that resolves a service (the in-tree log bridge looks up an ILogService under
+// the ServiceManager read lock) can't re-enter the exclusive lock. The capture
+// sink here doesn't touch the ServiceManager, but the ordering contract is what
+// these cases pin down.
 // ---------------------------------------------------------------------------
 
-TEST_CASE("ServiceManager - duplicate registration routes a warning to the service",
+TEST_CASE("ServiceManager - duplicate registration routes a warning to the sink",
 		  "[log][service_manager]")
 {
-	auto* cap = installCapture();
+	SinkGuard g;
 
 	REQUIRE(thx::service::registerService<DummyService>());
 	REQUIRE_FALSE(thx::service::registerService<DummyService>()); // duplicate → warn
 
-	REQUIRE(cap->hasLevel(thx::log::LogLevel::Warn));
+	REQUIRE(g.cap.hasLevel(thx::LogLevel::Warn));
+
+	thx::service::unregisterService<DummyService>();
 }
 
-TEST_CASE("ServiceManager - null factory routes an error to the service",
+TEST_CASE("ServiceManager - null factory routes an error to the sink",
 		  "[log][service_manager]")
 {
-	auto* cap = installCapture();
+	SinkGuard g;
 
 	// Empty factory: invoke is null → registerService logs an Error.
 	REQUIRE_FALSE(thx::service::registerService(
 		thx::service::ServiceID("test.NullFactory"), thx::Version{1, 0, 0},
 		thx::service::ServiceFactory{}));
 
-	REQUIRE(cap->hasLevel(thx::log::LogLevel::Error));
+	REQUIRE(g.cap.hasLevel(thx::LogLevel::Error));
 }

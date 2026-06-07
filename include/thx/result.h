@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "thx/log/log.h"
+#include "thx/log.h"
 
 #include <optional>
 #include <string>
@@ -139,13 +139,13 @@ namespace thx
 
 		E& error()
 		{
-			thx::log::assertThat(m_error.has_value(),
+			thx::assertThat(m_error.has_value(),
 								 "Result<void, E>::error() called on an ok Result");
 			return *m_error;
 		}
 		E const& error() const
 		{
-			thx::log::assertThat(m_error.has_value(),
+			thx::assertThat(m_error.has_value(),
 								 "Result<void, E>::error() called on an ok Result");
 			return *m_error;
 		}

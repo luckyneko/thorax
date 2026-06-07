@@ -8,20 +8,25 @@
 
 #pragma once
 
-// Detect compiler support for builtin source-location default arguments.
-// These let thx::log::write() capture the caller's file/line/function without a
-// macro. GCC/Clang support __builtin_FILE/LINE/FUNCTION natively. MSVC supports
-// them since VS 2019 16.6 (_MSC_VER 1926).
+#include "thx/string_view.h"
+#include "thx/thx_api.h"
+
+#include <cstdlib>
+#include <string>
+
+namespace thx::rtti
+{
+	// Detect compiler support for builtin source-location default arguments.
+	// These let write() capture the caller's file/line/function without a macro.
+	// GCC/Clang support __builtin_FILE/LINE/FUNCTION natively; MSVC since VS 2019
+	// 16.6 (_MSC_VER 1926).
 #if defined(__GNUC__) || defined(__clang__) || (defined(_MSC_VER) && _MSC_VER >= 1926)
 #	define THX_DETAIL_HAS_BUILTIN_LOCATION 1
 #endif
 
-namespace thx::log
-{
-	// Thin source-location descriptor.
-	// current() captures the call site via compiler builtins when used as a
-	// default argument (C++17-compatible, no macros required). Supported on
-	// GCC, Clang, and MSVC >= VS 2019 16.6; empty on older toolchains.
+	// Thin source-location descriptor. current() captures the call site via
+	// compiler builtins when used as a default argument (C++17-compatible, no
+	// macros required); empty on older toolchains.
 	struct SourceLocation
 	{
 		const char* file = "";
@@ -43,5 +48,4 @@ namespace thx::log
 			return {f, ln, fn};
 		}
 	};
-
-} // namespace thx::log
+} // namespace thx::rtti

@@ -7,7 +7,7 @@
  */
 
 #include "service/service_manager.h"
-#include "thx/log/log.h"
+#include "thx/log.h"
 #include "thx/to_string.h"
 
 namespace thx::service
@@ -41,16 +41,17 @@ namespace thx::service
 
 		if (!factory.invoke)
 		{
-			thx::log::error(
+			thx::logMessage(thx::LogLevel::Error,
 				std::string("registerService: null factory.invoke for '") + id.name() + "'");
 			return false;
 		}
 
 		// Phase 1: reserve the ID. If anyone else already owns it (registered or
 		// in-flight reservation) we bail before doing real work. The diagnostic
-		// is emitted AFTER releasing the lock: thx::log::write may look up an
-		// ILogService via the ServiceManager's shared lock, which would deadlock
-		// against this exclusive lock (shared_mutex is not recursive).
+		// is emitted AFTER releasing the lock: the installed log sink may look up
+		// a service (the in-tree log bridge forwards to a registered ILogService
+		// via getService, taking this ServiceManager's shared lock), which would
+		// deadlock against this exclusive lock (shared_mutex is not recursive).
 		bool duplicate = false;
 		{
 			std::unique_lock lock(m_mutex);
@@ -61,7 +62,7 @@ namespace thx::service
 		}
 		if (duplicate)
 		{
-			thx::log::warn(
+			thx::logMessage(thx::LogLevel::Warn,
 				std::string("registerService: '") + id.name() + "' is already registered (single-owner registry)");
 			return false;
 		}
@@ -87,7 +88,7 @@ namespace thx::service
 			if (!raw)
 			{
 				releaseReservation();
-				thx::log::error(
+				thx::logMessage(thx::LogLevel::Error,
 					std::string("registerService: factory returned null for '") + id.name() + "'");
 				return false;
 			}
@@ -102,7 +103,7 @@ namespace thx::service
 			if (service->version() != version)
 			{
 				releaseReservation();
-				thx::log::error(
+				thx::logMessage(thx::LogLevel::Error,
 					std::string("registerService: declared version ") + toString(version) + " does not match service-reported " + toString(service->version()) + " for '" + id.name() + "'");
 				return false;
 			}
@@ -110,7 +111,7 @@ namespace thx::service
 			if (!service->onConstruct())
 			{
 				releaseReservation();
-				thx::log::error(
+				thx::logMessage(thx::LogLevel::Error,
 					std::string("registerService: onConstruct failed for '") + id.name() + "'");
 				return false;
 			}
@@ -153,7 +154,7 @@ namespace thx::service
 		// Diagnostic emitted outside the lock (see registerService for why).
 		if (missing)
 		{
-			thx::log::warn(
+			thx::logMessage(thx::LogLevel::Warn,
 				std::string("unregisterService: '") + id.name() + "' is not registered");
 			return false;
 		}
