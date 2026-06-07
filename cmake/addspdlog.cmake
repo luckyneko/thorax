@@ -9,7 +9,7 @@ find_package(spdlog CONFIG QUIET)
 
 if (${spdlog_FOUND})
 else ()
-	set(SPDLOG_VER "1.14.1")
+	set(SPDLOG_VER "1.17.0")
 	if(NOT EXISTS "${CMAKE_SOURCE_DIR}/thirdparty/spdlog-${SPDLOG_VER}.tar.gz")
 		message(STATUS "Downloading spdlog (${SPDLOG_VER})")
 		file(DOWNLOAD
