@@ -15,10 +15,10 @@
 // IAssetService, so we use loadWithDependencies() to pull the media-core plugin
 // in automatically.
 
-#include <thx/lifecycle.h>
 #include <thx/log.h>
 #include <thx/plugin/plugin.h>
 #include <thx/service/service.h>
+#include <thx/thorax.h>
 
 #include "interfaces/asset_service.h"
 
@@ -32,7 +32,9 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-	thx::initialise("host_by_name");
+	thx::Settings settings;
+	settings.name = "host_by_name";
+	thx::initialise(settings);
 
 	// Populate the manifest cache for the directory. No DSO is mapped yet.
 	if (auto r = thx::plugin::discover(argv[1]); !r)

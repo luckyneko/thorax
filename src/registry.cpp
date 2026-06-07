@@ -7,35 +7,26 @@
  */
 
 #include "registry.h"
-#include "thx/lifecycle.h"
 
 namespace thx
 {
 
-	Registry::Registry()
-		: m_pluginManager(m_serviceManager)
+	Registry::Registry(Settings settings)
+		: m_name(settings.name)
+		, m_pluginGarbage()
+		, m_serviceManager()
+		, m_pluginManager(m_serviceManager)
 	{
 	}
 
-	Registry& Registry::instance() noexcept
+	Registry::~Registry()
 	{
-		static Registry inst;
-		return inst;
+		clear();
 	}
 
-	bool initialise(std::string debugName)
+	void Registry::clear() noexcept
 	{
-		auto& reg = Registry::instance();
-		if (!reg.m_debugName.empty())
-			return false;
-		reg.m_debugName = std::move(debugName);
-		return true;
-	}
-
-	void shutdown() noexcept
-	{
-		auto& reg = Registry::instance();
-		// Tear framework-owned state down in the same order ~Registry would:
+		// Tear framework-owned state down to empty, in order:
 		//   1. unload every plugin (runs onUnload, unregisters their services,
 		//      queues each DSO into PluginGarbage);
 		//   2. unregister any services registered directly (not owned by a plugin),
@@ -44,18 +35,13 @@ namespace thx
 		//      actually unmapped;
 		//   4. clear the debug name.
 		// After this call no framework-owned services, loaded plugins, or mapped
-		// plugin DSOs survive — only the empty Registry shell persists. Callers
-		// MUST have released every ServiceHandle into a plugin DSO first (step 3
-		// dlclose's them).
-		reg.m_pluginManager.clear();
-		reg.m_serviceManager.clear();
-		reg.m_pluginGarbage.collect();
-		reg.m_debugName.clear();
+		// plugin DSOs survive. Callers MUST have released every ServiceHandle into
+		// a plugin DSO first (step 3 dlclose's them). A plugin's onUnload may call
+		// back through the facade into registry(), so this runs in place — the
+		// Registry (and the global registry() pointer) stays live throughout.
+		m_pluginManager.clear();
+		m_serviceManager.clear();
+		m_pluginGarbage.collect();
+		m_name.clear();
 	}
-
-	Registry& registry() noexcept
-	{
-		return Registry::instance();
-	}
-
 } // namespace thx

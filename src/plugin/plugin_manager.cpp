@@ -50,7 +50,7 @@ namespace thx::plugin
 				if (sm.getService<IService>(id))
 				{
 					thx::logMessage(thx::LogLevel::Warn,
-						std::string("PluginManager: plugin '") + pluginName + "' left service '" + id.name() + "' registered after onUnload; force-unregistering");
+									std::string("PluginManager: plugin '") + pluginName + "' left service '" + id.name() + "' registered after onUnload; force-unregistering");
 					sm.unregisterService(id);
 				}
 			}
@@ -155,7 +155,7 @@ namespace thx::plugin
 		// Drain the deferred-close queue before any new dlopen so we don't
 		// accumulate a long tail of mapped-but-released DSOs in long-running
 		// processes.
-		Registry::instance().pluginGarbage().collect();
+		registry()->pluginGarbage().collect();
 
 		auto handleResult = PluginHandle::open(canonical);
 		if (!handleResult)
@@ -351,7 +351,7 @@ namespace thx::plugin
 				if (m_warnedMissingDso.insert(manifestPath).second)
 				{
 					thx::logMessage(thx::LogLevel::Warn,
-						"discover: sidecar '" + manifestPath + "' has no paired DSO at '" + dsoPath + "' — skipping");
+									"discover: sidecar '" + manifestPath + "' has no paired DSO at '" + dsoPath + "' — skipping");
 				}
 				return;
 			}
@@ -369,7 +369,7 @@ namespace thx::plugin
 			if (!parsed)
 			{
 				thx::logMessage(thx::LogLevel::Error,
-					"discover: failed to parse '" + manifestPath + "': " + parsed.error().message);
+								"discover: failed to parse '" + manifestPath + "': " + parsed.error().message);
 				return;
 			}
 
@@ -574,7 +574,7 @@ namespace thx::plugin
 		// outstanding handles still hold a refcount on the service, so the
 		// underlying objects live; but the DSO is unmapped immediately and
 		// any later handle release will segfault.
-		thx::Registry::instance().pluginGarbage().collect();
+		thx::registry()->pluginGarbage().collect();
 
 		return load(path);
 	}
@@ -586,7 +586,7 @@ namespace thx::plugin
 		if (auto r = discover(directory, recursive); !r)
 		{
 			thx::logMessage(thx::LogLevel::Warn,
-				"discoverAndLoad: discover failed for '" + directory + "': " + r.error().message);
+							"discoverAndLoad: discover failed for '" + directory + "': " + r.error().message);
 			return summary;
 		}
 
@@ -661,7 +661,7 @@ namespace thx::plugin
 			else
 			{
 				thx::logMessage(thx::LogLevel::Warn,
-					"discoverAndLoad: failed to load '" + p + "': " + r.error().message);
+								"discoverAndLoad: failed to load '" + p + "': " + r.error().message);
 				summary.failed.emplace_back(p, std::move(r.error()));
 			}
 		}
@@ -698,13 +698,13 @@ namespace thx::plugin
 				if (!inserted && canonical < it->second)
 				{
 					thx::logMessage(thx::LogLevel::Warn,
-						"resolveLoadOrder: service '" + id + "' is provided by both '" + it->second + "' and '" + canonical + "'; preferring '" + canonical + "'");
+									"resolveLoadOrder: service '" + id + "' is provided by both '" + it->second + "' and '" + canonical + "'; preferring '" + canonical + "'");
 					it->second = canonical;
 				}
 				else if (!inserted && it->second != canonical)
 				{
 					thx::logMessage(thx::LogLevel::Warn,
-						"resolveLoadOrder: service '" + id + "' is provided by both '" + it->second + "' and '" + canonical + "'; preferring '" + it->second + "'");
+									"resolveLoadOrder: service '" + id + "' is provided by both '" + it->second + "' and '" + canonical + "'; preferring '" + it->second + "'");
 				}
 			}
 		};

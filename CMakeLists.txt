@@ -67,7 +67,6 @@ add_library(${PROJECT_NAME} SHARED
     # Public headers — top-level (cross-cutting types and umbrella)
     include/thx/thorax.h
     include/thx/thx_api.h
-    include/thx/lifecycle.h
     include/thx/string_view.h
     include/thx/span.h
     include/thx/version_type.h

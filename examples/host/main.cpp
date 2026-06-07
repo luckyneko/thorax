@@ -16,10 +16,10 @@
 // media-core plugin. loadAll() resolves that order from the manifests;
 // discoverAndLoad() would load in filesystem order and fail the decoders.
 
-#include <thx/lifecycle.h>
 #include <thx/log.h>
 #include <thx/plugin/plugin.h>
 #include <thx/service/service.h>
+#include <thx/thorax.h>
 
 #include "interfaces/asset_service.h"
 
@@ -59,7 +59,9 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-	thx::initialise("example_host");
+	thx::Settings settings;
+	settings.name = "example_host";
+	thx::initialise(settings);
 
 	if (auto r = thx::plugin::discover(argv[1]); !r)
 	{

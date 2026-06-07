@@ -53,7 +53,7 @@ namespace thx::plugin
 	public:
 		// `sm` MUST be the Registry's ServiceManager. A plugin's onLoad/onUnload
 		// registers its services through the thx::service::* facades, which
-		// dispatch to Registry::instance().serviceManager(); finalizeLoad then
+		// dispatch to registry()->serviceManager(); finalizeLoad then
 		// attributes the newly-registered services by diffing `sm`. The two only
 		// agree when sm IS the Registry's ServiceManager. In production the
 		// Registry constructs the PluginManager with its own ServiceManager; the

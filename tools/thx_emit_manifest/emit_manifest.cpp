@@ -26,6 +26,7 @@
 
 #include "thx/plugin/manifest.h"
 #include "thx/plugin/plugin.h"
+#include "thx/thorax.h"
 
 #include <cstdio>
 #include <fstream>
@@ -86,5 +87,13 @@ int main(int argc, char* argv[])
 	}
 	std::string dsoPath = argv[1];
 	std::string outPath = (argc == 3) ? argv[2] : manifestPathForDso(dsoPath);
-	return emit(dsoPath, outPath);
+
+	// inspect() opens a plugin DSO and, on teardown, queues it into the
+	// registry's PluginGarbage — so the framework's process-wide state must
+	// exist. initialise() stands it up; shutdown() drains the queue (unmapping
+	// the inspected DSO) and tears it down before exit.
+	thx::initialise();
+	int rc = emit(dsoPath, outPath);
+	thx::shutdown();
+	return rc;
 }

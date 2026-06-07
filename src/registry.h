@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "thx/thorax.h"
+
 #include "plugin/plugin_garbage.h"
 #include "plugin/plugin_manager.h"
 #include "service/service_manager.h"
@@ -36,32 +38,32 @@ namespace thx
 	class THX_INTERNAL_API Registry
 	{
 	public:
+		Registry(Settings settings);
+		~Registry();
 		Registry(Registry const&) = delete;
 		Registry& operator=(Registry const&) = delete;
 		Registry(Registry&&) = delete;
 		Registry& operator=(Registry&&) = delete;
 
-		// Process-wide singleton accessor. Constructs lazily on first call.
-		static Registry& instance() noexcept;
-
 		thx::service::ServiceManager& serviceManager() noexcept { return m_serviceManager; }
 		thx::plugin::PluginManager& pluginManager() noexcept { return m_pluginManager; }
 		thx::plugin::PluginGarbage& pluginGarbage() noexcept { return m_pluginGarbage; }
 
+		// Tears the owned state down to empty *in place* — unloads every plugin,
+		// unregisters every remaining service, and drains the deferred-close
+		// queue — without destroying the Registry itself. This is the body of
+		// ~Registry, and the first half of thx::shutdown(): shutdown() runs it
+		// while the global registry() pointer is still valid (a plugin's onUnload
+		// reaches back through the facade to registry()), then destroys the
+		// now-empty shell. Idempotent — a second call has nothing to do.
+		void clear() noexcept;
+
 		// Optional human-readable name set via thx::initialise(). Used for
 		// diagnostics; has no effect on framework behaviour. Empty until
 		// initialise() is called.
-		std::string const& debugName() const noexcept { return m_debugName; }
+		std::string const& name() const noexcept { return m_name; }
 
 	private:
-		Registry();
-
-		// Allow the free-function lifecycle hooks to mutate state without
-		// exposing it on the public surface. THX_API must match the linkage of
-		// the out-of-line declarations below (MSVC C2375 otherwise).
-		friend THX_API bool initialise(std::string debugName);
-		friend THX_API void shutdown() noexcept;
-
 		// Declaration (= initialisation) order matters in two ways:
 		//   - m_pluginGarbage must be initialised first so it outlives both
 		//     m_serviceManager and m_pluginManager: at destruction, ~PluginManager
@@ -70,15 +72,9 @@ namespace thx
 		//   - m_serviceManager must be initialised before m_pluginManager
 		//     because m_pluginManager's constructor takes m_serviceManager by
 		//     reference.
+		std::string m_name;
 		thx::plugin::PluginGarbage m_pluginGarbage;
 		thx::service::ServiceManager m_serviceManager;
 		thx::plugin::PluginManager m_pluginManager;
-		std::string m_debugName;
 	};
-
-	// thx::initialise / thx::shutdown are declared in <thx/lifecycle.h>
-	// (public). registry() is internal — used only by the in-tree facade
-	// .cpp files and the test binary.
-	THX_INTERNAL_API Registry& registry() noexcept;
-
 } // namespace thx

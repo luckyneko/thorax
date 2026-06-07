@@ -7,16 +7,17 @@
  */
 
 #include <catch2/catch_all.hpp>
-#include <thx/lifecycle.h>
+#include <thx/thorax.h>
 
 // Test isolation for the production-path tests.
 //
 // Tests that drive the framework through the public facades (thx::service::* /
-// thx::plugin::*) share the one process-wide Registry singleton. This listener
-// returns that singleton to an empty state after every test case — shutdown()
+// thx::plugin::*) share the one process-wide Registry singleton. The framework
+// requires thx::initialise() before any facade works, so this listener stands
+// the singleton up before every case and tears it back down after — shutdown()
 // unloads all plugins, unregisters all services, and drains the deferred-close
-// queue — so cases stay isolated and order-independent without each one having
-// to clean up by hand.
+// queue — so cases start from an empty Registry and stay order-independent
+// without each one having to set up or clean up by hand.
 //
 // Contract: a TEST_CASE MUST drop every ServiceHandle into a plugin DSO before
 // its body returns. This listener runs *after* the body (so case-local handles
@@ -28,6 +29,11 @@ namespace
 	struct RegistryResetListener : Catch::EventListenerBase
 	{
 		using Catch::EventListenerBase::EventListenerBase;
+
+		void testCaseStarting(Catch::TestCaseInfo const&) override
+		{
+			thx::initialise();
+		}
 
 		void testCaseEnded(Catch::TestCaseStats const&) override
 		{

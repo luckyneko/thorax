@@ -20,12 +20,12 @@ namespace thx::service
 
 	bool registerService(ServiceID id, Version version, ServiceFactory factory)
 	{
-		return thx::Registry::instance().serviceManager().registerService(std::move(id), version, std::move(factory));
+		return thx::registry()->serviceManager().registerService(std::move(id), version, std::move(factory));
 	}
 
 	bool unregisterService(ServiceID id)
 	{
-		return thx::Registry::instance().serviceManager().unregisterService(std::move(id));
+		return thx::registry()->serviceManager().unregisterService(std::move(id));
 	}
 
 	IService* acquireService(ServiceID id)
@@ -33,12 +33,12 @@ namespace thx::service
 		// getService<IService> returns a ServiceHandle<IService> whose ctor already
 		// incremented the refcount. detach() hands the raw pointer out without
 		// releasing — caller's ServiceHandle::adopt completes the hand-off.
-		return thx::Registry::instance().serviceManager().getService<IService>(std::move(id)).detach();
+		return thx::registry()->serviceManager().getService<IService>(std::move(id)).detach();
 	}
 
 	std::vector<ServiceInfo> listServices()
 	{
-		return thx::Registry::instance().serviceManager().listServices();
+		return thx::registry()->serviceManager().listServices();
 	}
 
 } // namespace thx::service

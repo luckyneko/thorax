@@ -16,10 +16,10 @@
 // provider for each from the discovered set, and loads everything in dependency
 // order — so the media-core plugin comes up first.
 
-#include <thx/lifecycle.h>
 #include <thx/log.h>
 #include <thx/plugin/plugin.h>
 #include <thx/service/service.h>
+#include <thx/thorax.h>
 
 #include "interfaces/asset_service.h"
 
@@ -33,7 +33,9 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-	thx::initialise("host_with_deps");
+	thx::Settings settings;
+	settings.name = "host_with_deps";
+	thx::initialise(settings);
 
 	if (auto r = thx::plugin::discover(argv[1]); !r)
 	{

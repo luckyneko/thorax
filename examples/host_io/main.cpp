@@ -20,8 +20,8 @@
 
 #include <thx/io/io.h>
 #include <thx/io/stream.h>
-#include <thx/lifecycle.h>
 #include <thx/plugin/plugin.h>
+#include <thx/thorax.h>
 
 #include <cstdint>
 #include <cstdio>
@@ -45,7 +45,9 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-	thx::initialise("host_io");
+	thx::Settings settings;
+	settings.name = "host_io";
+	thx::initialise(settings);
 
 	const std::string path = (std::filesystem::temp_directory_path() / "thx_host_io.bin").string();
 	const std::string addr = "file://" + path;

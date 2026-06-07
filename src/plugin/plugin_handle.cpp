@@ -51,7 +51,7 @@ namespace thx::plugin
 		// Hand the Library to PluginGarbage rather than unmapping immediately;
 		// see plugin_garbage.h for the lifetime contract. The queue's destructor
 		// (or an explicit collect()) is what eventually runs dlclose.
-		Registry::instance().pluginGarbage().schedule(std::move(m_library));
+		registry()->pluginGarbage().schedule(std::move(m_library));
 		m_createFn = nullptr;
 		m_destroyFn = nullptr;
 	}

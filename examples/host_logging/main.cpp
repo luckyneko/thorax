@@ -20,10 +20,10 @@
 // (stderr fallback), then loads the bridge + a backend and emits again (now
 // routed through the backend).
 
-#include <thx/lifecycle.h>
 #include <thx/log.h>
 #include <thx/log/log_service.h>
 #include <thx/plugin/plugin.h>
+#include <thx/thorax.h>
 
 #include <cstdio>
 
@@ -35,7 +35,9 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-	thx::initialise("host_logging");
+	thx::Settings settings;
+	settings.name = "host_logging";
+	thx::initialise(settings);
 
 	// No bridge loaded yet — this goes to core's built-in stderr fallback.
 	thx::logMessage(thx::LogLevel::Info, "before: routed to the stderr fallback");

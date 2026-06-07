@@ -11,6 +11,7 @@
 #include <thx/io/io.h>
 #include <thx/log/log_service.h>
 #include <thx/plugin/plugin.h>
+#include <thx/thorax.h>
 
 #include <algorithm>
 #include <cstdio>
@@ -28,12 +29,18 @@ int main(int argc, char* argv[])
 	if (argc < 2)
 		return 0; // header-only smoke; runtime discover is optional.
 
+	// The plugin/service facades reach the process-wide Registry, which the
+	// framework requires initialise() to stand up before anything works;
+	// shutdown() tears it back down before exit.
+	thx::initialise();
+
 	std::string const plugins_dir = argv[1];
 	auto disc = thx::plugin::discover(plugins_dir);
 	if (!disc)
 	{
 		std::fprintf(stderr, "discover(%s) failed: %s\n",
 					 plugins_dir.c_str(), disc.error().message.c_str());
+		thx::shutdown();
 		return 1;
 	}
 
@@ -58,8 +65,10 @@ int main(int argc, char* argv[])
 	{
 		std::fprintf(stderr,
 					 "discover did not find both expected plugins (spdlog + http)\n");
+		thx::shutdown();
 		return 2;
 	}
 
+	thx::shutdown();
 	return 0;
 }

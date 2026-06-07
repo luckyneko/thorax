@@ -168,7 +168,7 @@ Run them with the directory that holds the built plugins:
 **Plugin facade** ([thx/plugin/plugin.h](include/thx/plugin/plugin.h)) — the full loader surface as free functions:
 `discover` / `forget`, `open` / `close` / `closeAllOpened`, `load` / `unload` / `reload`, `discoverAndLoad`, `loadWithDependencies` / `loadAll`, `checkRequirements`, the `plugins` / `pluginInfo` / `isLoaded` / `pluginsProviding` / `pluginByName` queries, and `collectGarbage` / `pendingGarbage`. Loading is a three-state lifecycle — **Discovered → Opened → Loaded** — and every state change returns a `thx::Result<…>` (no exceptions in library code).
 
-**Lifecycle** ([thx/lifecycle.h](include/thx/lifecycle.h)) — `thx::initialise(name)` records an optional diagnostic name; `thx::shutdown()` tears framework state fully down (unloads plugins, unregisters services, drains the deferred-close queue). Release every `ServiceHandle` into a plugin DSO before calling it.
+**Lifecycle** ([thx/thorax.h](include/thx/thorax.h)) — `thx::initialise(name)` records an optional diagnostic name; `thx::shutdown()` tears framework state fully down (unloads plugins, unregisters services, drains the deferred-close queue). Release every `ServiceHandle` into a plugin DSO before calling it.
 
 **Multi-service / advanced plugins** — when one DSO needs to register several services, hold per-DSO state, or declare `required()` dependencies, write your own `IPlugin` and use `THX_DEFINE_PLUGIN(MyPlugin)` instead of `THX_DEFINE_SERVICE_PLUGIN`.
 
