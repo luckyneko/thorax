@@ -18,7 +18,7 @@ namespace
 	// Helper: write `contents` to a temp file and return the path.
 	// The path is unique per test by appending a counter; cleanup is left
 	// to the test (or the OS) so test failures don't lose the artefact.
-	std::string writeTempManifest(std::string const& tag, std::string const& contents)
+	std::string writeTempManifest(const std::string& tag, const std::string& contents)
 	{
 		namespace fs = std::filesystem;
 		static int counter = 0;
@@ -64,7 +64,7 @@ TEST_CASE("parseManifest - populated provides and requires", "[manifest]")
 
 	auto r = thx::plugin::parseManifest(path);
 	REQUIRE(r);
-	auto const& m = r.value();
+	const auto& m = r.value();
 
 	REQUIRE(m.provides.size() == 2);
 	REQUIRE(m.provides[0] == "thx.cameras.ICameraDriver");
@@ -322,7 +322,7 @@ namespace
 {
 	// Write `contents` to a temp file and return the path. Used to round-trip
 	// serialised output through parseManifest.
-	std::string writeTempJson(std::string const& tag, std::string const& contents)
+	std::string writeTempJson(const std::string& tag, const std::string& contents)
 	{
 		namespace fs = std::filesystem;
 		static int counter = 0;
@@ -366,7 +366,7 @@ TEST_CASE("serialiseManifest - round-trip preserves all fields", "[manifest][ser
 
 	auto parsed = thx::plugin::parseManifest(path);
 	REQUIRE(parsed);
-	auto const& r = parsed.value();
+	const auto& r = parsed.value();
 
 	REQUIRE(r.schema == original.schema);
 	REQUIRE(r.name == original.name);

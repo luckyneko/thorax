@@ -42,13 +42,13 @@ namespace thx::plugin
 		PluginHandle(PluginHandle&&) noexcept;
 		PluginHandle& operator=(PluginHandle&&) noexcept;
 
-		PluginHandle(PluginHandle const&) = delete;
-		PluginHandle& operator=(PluginHandle const&) = delete;
+		PluginHandle(const PluginHandle&) = delete;
+		PluginHandle& operator=(const PluginHandle&) = delete;
 
 		// True if the handle holds an open DSO.
 		explicit operator bool() const noexcept { return static_cast<bool>(m_library); }
 
-		std::string const& path() const noexcept { return m_library.path(); }
+		const std::string& path() const noexcept { return m_library.path(); }
 
 		PluginCreateFn createFn() const noexcept { return m_createFn; }
 		PluginDestroyFn destroyFn() const noexcept { return m_destroyFn; }
@@ -61,7 +61,7 @@ namespace thx::plugin
 		// fail-fast loading when a plugin has missing transitive deps. Default
 		// is Lazy.
 		static Result<PluginHandle, Error> open(
-			std::string const& path,
+			const std::string& path,
 			Library::LoadFlags flags = Library::LoadFlags::Lazy);
 
 	private:

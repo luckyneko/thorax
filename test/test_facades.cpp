@@ -61,7 +61,7 @@ TEST_CASE("thx::service::listServices - reflects the Registry-owned manager",
 	REQUIRE(thx::service::registerService<FacadeProbe>());
 
 	bool found = false;
-	for (auto const& info : thx::service::listServices())
+	for (const auto& info : thx::service::listServices())
 	{
 		if (info.id == FacadeProbe::staticId())
 		{
@@ -95,7 +95,7 @@ TEST_CASE("thx::plugin facades - cover the load lifecycle",
 	// plugins(Loaded) includes our entry.
 	auto entries = thx::plugin::plugins(thx::plugin::State::Loaded);
 	bool found = false;
-	for (auto const& e : entries)
+	for (const auto& e : entries)
 		if (e.path == THX_MOCK_PLUGIN_PATH || e.name == "thx_mock.MockService")
 		{
 			found = true;
@@ -160,7 +160,7 @@ TEST_CASE("thx::plugin facades - name / provides queries and loadWithDependencie
 	// Type-deduced provides filter forwards to the string overload.
 	auto providers = thx::plugin::pluginsProviding<thx_mock::MockService>();
 	bool foundProvider = false;
-	for (auto const& p : providers)
+	for (const auto& p : providers)
 		if (p.path == canonical)
 			foundProvider = true;
 	REQUIRE(foundProvider);

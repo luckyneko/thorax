@@ -36,14 +36,14 @@ namespace
 
 		bool hasLevel(thx::LogLevel lvl) const
 		{
-			for (auto const& r : records)
+			for (const auto& r : records)
 				if (r.level == lvl)
 					return true;
 			return false;
 		}
 	};
 
-	void captureSink(thx::LogRecord const& r, void* userdata)
+	void captureSink(const thx::LogRecord& r, void* userdata)
 	{
 		auto* cap = static_cast<Capture*>(userdata);
 		cap->records.push_back({r.level, r.location,
@@ -105,7 +105,7 @@ TEST_CASE("log - captures call-site source location", "[log]")
 	thx::logMessage(thx::LogLevel::Debug, "location check");
 
 	REQUIRE(!g.cap.records.empty());
-	auto const& loc = g.cap.records[0].location;
+	const auto& loc = g.cap.records[0].location;
 	REQUIRE(loc.line == expected_line);
 	REQUIRE(std::string(loc.file).find("test_diagnostics") != std::string::npos);
 	REQUIRE(std::string(loc.function).size() > 0);

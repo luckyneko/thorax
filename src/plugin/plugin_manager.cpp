@@ -42,10 +42,10 @@ namespace thx::plugin
 		// A well-behaved IPlugin removes everything it registered; this is a safety
 		// net against third-party plugins that forget.
 		void sweepSurvivingServices(ServiceManager& sm,
-									std::vector<ServiceID> const& ids,
-									std::string const& pluginName)
+									const std::vector<ServiceID>& ids,
+									const std::string& pluginName)
 		{
-			for (auto const& id : ids)
+			for (const auto& id : ids)
 			{
 				if (sm.getService<IService>(id))
 				{
@@ -56,8 +56,8 @@ namespace thx::plugin
 			}
 		}
 
-		std::string pluginDisplayName(std::shared_ptr<IPlugin> const& plugin,
-									  std::string const& fallback)
+		std::string pluginDisplayName(const std::shared_ptr<IPlugin>& plugin,
+									  const std::string& fallback)
 		{
 			return plugin
 					   ? std::string(static_cast<std::string_view>(plugin->name()))
@@ -94,17 +94,17 @@ namespace thx::plugin
 		m_warnedMissingDso.clear();
 	}
 
-	std::string PluginManager::resolveCanonical(std::string const& path)
+	std::string PluginManager::resolveCanonical(const std::string& path)
 	{
 		std::error_code ec;
 		auto c = std::filesystem::canonical(path, ec);
 		return ec ? std::string{} : c.string();
 	}
 
-	std::string PluginManager::manifestPathForDso(std::string const& dsoPath)
+	std::string PluginManager::manifestPathForDso(const std::string& dsoPath)
 	{
 		// Strip the platform DSO suffix if present, then append .thx.json.
-		std::string const suffix = LIBRARY_EXTENSION;
+		const std::string suffix = LIBRARY_EXTENSION;
 		if (dsoPath.size() > suffix.size() && dsoPath.compare(dsoPath.size() - suffix.size(), suffix.size(), suffix) == 0)
 		{
 			return dsoPath.substr(0, dsoPath.size() - suffix.size()) + ".thx.json";
@@ -113,7 +113,7 @@ namespace thx::plugin
 		return dsoPath + ".thx.json";
 	}
 
-	Result<void, Error> PluginManager::ensureDiscovered(std::string const& canonical)
+	Result<void, Error> PluginManager::ensureDiscovered(const std::string& canonical)
 	{
 		if (m_discovered.count(canonical) || m_opened.count(canonical) || m_plugins.count(canonical))
 			return Result<void, Error>::ok();
@@ -127,12 +127,12 @@ namespace thx::plugin
 		return Result<void, Error>::ok();
 	}
 
-	Result<void, Error> PluginManager::checkRequirements(ServiceManager const& sm,
+	Result<void, Error> PluginManager::checkRequirements(const ServiceManager& sm,
 														 Span<const ServiceRequirement> reqs)
 	{
 		for (std::size_t i = 0; i < reqs.size(); ++i)
 		{
-			auto const& req = reqs[i];
+			const auto& req = reqs[i];
 			auto svc = sm.getService<IService>(req.id);
 			if (!svc)
 				return Result<void, Error>::err({ErrorCode::NotLoaded,
@@ -150,7 +150,7 @@ namespace thx::plugin
 	// --- Internal: open a DSO and produce an OpenedEntry -------------------------
 
 	Result<PluginManager::OpenedEntry, Error>
-	PluginManager::openHandle(std::string const& canonical, PluginManifest manifest)
+	PluginManager::openHandle(const std::string& canonical, PluginManifest manifest)
 	{
 		// Drain the deferred-close queue before any new dlopen so we don't
 		// accumulate a long tail of mapped-but-released DSOs in long-running
@@ -188,7 +188,7 @@ namespace thx::plugin
 	// --- Internal: promote an OpenedEntry into a LoadedEntry ---------------------
 
 	Result<PluginManager::LoadedEntry, Error>
-	PluginManager::finalizeLoad(OpenedEntry opened, std::string const& canonical)
+	PluginManager::finalizeLoad(OpenedEntry opened, const std::string& canonical)
 	{
 		if (auto r = checkRequirements(m_sm, opened.plugin->required()); !r)
 			return Result<LoadedEntry, Error>::err(std::move(r.error()));
@@ -197,17 +197,17 @@ namespace thx::plugin
 		auto before = m_sm.listServices();
 		std::unordered_set<ServiceID> beforeIds;
 		beforeIds.reserve(before.size());
-		for (auto const& s : before)
+		for (const auto& s : before)
 			beforeIds.insert(s.id);
 
 		auto diffNewIds = [&]() -> std::vector<ServiceID>
 		{
 			std::vector<ServiceID> ids;
-			for (auto const& s : m_sm.listServices())
+			for (const auto& s : m_sm.listServices())
 				if (!beforeIds.count(s.id))
 					ids.push_back(s.id);
 			std::sort(ids.begin(), ids.end(),
-					  [](ServiceID const& a, ServiceID const& b)
+					  [](const ServiceID& a, const ServiceID& b)
 					  {
 						  return std::string_view(a.name()) < std::string_view(b.name());
 					  });
@@ -224,7 +224,7 @@ namespace thx::plugin
 		{
 			// onLoad may have partially registered services before returning false.
 			// Unregister them so the failed load leaves the registry as it was.
-			for (auto const& id : diffNewIds())
+			for (const auto& id : diffNewIds())
 				m_sm.unregisterService(id);
 			return Result<LoadedEntry, Error>::err({ErrorCode::RegistrationFailed,
 													"IPlugin::onLoad returned false for: " + canonical});
@@ -241,11 +241,11 @@ namespace thx::plugin
 
 		auto rollback = [&]
 		{
-			for (auto const& id : registered)
+			for (const auto& id : registered)
 				m_sm.unregisterService(id);
 		};
 
-		auto mismatch = [&](std::string const& field, std::string const& detail)
+		auto mismatch = [&](const std::string& field, const std::string& detail)
 		{
 			rollback();
 			return Result<LoadedEntry, Error>::err({ErrorCode::ManifestMismatch,
@@ -279,7 +279,7 @@ namespace thx::plugin
 
 			std::vector<std::pair<std::string, Version>> manifestSet;
 			manifestSet.reserve(opened.manifest.requirements.size());
-			for (auto const& r : opened.manifest.requirements)
+			for (const auto& r : opened.manifest.requirements)
 				manifestSet.emplace_back(r.id, r.version);
 			std::sort(manifestSet.begin(), manifestSet.end());
 
@@ -292,7 +292,7 @@ namespace thx::plugin
 		{
 			std::vector<std::string> liveSet;
 			liveSet.reserve(registered.size());
-			for (auto const& id : registered)
+			for (const auto& id : registered)
 				liveSet.emplace_back(id.name());
 			std::sort(liveSet.begin(), liveSet.end());
 
@@ -319,22 +319,22 @@ namespace thx::plugin
 		constexpr std::string_view kSidecarSuffix = ".thx.json";
 
 		// True if `filename` ends with the sidecar suffix.
-		bool hasSidecarSuffix(std::string const& filename) noexcept
+		bool hasSidecarSuffix(const std::string& filename) noexcept
 		{
 			return filename.size() > kSidecarSuffix.size() && filename.compare(filename.size() - kSidecarSuffix.size(),
 																			   kSidecarSuffix.size(), kSidecarSuffix) == 0;
 		}
 	} // namespace
 
-	Result<void, Error> PluginManager::discover(std::string const& directory, Recursive recursive)
+	Result<void, Error> PluginManager::discover(const std::string& directory, Recursive recursive)
 	{
 		std::lock_guard<std::recursive_mutex> lock(m_mutex);
 
 		// Per-entry handler — shared between the recursive and non-recursive
 		// iterator paths. Returns nothing; logs and continues on failure modes.
-		auto handle = [&](std::filesystem::directory_entry const& entry)
+		auto handle = [&](const std::filesystem::directory_entry& entry)
 		{
-			auto const& filename = entry.path().filename().string();
+			const auto& filename = entry.path().filename().string();
 			if (!hasSidecarSuffix(filename))
 				return;
 
@@ -383,7 +383,7 @@ namespace thx::plugin
 			if (ec)
 				return Result<void, Error>::err({ErrorCode::FileNotFound,
 												 "Cannot iterate directory '" + directory + "': " + ec.message()});
-			for (auto const& entry : iter)
+			for (const auto& entry : iter)
 				handle(entry);
 		}
 		else
@@ -392,17 +392,17 @@ namespace thx::plugin
 			if (ec)
 				return Result<void, Error>::err({ErrorCode::FileNotFound,
 												 "Cannot iterate directory '" + directory + "': " + ec.message()});
-			for (auto const& entry : iter)
+			for (const auto& entry : iter)
 				handle(entry);
 		}
 		return Result<void, Error>::ok();
 	}
 
-	Result<void, Error> PluginManager::forget(std::string const& path)
+	Result<void, Error> PluginManager::forget(const std::string& path)
 	{
 		std::lock_guard<std::recursive_mutex> lock(m_mutex);
 		auto canonical = resolveCanonical(path);
-		auto const& key = canonical.empty() ? path : canonical;
+		const auto& key = canonical.empty() ? path : canonical;
 
 		if (m_plugins.count(key))
 			return Result<void, Error>::err({ErrorCode::InUse,
@@ -417,7 +417,7 @@ namespace thx::plugin
 		return Result<void, Error>::ok();
 	}
 
-	Result<void, Error> PluginManager::open(std::string const& path)
+	Result<void, Error> PluginManager::open(const std::string& path)
 	{
 		std::lock_guard<std::recursive_mutex> lock(m_mutex);
 		auto canonical = resolveCanonical(path);
@@ -452,11 +452,11 @@ namespace thx::plugin
 		return Result<void, Error>::ok();
 	}
 
-	Result<void, Error> PluginManager::close(std::string const& path)
+	Result<void, Error> PluginManager::close(const std::string& path)
 	{
 		std::lock_guard<std::recursive_mutex> lock(m_mutex);
 		auto canonical = resolveCanonical(path);
-		auto const& key = canonical.empty() ? path : canonical;
+		const auto& key = canonical.empty() ? path : canonical;
 
 		auto it = m_opened.find(key);
 		if (it == m_opened.end())
@@ -484,7 +484,7 @@ namespace thx::plugin
 		return count;
 	}
 
-	Result<void, Error> PluginManager::load(std::string const& path)
+	Result<void, Error> PluginManager::load(const std::string& path)
 	{
 		std::lock_guard<std::recursive_mutex> lock(m_mutex);
 		auto canonical = resolveCanonical(path);
@@ -536,11 +536,11 @@ namespace thx::plugin
 		return Result<void, Error>::ok();
 	}
 
-	Result<void, Error> PluginManager::unload(std::string const& path)
+	Result<void, Error> PluginManager::unload(const std::string& path)
 	{
 		std::lock_guard<std::recursive_mutex> lock(m_mutex);
 		auto canonical = resolveCanonical(path);
-		auto const& key = canonical.empty() ? path : canonical;
+		const auto& key = canonical.empty() ? path : canonical;
 
 		auto it = m_plugins.find(key);
 		if (it == m_plugins.end())
@@ -560,7 +560,7 @@ namespace thx::plugin
 		return Result<void, Error>::ok();
 	}
 
-	Result<void, Error> PluginManager::reload(std::string const& path)
+	Result<void, Error> PluginManager::reload(const std::string& path)
 	{
 		std::lock_guard<std::recursive_mutex> lock(m_mutex);
 
@@ -579,7 +579,7 @@ namespace thx::plugin
 		return load(path);
 	}
 
-	LoadSummary PluginManager::discoverAndLoad(std::string const& directory, Recursive recursive)
+	LoadSummary PluginManager::discoverAndLoad(const std::string& directory, Recursive recursive)
 	{
 		std::lock_guard<std::recursive_mutex> lock(m_mutex);
 		LoadSummary summary;
@@ -601,9 +601,9 @@ namespace thx::plugin
 		auto enumerate = [&](auto&& iter)
 		{
 			std::vector<std::string> out;
-			for (auto const& entry : iter)
+			for (const auto& entry : iter)
 			{
-				auto const& filename = entry.path().filename().string();
+				const auto& filename = entry.path().filename().string();
 				if (!hasSidecarSuffix(filename))
 					continue;
 
@@ -641,7 +641,7 @@ namespace thx::plugin
 		}
 		std::sort(paths.begin(), paths.end()); // deterministic order
 
-		for (auto const& p : paths)
+		for (const auto& p : paths)
 		{
 			if (m_plugins.count(p))
 			{
@@ -670,11 +670,11 @@ namespace thx::plugin
 
 	// --- Dependency-resolving load ----------------------------------------------
 
-	Result<void, Error> PluginManager::resolveLoadOrder(std::vector<std::string> const& roots,
+	Result<void, Error> PluginManager::resolveLoadOrder(const std::vector<std::string>& roots,
 														std::vector<std::string>& order) const
 	{
 		// Locate the manifest for a canonical path in whichever state it sits.
-		auto manifestFor = [&](std::string const& canonical) -> PluginManifest const*
+		auto manifestFor = [&](const std::string& canonical) -> const PluginManifest*
 		{
 			if (auto it = m_discovered.find(canonical); it != m_discovered.end())
 				return &it->second.manifest;
@@ -690,9 +690,9 @@ namespace thx::plugin
 		// is deterministic, and warn (an ambiguous provider is a host-side
 		// configuration smell).
 		std::unordered_map<std::string, std::string> providerOf;
-		auto indexProvides = [&](std::string const& canonical, PluginManifest const& m)
+		auto indexProvides = [&](const std::string& canonical, const PluginManifest& m)
 		{
-			for (auto const& id : m.provides)
+			for (const auto& id : m.provides)
 			{
 				auto [it, inserted] = providerOf.emplace(id, canonical);
 				if (!inserted && canonical < it->second)
@@ -708,16 +708,16 @@ namespace thx::plugin
 				}
 			}
 		};
-		for (auto const& [path, entry] : m_discovered)
+		for (const auto& [path, entry] : m_discovered)
 			indexProvides(path, entry.manifest);
-		for (auto const& [path, entry] : m_opened)
+		for (const auto& [path, entry] : m_opened)
 			indexProvides(path, entry.manifest);
-		for (auto const& [path, entry] : m_plugins)
+		for (const auto& [path, entry] : m_plugins)
 			indexProvides(path, entry.manifest);
 
 		// Is `req` already met by a service registered in the ServiceManager?
 		// Mirrors checkRequirements: same id, compatible version.
-		auto satisfiedByRegistered = [&](ManifestRequirement const& req) -> bool
+		auto satisfiedByRegistered = [&](const ManifestRequirement& req) -> bool
 		{
 			auto svc = m_sm.getService<IService>(ServiceID(req.id.c_str()));
 			return svc && Version::compatible(req.version, svc->version());
@@ -727,9 +727,9 @@ namespace thx::plugin
 		std::unordered_map<std::string, int> color;
 		Result<void, Error> failure = Result<void, Error>::ok();
 
-		std::function<bool(std::string const&)> visit = [&](std::string const& node) -> bool
+		std::function<bool(const std::string&)> visit = [&](const std::string& node) -> bool
 		{
-			auto const& c = color[node]; // inserts white (0) on first touch
+			const auto& c = color[node]; // inserts white (0) on first touch
 			if (c == 2)
 				return true;
 			if (c == 1)
@@ -743,9 +743,9 @@ namespace thx::plugin
 
 			color[node] = 1; // gray
 
-			if (PluginManifest const* mani = manifestFor(node))
+			if (const PluginManifest* mani = manifestFor(node))
 			{
-				for (auto const& req : mani->requirements)
+				for (const auto& req : mani->requirements)
 				{
 					if (satisfiedByRegistered(req))
 						continue;
@@ -769,7 +769,7 @@ namespace thx::plugin
 			return true;
 		};
 
-		for (auto const& root : roots)
+		for (const auto& root : roots)
 		{
 			if (!visit(root))
 				return failure;
@@ -788,7 +788,7 @@ namespace thx::plugin
 		rootPaths.reserve(roots.size());
 		for (std::size_t i = 0; i < roots.size(); ++i)
 		{
-			auto const& info = roots[i];
+			const auto& info = roots[i];
 			auto canonical = resolveCanonical(info.path);
 			if (canonical.empty())
 			{
@@ -810,12 +810,12 @@ namespace thx::plugin
 			thx::logMessage(thx::LogLevel::Warn, "loadAll: dependency resolution failed: " + r.error().message);
 			// Attribute the structural error to the first root that triggered
 			// it; callers see it in `failed`. Nothing is loaded.
-			std::string const& key = rootPaths.empty() ? std::string{} : rootPaths.front();
+			const std::string& key = rootPaths.empty() ? std::string{} : rootPaths.front();
 			summary.failed.emplace_back(key, std::move(r.error()));
 			return summary;
 		}
 
-		for (auto const& p : order)
+		for (const auto& p : order)
 		{
 			if (m_plugins.count(p))
 			{
@@ -837,7 +837,7 @@ namespace thx::plugin
 		return summary;
 	}
 
-	LoadSummary PluginManager::loadWithDependencies(std::string const& path)
+	LoadSummary PluginManager::loadWithDependencies(const std::string& path)
 	{
 		std::lock_guard<std::recursive_mutex> lock(m_mutex);
 		LoadSummary summary;
@@ -865,7 +865,7 @@ namespace thx::plugin
 	namespace
 	{
 		// Populate the manifest-derived fields on a PluginInfo.
-		void populateFromManifest(PluginInfo& info, PluginManifest const& m)
+		void populateFromManifest(PluginInfo& info, const PluginManifest& m)
 		{
 			info.name = m.name;
 			info.version = m.version;
@@ -875,18 +875,18 @@ namespace thx::plugin
 
 		// Convert runtime ServiceIDs to their string form for the value-typed
 		// PluginInfo snapshot.
-		std::vector<std::string> serviceNames(std::vector<thx::service::ServiceID> const& ids)
+		std::vector<std::string> serviceNames(const std::vector<thx::service::ServiceID>& ids)
 		{
 			std::vector<std::string> out;
 			out.reserve(ids.size());
-			for (auto const& id : ids)
+			for (const auto& id : ids)
 				out.emplace_back(id.name());
 			return out;
 		}
 	} // namespace
 
-	PluginInfo PluginManager::infoFromDiscovered(std::string const& path,
-												 DiscoveredEntry const& entry) const
+	PluginInfo PluginManager::infoFromDiscovered(const std::string& path,
+												 const DiscoveredEntry& entry) const
 	{
 		PluginInfo info;
 		info.path = path;
@@ -896,8 +896,8 @@ namespace thx::plugin
 		return info;
 	}
 
-	PluginInfo PluginManager::infoFromOpened(std::string const& path,
-											 OpenedEntry const& entry) const
+	PluginInfo PluginManager::infoFromOpened(const std::string& path,
+											 const OpenedEntry& entry) const
 	{
 		PluginInfo info;
 		info.path = path;
@@ -907,8 +907,8 @@ namespace thx::plugin
 		return info;
 	}
 
-	PluginInfo PluginManager::infoFromLoaded(std::string const& path,
-											 LoadedEntry const& entry) const
+	PluginInfo PluginManager::infoFromLoaded(const std::string& path,
+											 const LoadedEntry& entry) const
 	{
 		PluginInfo info;
 		info.path = path;
@@ -925,11 +925,11 @@ namespace thx::plugin
 		std::lock_guard<std::recursive_mutex> lock(m_mutex);
 		std::vector<PluginInfo> result;
 		result.reserve(m_discovered.size() + m_opened.size() + m_plugins.size());
-		for (auto const& [path, entry] : m_discovered)
+		for (const auto& [path, entry] : m_discovered)
 			result.push_back(infoFromDiscovered(path, entry));
-		for (auto const& [path, entry] : m_opened)
+		for (const auto& [path, entry] : m_opened)
 			result.push_back(infoFromOpened(path, entry));
-		for (auto const& [path, entry] : m_plugins)
+		for (const auto& [path, entry] : m_plugins)
 			result.push_back(infoFromLoaded(path, entry));
 		return result;
 	}
@@ -942,28 +942,28 @@ namespace thx::plugin
 		{
 			case State::Discovered:
 				result.reserve(m_discovered.size());
-				for (auto const& [path, entry] : m_discovered)
+				for (const auto& [path, entry] : m_discovered)
 					result.push_back(infoFromDiscovered(path, entry));
 				return result;
 			case State::Opened:
 				result.reserve(m_opened.size());
-				for (auto const& [path, entry] : m_opened)
+				for (const auto& [path, entry] : m_opened)
 					result.push_back(infoFromOpened(path, entry));
 				return result;
 			case State::Loaded:
 				result.reserve(m_plugins.size());
-				for (auto const& [path, entry] : m_plugins)
+				for (const auto& [path, entry] : m_plugins)
 					result.push_back(infoFromLoaded(path, entry));
 				return result;
 		}
 		return result;
 	}
 
-	std::optional<PluginInfo> PluginManager::pluginInfo(std::string const& path) const
+	std::optional<PluginInfo> PluginManager::pluginInfo(const std::string& path) const
 	{
 		std::lock_guard<std::recursive_mutex> lock(m_mutex);
 		auto canonical = resolveCanonical(path);
-		auto const& key = canonical.empty() ? path : canonical;
+		const auto& key = canonical.empty() ? path : canonical;
 
 		if (auto it = m_plugins.find(key); it != m_plugins.end())
 			return infoFromLoaded(it->first, it->second);
@@ -974,11 +974,11 @@ namespace thx::plugin
 		return std::nullopt;
 	}
 
-	bool PluginManager::is(State state, std::string const& path) const
+	bool PluginManager::is(State state, const std::string& path) const
 	{
 		std::lock_guard<std::recursive_mutex> lock(m_mutex);
 		auto canonical = resolveCanonical(path);
-		auto const& key = canonical.empty() ? path : canonical;
+		const auto& key = canonical.empty() ? path : canonical;
 
 		switch (state)
 		{
@@ -992,14 +992,14 @@ namespace thx::plugin
 		return false;
 	}
 
-	std::vector<PluginInfo> PluginManager::pluginsProviding(std::string const& serviceId) const
+	std::vector<PluginInfo> PluginManager::pluginsProviding(const std::string& serviceId) const
 	{
 		std::lock_guard<std::recursive_mutex> lock(m_mutex);
 		std::vector<PluginInfo> result;
 
-		auto matches = [&](std::vector<std::string> const& provides) -> bool
+		auto matches = [&](const std::vector<std::string>& provides) -> bool
 		{
-			for (auto const& p : provides)
+			for (const auto& p : provides)
 				if (p == serviceId)
 					return true;
 			return false;
@@ -1008,19 +1008,19 @@ namespace thx::plugin
 		// Iterate the manifest's `provides` list — which is populated for
 		// Discovered, Opened, and Loaded entries (manifest is read at
 		// discover() time). No DSO interaction.
-		for (auto const& [path, entry] : m_discovered)
+		for (const auto& [path, entry] : m_discovered)
 			if (matches(entry.manifest.provides))
 				result.push_back(infoFromDiscovered(path, entry));
-		for (auto const& [path, entry] : m_opened)
+		for (const auto& [path, entry] : m_opened)
 			if (matches(entry.manifest.provides))
 				result.push_back(infoFromOpened(path, entry));
-		for (auto const& [path, entry] : m_plugins)
+		for (const auto& [path, entry] : m_plugins)
 			if (matches(entry.manifest.provides))
 				result.push_back(infoFromLoaded(path, entry));
 		return result;
 	}
 
-	std::optional<PluginInfo> PluginManager::pluginByName(std::string const& name) const
+	std::optional<PluginInfo> PluginManager::pluginByName(const std::string& name) const
 	{
 		std::lock_guard<std::recursive_mutex> lock(m_mutex);
 
@@ -1036,11 +1036,11 @@ namespace thx::plugin
 				best = std::move(info);
 		};
 
-		for (auto const& [path, entry] : m_discovered)
+		for (const auto& [path, entry] : m_discovered)
 			consider(infoFromDiscovered(path, entry));
-		for (auto const& [path, entry] : m_opened)
+		for (const auto& [path, entry] : m_opened)
 			consider(infoFromOpened(path, entry));
-		for (auto const& [path, entry] : m_plugins)
+		for (const auto& [path, entry] : m_plugins)
 			consider(infoFromLoaded(path, entry));
 		return best;
 	}

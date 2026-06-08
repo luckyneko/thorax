@@ -241,7 +241,7 @@ TEST_CASE("PluginManager - load drains the deferred-close queue",
 // Helper: write a minimal-but-valid manifest at `path` advertising `name`.
 namespace
 {
-	void writeStubManifest(std::filesystem::path const& path, std::string const& name)
+	void writeStubManifest(const std::filesystem::path& path, const std::string& name)
 	{
 		std::ofstream f(path);
 		f << R"({
@@ -257,8 +257,8 @@ namespace
 	// Helper: copy a plugin DSO and its sidecar from src_dso path into dst_dir.
 	// The sidecar is assumed to live next to the source with the same basename
 	// and a .thx.json suffix.
-	std::filesystem::path copyPluginWithSidecar(std::filesystem::path const& src_dso,
-												std::filesystem::path const& dst_dir)
+	std::filesystem::path copyPluginWithSidecar(const std::filesystem::path& src_dso,
+												const std::filesystem::path& dst_dir)
 	{
 		namespace fs = std::filesystem;
 		auto basename = src_dso.stem().string(); // e.g. "libmock_plugin"
@@ -584,7 +584,7 @@ TEST_CASE("PluginManager - IPlugin required() service missing fails the load",
 namespace
 {
 	// Index of a canonical path within a loaded-list, for ordering asserts.
-	std::ptrdiff_t indexOf(std::vector<std::string> const& v, std::string const& p)
+	std::ptrdiff_t indexOf(const std::vector<std::string>& v, const std::string& p)
 	{
 		auto it = std::find(v.begin(), v.end(), p);
 		return it == v.end() ? -1 : (it - v.begin());
@@ -721,8 +721,8 @@ TEST_CASE("PluginManager::loadWithDependencies - detects a dependency cycle",
 	// only need to *exist* for discover() to register the entries — the cycle
 	// is detected from the manifests alone, before any DSO is opened, so empty
 	// stub files suffice.
-	std::string const ext = thx::LIBRARY_EXTENSION;
-	auto writeCycle = [&](char const* base, char const* provides, char const* needs)
+	const std::string ext = thx::LIBRARY_EXTENSION;
+	auto writeCycle = [&](const char* base, const char* provides, const char* needs)
 	{
 		std::ofstream(tmp / (std::string(base) + ext)).put('\0'); // stub DSO
 		std::ofstream mf(tmp / (std::string(base) + ".thx.json"));
@@ -1097,7 +1097,7 @@ TEST_CASE("thx::plugin facade exposes the new query functions",
 
 	auto loaded = thx::plugin::plugins(thx::plugin::State::Loaded);
 	bool found = false;
-	for (auto const& p : loaded)
+	for (const auto& p : loaded)
 		if (p.path == info->path)
 		{
 			found = true;

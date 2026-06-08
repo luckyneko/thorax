@@ -40,8 +40,8 @@ namespace thx
 	public:
 		Registry(Settings settings);
 		~Registry();
-		Registry(Registry const&) = delete;
-		Registry& operator=(Registry const&) = delete;
+		Registry(const Registry&) = delete;
+		Registry& operator=(const Registry&) = delete;
 		Registry(Registry&&) = delete;
 		Registry& operator=(Registry&&) = delete;
 
@@ -61,7 +61,7 @@ namespace thx
 		// Optional human-readable name set via thx::initialise(). Used for
 		// diagnostics; has no effect on framework behaviour. Empty until
 		// initialise() is called.
-		std::string const& name() const noexcept { return m_name; }
+		const std::string& name() const noexcept { return m_name; }
 
 	private:
 		// Declaration (= initialisation) order matters in two ways:

@@ -154,20 +154,25 @@ jobs:
           ./build-consumer/consumer
           ./build-consumer/consumer_plugins "$GITHUB_WORKSPACE/_install/lib/thorax/plugins"
 
-  # Style gate. The repo is formatted with a pinned clang-format; this fails the
-  # build on any drift. Pinned because clang-format's output varies by major
-  # version — bump the version here and reformat the tree in the same commit.
+  # Style gate. Runs the project's own `format-check` target, which uses the
+  # pinned clang-format vendored by cmake/addclangformat.cmake — the *same*
+  # binary developers run locally, so CI and local never disagree on version.
+  # Bump the version in that module and reformat the tree in the same commit.
+  # Configure with everything but the formatter off so this job pulls only the
+  # clang-format binary, not Catch2 / spdlog / httplib.
   format:
     name: "clang-format"
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install clang-format
-        run: pipx install clang-format==22.1.5
+      - name: Configure (formatter only)
+        run: >
+          cmake -S . -B build
+          -DTHORAX_BUILD_TESTING=OFF
+          -DTHORAX_BUILD_EXAMPLES=OFF
+          -DTHORAX_BUILD_PLUGINS=OFF
+          -DTHORAX_INSTALL=OFF
 
       - name: Check formatting
-        run: >
-          find src include plugins tools examples test
-          -type f \( -name '*.h' -o -name '*.cpp' -o -name '*.inl' \)
-          -print0 | xargs -0 clang-format --dry-run -Werror
+        run: cmake --build build --target format-check

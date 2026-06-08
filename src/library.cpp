@@ -24,7 +24,7 @@ namespace thx
 	{
 
 #if defined(_WIN32)
-		void* nativeOpen(char const* path, Library::LoadFlags /*flags*/) noexcept
+		void* nativeOpen(const char* path, Library::LoadFlags /*flags*/) noexcept
 		{
 			// LoadLibrary doesn't expose a Lazy/Now split — symbol resolution
 			// happens at load time regardless. Strict and Lazy converge here.
@@ -34,7 +34,7 @@ namespace thx
 		{
 			FreeLibrary(static_cast<HMODULE>(handle));
 		}
-		void* nativeSym(void* handle, char const* name) noexcept
+		void* nativeSym(void* handle, const char* name) noexcept
 		{
 			return reinterpret_cast<void*>(GetProcAddress(static_cast<HMODULE>(handle), name));
 		}
@@ -46,7 +46,7 @@ namespace thx
 			return buf;
 		}
 #else
-		void* nativeOpen(char const* path, Library::LoadFlags flags) noexcept
+		void* nativeOpen(const char* path, Library::LoadFlags flags) noexcept
 		{
 			int mode = (flags == Library::LoadFlags::Strict) ? RTLD_NOW : RTLD_LAZY;
 			return dlopen(path, mode | RTLD_LOCAL);
@@ -55,13 +55,13 @@ namespace thx
 		{
 			dlclose(handle);
 		}
-		void* nativeSym(void* handle, char const* name) noexcept
+		void* nativeSym(void* handle, const char* name) noexcept
 		{
 			return dlsym(handle, name);
 		}
 		std::string nativeError() noexcept
 		{
-			char const* msg = dlerror();
+			const char* msg = dlerror();
 			return msg ? std::string(msg) : std::string{};
 		}
 #endif
@@ -98,7 +98,7 @@ namespace thx
 		return *this;
 	}
 
-	Library& Library::open(std::filesystem::path const& path, LoadFlags flags)
+	Library& Library::open(const std::filesystem::path& path, LoadFlags flags)
 	{
 		if (m_handle)
 			close();
@@ -140,7 +140,7 @@ namespace thx
 		return h;
 	}
 
-	void* Library::sym(char const* name) noexcept
+	void* Library::sym(const char* name) noexcept
 	{
 		if (!m_handle || !name)
 			return nullptr;

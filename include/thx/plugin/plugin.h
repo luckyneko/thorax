@@ -107,13 +107,13 @@ namespace thx::plugin
 	// All take a path by value or reference; all return Result<void, Error>.
 	// Documented behaviour matches the previous PluginManager methods.
 
-	THX_API Result<void, Error> discover(std::string const& directory, Recursive recursive = Recursive::No);
-	THX_API Result<void, Error> forget(std::string const& path);
-	THX_API Result<void, Error> open(std::string const& path);
-	THX_API Result<void, Error> close(std::string const& path);
+	THX_API Result<void, Error> discover(const std::string& directory, Recursive recursive = Recursive::No);
+	THX_API Result<void, Error> forget(const std::string& path);
+	THX_API Result<void, Error> open(const std::string& path);
+	THX_API Result<void, Error> close(const std::string& path);
 	THX_API std::size_t closeAllOpened();
-	THX_API Result<void, Error> load(std::string const& path);
-	THX_API Result<void, Error> unload(std::string const& path);
+	THX_API Result<void, Error> load(const std::string& path);
+	THX_API Result<void, Error> unload(const std::string& path);
 
 	// Unload then load again. Equivalent to:
 	//
@@ -129,7 +129,7 @@ namespace thx::plugin
 	// pointing at services in that DSO will segfault when they're released
 	// (the service's destructor lives in unmapped code). The framework
 	// cannot detect this — it's a discipline contract documented here.
-	THX_API Result<void, Error> reload(std::string const& path);
+	THX_API Result<void, Error> reload(const std::string& path);
 
 	// Inspect a plugin DSO without requiring a sidecar manifest. Opens the
 	// DSO, ABI-checks it, instantiates the IPlugin, reads its name /
@@ -147,10 +147,10 @@ namespace thx::plugin
 	//   SymbolNotFound   — missing one of the thx_* C exports.
 	//   VersionMismatch  — incompatible thx_abi_version.
 	//   FactoryFailed    — thx_create_plugin returned null.
-	THX_API Result<PluginManifest, Error> inspect(std::string const& dsoPath);
+	THX_API Result<PluginManifest, Error> inspect(const std::string& dsoPath);
 
 	// --- Aggregate ---------------------------------------------------------
-	THX_API LoadSummary discoverAndLoad(std::string const& directory, Recursive recursive = Recursive::No);
+	THX_API LoadSummary discoverAndLoad(const std::string& directory, Recursive recursive = Recursive::No);
 
 	// Load `path` plus every plugin needed to satisfy its (transitive)
 	// manifest requirements, in dependency order. Providers are resolved from
@@ -165,7 +165,7 @@ namespace thx::plugin
 	//   DependencyCycle      — the requires/provides graph contains a cycle.
 	// A plugin whose dependency could not be resolved or loaded is itself
 	// reported in `failed` and is not loaded.
-	THX_API LoadSummary loadWithDependencies(std::string const& path);
+	THX_API LoadSummary loadWithDependencies(const std::string& path);
 
 	// Load a set of plugins (e.g. plugins(State::Discovered) filtered by
 	// pluginsProviding) plus their transitive dependencies, in dependency
@@ -181,18 +181,18 @@ namespace thx::plugin
 	// --- Queries -----------------------------------------------------------
 	THX_API std::vector<PluginInfo> plugins();
 	THX_API std::vector<PluginInfo> plugins(State state);
-	THX_API std::optional<PluginInfo> pluginInfo(std::string const& path);
-	THX_API bool is(State state, std::string const& path);
-	THX_API bool isDiscovered(std::string const& path);
-	THX_API bool isOpened(std::string const& path);
-	THX_API bool isLoaded(std::string const& path);
+	THX_API std::optional<PluginInfo> pluginInfo(const std::string& path);
+	THX_API bool is(State state, const std::string& path);
+	THX_API bool isDiscovered(const std::string& path);
+	THX_API bool isOpened(const std::string& path);
+	THX_API bool isLoaded(const std::string& path);
 
 	// Returns plugins (any state) whose manifest `provides` list contains
 	// the given service id. Useful for picking out e.g. all camera drivers
 	// without dlopen-ing anything: the manifest is read at discover() time.
 	// Match is by ServiceID name (the string form), since manifest-derived
 	// service ids are stored as strings.
-	THX_API std::vector<PluginInfo> pluginsProviding(std::string const& serviceId);
+	THX_API std::vector<PluginInfo> pluginsProviding(const std::string& serviceId);
 
 	// Type-deduced convenience over pluginsProviding(serviceId): looks the
 	// service up by `T`'s stable ID. `T` must derive from
@@ -207,7 +207,7 @@ namespace thx::plugin
 	// nullopt if none is known. Manifest data is read at discover() time, so
 	// no DSO is opened. Plugin names are not guaranteed unique; if several
 	// match, the lexicographically-first canonical path wins.
-	THX_API std::optional<PluginInfo> pluginByName(std::string const& name);
+	THX_API std::optional<PluginInfo> pluginByName(const std::string& name);
 
 	// --- Garbage queue -----------------------------------------------------
 	// Drains / queries the framework-owned deferred-dlclose queue.

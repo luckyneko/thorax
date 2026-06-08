@@ -39,22 +39,22 @@ namespace
 	// suffix and append .thx.json. The platform extension is duplicated here
 	// rather than imported from the framework's private library.h header —
 	// the tool is a normal API consumer and shouldn't reach into src/.
-	std::string manifestPathForDso(std::string const& dsoPath)
+	std::string manifestPathForDso(const std::string& dsoPath)
 	{
 #if defined(_WIN32)
-		constexpr char const* kExt = ".dll";
+		constexpr const char* kExt = ".dll";
 #elif defined(__APPLE__)
-		constexpr char const* kExt = ".dylib";
+		constexpr const char* kExt = ".dylib";
 #else
-		constexpr char const* kExt = ".so";
+		constexpr const char* kExt = ".so";
 #endif
-		std::string const suffix = kExt;
+		const std::string suffix = kExt;
 		if (dsoPath.size() > suffix.size() && dsoPath.compare(dsoPath.size() - suffix.size(), suffix.size(), suffix) == 0)
 			return dsoPath.substr(0, dsoPath.size() - suffix.size()) + ".thx.json";
 		return dsoPath + ".thx.json";
 	}
 
-	int emit(std::string const& dsoPath, std::string const& outPath)
+	int emit(const std::string& dsoPath, const std::string& outPath)
 	{
 		auto inspected = thx::plugin::inspect(dsoPath);
 		if (!inspected)

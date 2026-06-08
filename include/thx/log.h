@@ -65,7 +65,7 @@ namespace thx
 	// so must be internally thread-safe. A sink MUST NOT call back into the
 	// logging facade (logMessage() or setSink()) — the slot is held for the
 	// duration of the call and re-entry deadlocks.
-	using LogSink = void (*)(LogRecord const& record, void* userdata);
+	using LogSink = void (*)(const LogRecord& record, void* userdata);
 
 	// Install the process-wide log sink. Passing a null sink reverts to the
 	// built-in stderr writer. Installing a new sink replaces any previous one
@@ -86,7 +86,7 @@ namespace thx
 	// ILogService). Core's logging is flat in thx:: by design; the subsystem owns
 	// thx::log.
 	THX_API void logMessage(LogLevel level,
-							std::string const& message,
+							const std::string& message,
 							rtti::SourceLocation location = rtti::SourceLocation::current());
 
 } // namespace thx

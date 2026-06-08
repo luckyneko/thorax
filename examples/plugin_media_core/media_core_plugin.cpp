@@ -79,7 +79,7 @@ namespace
 			std::lock_guard lock(m_mutex);
 			m_decoders.erase(
 				std::remove_if(m_decoders.begin(), m_decoders.end(),
-							   [key](std::weak_ptr<examples::IAssetDecoder> const& wp)
+							   [key](const std::weak_ptr<examples::IAssetDecoder>& wp)
 							   {
 								   auto sp = wp.lock();
 								   return !sp || sp.get() == key;

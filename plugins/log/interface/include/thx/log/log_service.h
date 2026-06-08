@@ -50,7 +50,7 @@ namespace thx::log
 		// write() must not assume serialised calls and must not call back into the
 		// logging facade. (The in-tree spdlog service uses spdlog's `_mt` sinks,
 		// which are internally synchronised.)
-		virtual void write(LogRecord const& record) = 0;
+		virtual void write(const LogRecord& record) = 0;
 	};
 
 } // namespace thx::log

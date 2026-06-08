@@ -42,7 +42,7 @@ namespace thx::service
 		if (!factory.invoke)
 		{
 			thx::logMessage(thx::LogLevel::Error,
-				std::string("registerService: null factory.invoke for '") + id.name() + "'");
+							std::string("registerService: null factory.invoke for '") + id.name() + "'");
 			return false;
 		}
 
@@ -63,7 +63,7 @@ namespace thx::service
 		if (duplicate)
 		{
 			thx::logMessage(thx::LogLevel::Warn,
-				std::string("registerService: '") + id.name() + "' is already registered (single-owner registry)");
+							std::string("registerService: '") + id.name() + "' is already registered (single-owner registry)");
 			return false;
 		}
 
@@ -89,7 +89,7 @@ namespace thx::service
 			{
 				releaseReservation();
 				thx::logMessage(thx::LogLevel::Error,
-					std::string("registerService: factory returned null for '") + id.name() + "'");
+								std::string("registerService: factory returned null for '") + id.name() + "'");
 				return false;
 			}
 			// Wrap the raw pointer; ServiceHandle's ctor retains, bringing the
@@ -104,7 +104,7 @@ namespace thx::service
 			{
 				releaseReservation();
 				thx::logMessage(thx::LogLevel::Error,
-					std::string("registerService: declared version ") + toString(version) + " does not match service-reported " + toString(service->version()) + " for '" + id.name() + "'");
+								std::string("registerService: declared version ") + toString(version) + " does not match service-reported " + toString(service->version()) + " for '" + id.name() + "'");
 				return false;
 			}
 
@@ -112,7 +112,7 @@ namespace thx::service
 			{
 				releaseReservation();
 				thx::logMessage(thx::LogLevel::Error,
-					std::string("registerService: onConstruct failed for '") + id.name() + "'");
+								std::string("registerService: onConstruct failed for '") + id.name() + "'");
 				return false;
 			}
 		}
@@ -155,7 +155,7 @@ namespace thx::service
 		if (missing)
 		{
 			thx::logMessage(thx::LogLevel::Warn,
-				std::string("unregisterService: '") + id.name() + "' is not registered");
+							std::string("unregisterService: '") + id.name() + "' is not registered");
 			return false;
 		}
 
@@ -194,7 +194,7 @@ namespace thx::service
 		std::shared_lock lock(m_mutex);
 		std::vector<ServiceInfo> result;
 		result.reserve(m_services.size());
-		for (auto const& [id, svc] : m_services)
+		for (const auto& [id, svc] : m_services)
 			result.push_back({id, svc->version()});
 		return result;
 	}

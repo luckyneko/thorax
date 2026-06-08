@@ -37,8 +37,8 @@ namespace thx::plugin
 		PluginGarbage() = default;
 		~PluginGarbage() = default;
 
-		PluginGarbage(PluginGarbage const&) = delete;
-		PluginGarbage& operator=(PluginGarbage const&) = delete;
+		PluginGarbage(const PluginGarbage&) = delete;
+		PluginGarbage& operator=(const PluginGarbage&) = delete;
 
 		// Queues a Library for deferred close. An empty Library is a safe
 		// no-op. The Library is moved into the queue; on collect(), its

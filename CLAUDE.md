@@ -56,7 +56,14 @@ build/test/test-thorax "[plugin_manager]"          # by tag
 build/test/test-thorax --list-tests
 ```
 
-CMake options: `THORAX_BUILD_TESTING`, `THORAX_BUILD_EXAMPLES`, `THORAX_BUILD_PLUGINS`, and `THORAX_INSTALL` default ON when configured as the top-level project, OFF when bundled as a subproject. `THORAX_SANITIZE` defaults OFF and accepts `OFF` / `ON` (= `address,undefined`) / any explicit `-fsanitize` list such as `thread` (Clang/GCC only).
+CMake options: `THORAX_BUILD_TESTING`, `THORAX_BUILD_EXAMPLES`, `THORAX_BUILD_PLUGINS`, `THORAX_INSTALL`, and `THORAX_FORMAT` default ON when configured as the top-level project, OFF when bundled as a subproject. `THORAX_SANITIZE` defaults OFF and accepts `OFF` / `ON` (= `address,undefined`) / any explicit `-fsanitize` list such as `thread` (Clang/GCC only).
+
+**Formatting.** `THORAX_FORMAT` (via [cmake/addclangformat.cmake](cmake/addclangformat.cmake)) adds two targets backed by a **pinned** clang-format — `cmake --build build --target format` rewrites the tree in place, `--target format-check` is the CI gate (dry-run, non-zero on any diff). The pinned binary (currently v20, static prebuilt for linux-amd64 / macosx-amd64 / macos-arm-arm64 / windows-amd64) is fetched on demand into `thirdparty/clang-format/` (git-ignored) the first time either target runs — never at configure time. This mirrors the `addcatch2`/`addspdlog`/`addhttplib` vendoring pattern but for a tool: pinning one version is what keeps `format-check` reproducible instead of a "which clang-format do you have?" lottery. Point it at your own binary with `-DTHX_CLANG_FORMAT=/path/to/clang-format`; bump the version with `-DTHX_CLANG_FORMAT_VERSION=NN` (and the release tag inside the module). Use the pinned target, not a PATH clang-format, or you may reintroduce diffs.
+
+```bash
+cmake --build build --target format         # rewrite sources with the pinned clang-format
+cmake --build build --target format-check   # verify formatting (CI gate)
+```
 
 The test binary is `build/test/test-thorax`. CTest also runs an `examples.host` integration test and, when `THORAX_INSTALL` is on, an `install.*` smoke test that installs the library into `build/test_install_prefix/` and builds [test/consumer/](test/consumer/) against it via `find_package(Thorax)`.
 
@@ -332,13 +339,15 @@ examples/                a "media asset loader" suite: IAssetService + media-cor
 test/                    Catch2 unit + integration tests. Each mock plugin lives in its own subdirectory; mock_plugin/CMakeLists.txt also defines a `mock_plugin_headers` INTERFACE library that sibling mocks and the test binary link to share mock_plugin.h
 test/consumer/           standalone CMake project used by the install smoke test
 tools/<name>/            framework tools (currently just thx_emit_manifest)
-cmake/                   ThoraxConfig.cmake.in, addcatch2, addspdlog, addhttplib, thx_warnings, thx_install, thx_plugin_manifest, thx_plugin_auto_manifest
+cmake/                   ThoraxConfig.cmake.in, addcatch2, addspdlog, addhttplib, addclangformat (+ clang_format_fetch), thx_warnings, thx_install, thx_plugin_manifest, thx_plugin_auto_manifest
 thirdparty/              vendored Catch2 + spdlog + cpp-httplib tarballs (downloaded on demand by addcatch2 / addspdlog / addhttplib.cmake)
 ```
 
 `abi.cpp` is the anchor file: it defines the out-of-line virtual destructors for `IService` and `IPlugin` so libthorax owns their vtable + typeinfo. Without these key functions the typeinfos would be emitted as weak COMDAT in every consumer and macOS's two-level namespace would leave the addresses distinct across DSOs, breaking `dynamic_cast` from inside the library.
 
 Style is enforced by [.clang-format](.clang-format): Allman braces, **tabs for indent (width 4)**, no column limit, namespace contents indented, pointer-left (`int* p`), access modifiers offset −4. Match the existing files when editing.
+
+**Const placement — west const (`const` first).** Write `const T&`, `const T*`, `const std::string&` — not the east-const `T const&` / `char const*`. This applies to references, pointers, and by-value `const` declarations alike (`const auto& x`, `const ServiceID m_id`). The `const`-pointer form `T* const` is unaffected (the `const` there qualifies the pointer, not the pointee, and stays to the right). `.clang-format` does not set `QualifierAlignment`, so this is a convention to apply by hand, not an autoformat — keep new code consistent with it.
 
 **Naming policy.** Settled during the Phase 2 / style refactor; new code must conform:
 

@@ -36,13 +36,13 @@ namespace thx::service
 			return ServiceID(thx::rtti::TypeName<T>::value.data());
 		}
 
-		constexpr bool operator==(ServiceID const& other) const noexcept
+		constexpr bool operator==(const ServiceID& other) const noexcept
 		{
 			return m_hash == other.m_hash &&
 				   std::string_view(m_name) == std::string_view(other.m_name);
 		}
 
-		constexpr bool operator!=(ServiceID const& other) const noexcept
+		constexpr bool operator!=(const ServiceID& other) const noexcept
 		{
 			return !(*this == other);
 		}
@@ -74,7 +74,7 @@ namespace thx::service
 template <>
 struct std::hash<thx::service::ServiceID>
 {
-	std::size_t operator()(thx::service::ServiceID const& id) const noexcept
+	std::size_t operator()(const thx::service::ServiceID& id) const noexcept
 	{
 		return static_cast<std::size_t>(id.hash());
 	}

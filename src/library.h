@@ -20,11 +20,11 @@ namespace thx
 	// Platform shared-library file extension. Used by PluginManager::discover()
 	// and any consumer that scans a directory for native modules.
 #if defined(_WIN32)
-	inline constexpr char const* LIBRARY_EXTENSION = ".dll";
+	inline constexpr const char* LIBRARY_EXTENSION = ".dll";
 #elif defined(__APPLE__)
-	inline constexpr char const* LIBRARY_EXTENSION = ".dylib";
+	inline constexpr const char* LIBRARY_EXTENSION = ".dylib";
 #else
-	inline constexpr char const* LIBRARY_EXTENSION = ".so";
+	inline constexpr const char* LIBRARY_EXTENSION = ".so";
 #endif
 
 	// RAII wrapper around a platform dynamic shared object (DSO) handle.
@@ -71,13 +71,13 @@ namespace thx
 		Library(Library&&) noexcept;
 		Library& operator=(Library&&) noexcept;
 
-		Library(Library const&) = delete;
-		Library& operator=(Library const&) = delete;
+		Library(const Library&) = delete;
+		Library& operator=(const Library&) = delete;
 
 		// Opens the DSO at path. If the Library is already holding an open
 		// handle, closes it first. After the call, valid() reflects success
 		// and error() carries any platform diagnostic.
-		Library& open(std::filesystem::path const& path,
+		Library& open(const std::filesystem::path& path,
 					  LoadFlags flags = LoadFlags::Lazy);
 
 		// Closes the DSO if open. Idempotent and noexcept; calls dlclose /
@@ -89,7 +89,7 @@ namespace thx
 		// clears valid(), and records error(). Subsequent bind() calls on
 		// an invalid Library are no-ops and leave their out-params untouched.
 		template <typename FnPtr>
-		Library& bind(char const* name, FnPtr& out)
+		Library& bind(const char* name, FnPtr& out)
 		{
 			static_assert(std::is_pointer_v<FnPtr>,
 						  "Library::bind expects a function-pointer out-parameter");
@@ -111,7 +111,7 @@ namespace thx
 		// independent of any prior bind() outcome (as long as the library is
 		// open; if it isn't, returns NotLoaded).
 		template <typename FnPtr>
-		Result<void, Error> tryBind(char const* name, FnPtr& out)
+		Result<void, Error> tryBind(const char* name, FnPtr& out)
 		{
 			static_assert(std::is_pointer_v<FnPtr>,
 						  "Library::tryBind expects a function-pointer out-parameter");
@@ -131,11 +131,11 @@ namespace thx
 		explicit operator bool() const noexcept { return m_valid; }
 
 		// Canonical path of the loaded DSO; empty until open() is called.
-		std::string const& path() const noexcept { return m_path; }
+		const std::string& path() const noexcept { return m_path; }
 
 		// Most recent platform error message. Empty if no error has occurred
 		// since the last successful operation.
-		std::string const& error() const noexcept { return m_error; }
+		const std::string& error() const noexcept { return m_error; }
 
 		// Releases ownership of the native handle without closing it. After
 		// this call, the Library is empty and invalid; the caller is
@@ -158,7 +158,7 @@ namespace thx
 		// inside bind() returns null, the bind clears its validity bit but
 		// expects sym() to have already recorded the reason in m_error.
 		// Direct callers of sym() will see the same behaviour.
-		void* sym(char const* name) noexcept;
+		void* sym(const char* name) noexcept;
 
 	private:
 		void* m_handle = nullptr;

@@ -56,7 +56,7 @@ namespace thx::plugin
 		m_destroyFn = nullptr;
 	}
 
-	Result<PluginHandle, Error> PluginHandle::open(std::string const& path,
+	Result<PluginHandle, Error> PluginHandle::open(const std::string& path,
 												   Library::LoadFlags flags)
 	{
 		Library lib;

@@ -40,8 +40,8 @@ namespace thx::service
 		ServiceManager() = default;
 		~ServiceManager() = default;
 
-		ServiceManager(ServiceManager const&) = delete;
-		ServiceManager& operator=(ServiceManager const&) = delete;
+		ServiceManager(const ServiceManager&) = delete;
+		ServiceManager& operator=(const ServiceManager&) = delete;
 
 		// Registers a service by ID, version, and a factory.
 		//

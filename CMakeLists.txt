@@ -44,8 +44,14 @@ option(THORAX_BUILD_TESTING "Build UnitTesting project" ${NOT_SUBPROJECT})
 option(THORAX_BUILD_EXAMPLES "Build example applications" ${NOT_SUBPROJECT})
 option(THORAX_BUILD_PLUGINS "Build built-in plugins" ${NOT_SUBPROJECT})
 option(THORAX_INSTALL "Generate install targets and CMake package files" ${NOT_SUBPROJECT})
+option(THORAX_FORMAT "Provide the format / format-check targets (pinned clang-format)" ${NOT_SUBPROJECT})
 set(THORAX_SANITIZE OFF CACHE STRING
     "Sanitizers (Clang/GCC only): OFF, ON (= address,undefined), or any -fsanitize list e.g. 'thread'")
+
+# format / format-check targets, backed by a pinned clang-format binary.
+if(THORAX_FORMAT)
+    include(addclangformat)
+endif()
 
 include(GNUInstallDirs)
 

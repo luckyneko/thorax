@@ -63,14 +63,16 @@ TEST_CASE("Result<int> - valueOr returns the fallback when err", "[result]")
 
 TEST_CASE("Result<int> - map transforms the value when ok", "[result]")
 {
-	auto r = thx::Result<int>::ok(2).map([](int n) { return n * 10; });
+	auto r = thx::Result<int>::ok(2).map([](int n)
+										 { return n * 10; });
 	REQUIRE(r.isOk());
 	REQUIRE(r.value() == 20);
 }
 
 TEST_CASE("Result<int> - map can change the contained type", "[result]")
 {
-	auto r = thx::Result<int>::ok(7).map([](int n) { return std::to_string(n); });
+	auto r = thx::Result<int>::ok(7).map([](int n)
+										 { return std::to_string(n); });
 	REQUIRE(r.isOk());
 	REQUIRE(r.value() == "7");
 }
@@ -78,7 +80,8 @@ TEST_CASE("Result<int> - map can change the contained type", "[result]")
 TEST_CASE("Result<int> - map propagates the error unchanged", "[result]")
 {
 	auto r = thx::Result<int>::err({thx::ErrorCode::FileNotFound, "missing"})
-				 .map([](int n) { return n * 10; });
+				 .map([](int n)
+					  { return n * 10; });
 	REQUIRE(r.isErr());
 	REQUIRE(r.error().code == thx::ErrorCode::FileNotFound);
 	REQUIRE(r.error().message == "missing");
@@ -87,7 +90,8 @@ TEST_CASE("Result<int> - map propagates the error unchanged", "[result]")
 TEST_CASE("Result - map rvalue overload moves a move-only value", "[result]")
 {
 	auto r = thx::Result<std::unique_ptr<int>>::ok(std::make_unique<int>(5))
-				 .map([](std::unique_ptr<int> p) { return *p + 1; });
+				 .map([](std::unique_ptr<int> p)
+					  { return *p + 1; });
 	REQUIRE(r.isOk());
 	REQUIRE(r.value() == 6);
 }

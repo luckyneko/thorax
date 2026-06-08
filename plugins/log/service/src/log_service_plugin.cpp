@@ -47,7 +47,7 @@ namespace
 	// code holding the ServiceManager write lock must NOT log until it releases
 	// it (ServiceManager already defers its own diagnostics for exactly this
 	// reason — see service_manager.cpp).
-	void forwardToService(thx::LogRecord const& r, void*)
+	void forwardToService(const thx::LogRecord& r, void*)
 	{
 		if (auto svc = thx::service::getService<thx::log::ILogService>())
 		{

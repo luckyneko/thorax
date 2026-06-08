@@ -92,8 +92,8 @@ namespace thx::io
 			return *this;
 		}
 
-		StreamHandle(StreamHandle const&) = delete;
-		StreamHandle& operator=(StreamHandle const&) = delete;
+		StreamHandle(const StreamHandle&) = delete;
+		StreamHandle& operator=(const StreamHandle&) = delete;
 
 		~StreamHandle() { delete m_ptr; }
 

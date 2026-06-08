@@ -30,12 +30,12 @@ namespace
 	{
 		using Catch::EventListenerBase::EventListenerBase;
 
-		void testCaseStarting(Catch::TestCaseInfo const&) override
+		void testCaseStarting(const Catch::TestCaseInfo&) override
 		{
 			thx::initialise();
 		}
 
-		void testCaseEnded(Catch::TestCaseStats const&) override
+		void testCaseEnded(const Catch::TestCaseStats&) override
 		{
 			thx::shutdown();
 		}

@@ -60,12 +60,12 @@ namespace thx
 			return ((major & 0xFFu) << 24) | ((minor & 0xFFu) << 16) | (patch & 0xFFFFu);
 		}
 
-		constexpr bool operator==(Version const& o) const noexcept
+		constexpr bool operator==(const Version& o) const noexcept
 		{
 			return major == o.major && minor == o.minor && patch == o.patch;
 		}
-		constexpr bool operator!=(Version const& o) const noexcept { return !(*this == o); }
-		constexpr bool operator<(Version const& o) const noexcept
+		constexpr bool operator!=(const Version& o) const noexcept { return !(*this == o); }
+		constexpr bool operator<(const Version& o) const noexcept
 		{
 			if (major != o.major)
 				return major < o.major;
@@ -73,13 +73,13 @@ namespace thx
 				return minor < o.minor;
 			return patch < o.patch;
 		}
-		constexpr bool operator<=(Version const& o) const noexcept { return !(o < *this); }
-		constexpr bool operator>(Version const& o) const noexcept { return o < *this; }
-		constexpr bool operator>=(Version const& o) const noexcept { return !(*this < o); }
+		constexpr bool operator<=(const Version& o) const noexcept { return !(o < *this); }
+		constexpr bool operator>(const Version& o) const noexcept { return o < *this; }
+		constexpr bool operator>=(const Version& o) const noexcept { return !(*this < o); }
 
 		// Returns true if `provided` is backwards-compatible with `required`:
 		// same major version and provided >= required.
-		static constexpr bool compatible(Version const& required, Version const& provided) noexcept
+		static constexpr bool compatible(const Version& required, const Version& provided) noexcept
 		{
 			return provided.major == required.major && provided >= required;
 		}

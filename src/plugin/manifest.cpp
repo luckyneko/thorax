@@ -29,7 +29,7 @@ namespace thx::plugin
 		class Reader
 		{
 		public:
-			Reader(char const* begin, char const* end) noexcept
+			Reader(const char* begin, const char* end) noexcept
 				: m_begin(begin)
 				, m_pos(begin)
 				, m_end(end)
@@ -68,14 +68,14 @@ namespace thx::plugin
 			}
 
 		private:
-			char const* m_begin;
-			char const* m_pos;
-			char const* m_end;
+			const char* m_begin;
+			const char* m_pos;
+			const char* m_end;
 		};
 
 		// Build a malformed-manifest error with a position hint.
-		Result<PluginManifest, Error> fail(Reader const& r, std::string const& path,
-										   std::string const& msg)
+		Result<PluginManifest, Error> fail(const Reader& r, const std::string& path,
+										   const std::string& msg)
 		{
 			std::ostringstream oss;
 			oss << "Malformed manifest '" << path << "' (line " << r.line() << "): " << msg;
@@ -160,7 +160,7 @@ namespace thx::plugin
 
 		// Parse a "X.Y.Z" version triple. The string is the JSON value; we use a
 		// separate helper because Version doesn't have a string parser of its own.
-		bool parseVersionTriple(std::string const& s, Version& out)
+		bool parseVersionTriple(const std::string& s, Version& out)
 		{
 			std::uint32_t parts[3] = {0, 0, 0};
 			std::size_t idx = 0;
@@ -351,7 +351,7 @@ namespace thx::plugin
 		}
 
 		// Parse the whole manifest object.
-		Result<PluginManifest, Error> parseDocument(Reader& r, std::string const& path)
+		Result<PluginManifest, Error> parseDocument(Reader& r, const std::string& path)
 		{
 			r.skipWs();
 			if (r.peek() != '{')
@@ -524,7 +524,7 @@ namespace thx::plugin
 		}
 	} // namespace
 
-	Result<PluginManifest, Error> parseManifest(std::string const& jsonPath)
+	Result<PluginManifest, Error> parseManifest(const std::string& jsonPath)
 	{
 		std::ifstream in(jsonPath);
 		if (!in)
@@ -579,7 +579,7 @@ namespace thx::plugin
 		}
 	} // namespace
 
-	std::string serialiseManifest(PluginManifest const& m)
+	std::string serialiseManifest(const PluginManifest& m)
 	{
 		std::ostringstream out;
 		out << "{\n";

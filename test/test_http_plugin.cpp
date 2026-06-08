@@ -36,7 +36,7 @@ TEST_CASE("HttpPlugin - reads an http:// resource through thx::io", "[http_plugi
 	const std::string payload = "thorax http payload — 0123456789 abcdefghij";
 
 	httplib::Server server;
-	server.Get("/data", [&](httplib::Request const&, httplib::Response& res)
+	server.Get("/data", [&](const httplib::Request&, httplib::Response& res)
 			   { res.set_content(payload, "application/octet-stream"); });
 
 	int port = server.bind_to_any_port("127.0.0.1");

@@ -58,7 +58,7 @@ int main(int argc, char* argv[])
 	// DSO is mapped to enumerate them — this reads the discovered manifests.
 	auto loggers = thx::plugin::pluginsProviding<thx::log::ILogService>();
 	std::printf("available logger backends (%zu):\n", loggers.size());
-	for (auto const& l : loggers)
+	for (const auto& l : loggers)
 		std::printf("  %s @ %u.%u.%u\n", l.name.c_str(), l.version.major, l.version.minor, l.version.patch);
 	if (loggers.empty())
 	{
@@ -80,7 +80,7 @@ int main(int argc, char* argv[])
 	auto summary = thx::plugin::loadWithDependencies(bridge->path);
 	if (!summary.failed.empty())
 	{
-		for (auto const& [p, err] : summary.failed)
+		for (const auto& [p, err] : summary.failed)
 			std::fprintf(stderr, "load failed: %s: %s\n", p.c_str(), err.message.c_str());
 		thx::shutdown();
 		return 1;

@@ -73,7 +73,7 @@ namespace
 			m_logger->set_pattern("[thorax] [%l] %v");
 		}
 
-		void write(thx::log::LogRecord const& r) override
+		void write(const thx::log::LogRecord& r) override
 		{
 			// r.message is a non-owning view valid only for this call; fmt copies
 			// what it needs synchronously.

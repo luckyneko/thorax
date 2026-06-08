@@ -132,9 +132,9 @@ TEST_CASE("Version - pack/unpack roundtrip preserves major.minor.patch",
 {
 	// pack() is runtime-only (the overflow check goes through the logging
 	// facade); the inverse constructor stays constexpr.
-	auto const v = thx::Version{2, 5, 17};
-	auto const packed = v.pack();
-	auto const roundt = thx::Version(packed);
+	const auto v = thx::Version{2, 5, 17};
+	const auto packed = v.pack();
+	const auto roundt = thx::Version(packed);
 	REQUIRE(roundt.major == 2);
 	REQUIRE(roundt.minor == 5);
 	REQUIRE(roundt.patch == 17);
@@ -144,7 +144,7 @@ TEST_CASE("Version - pack() uses fixed bit layout",
 		  "[version][pack]")
 {
 	// Documented encoding: (major<<24) | (minor<<16) | patch
-	auto const packed = thx::Version{0x12, 0x34, 0x5678}.pack();
+	const auto packed = thx::Version{0x12, 0x34, 0x5678}.pack();
 	REQUIRE(packed == 0x12345678u);
 }
 

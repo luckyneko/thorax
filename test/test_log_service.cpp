@@ -39,7 +39,7 @@ namespace
 	struct CaptureLog : thx::log::ILogService
 	{
 		std::vector<std::string> messages;
-		void write(thx::log::LogRecord const& r) override
+		void write(const thx::log::LogRecord& r) override
 		{
 			messages.emplace_back(r.message.data(), r.message.size());
 		}

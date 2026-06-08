@@ -74,7 +74,7 @@ int main(int argc, char* argv[])
 	auto summary = thx::plugin::loadAll({discovered.data(), discovered.size()});
 	if (!summary.failed.empty())
 	{
-		for (auto const& [path, err] : summary.failed)
+		for (const auto& [path, err] : summary.failed)
 			std::fprintf(stderr, "load failed: %s: %s\n", path.c_str(), err.message.c_str());
 		thx::shutdown();
 		return 1;

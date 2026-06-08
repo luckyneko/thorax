@@ -25,7 +25,7 @@ namespace thx
 
 		// Fallback when no sink is installed: structured line to stderr.
 		// Format: [thorax][LEVEL] file:line function: message
-		void writeStderr(LogRecord const& r)
+		void writeStderr(const LogRecord& r)
 		{
 			static const char* const kLevel[] = {"DEBUG", "INFO", "WARN", "ERROR"};
 			fprintf(stderr, "[thorax][%s] %s:%d %s: %.*s\n",
@@ -48,7 +48,7 @@ namespace thx
 		g_userdata = userdata;
 	}
 
-	void logMessage(LogLevel level, std::string const& message, rtti::SourceLocation location)
+	void logMessage(LogLevel level, const std::string& message, rtti::SourceLocation location)
 	{
 		LogRecord record{level, location, StringView{message.c_str(), message.size()}};
 

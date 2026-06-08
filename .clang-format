@@ -1,5 +1,8 @@
 # Custom Format based on Visual-Studio style.
-# The tree is formatted with clang-format v21 (Apple clang-format 21.0.0).
+# The tree is formatted with a pinned clang-format v20, vendored on demand by
+# cmake/addclangformat.cmake. Run `cmake --build build --target format` (rewrite)
+# or `format-check` (CI gate) — both use that pinned binary, not whatever
+# clang-format is on your PATH, so formatting stays reproducible.
 # Option reference: https://clang.llvm.org/docs/ClangFormatStyleOptions.html
 
 # Defaults
@@ -21,3 +24,5 @@ IndentPPDirectives: AfterHash
 NamespaceIndentation: All
 DerivePointerAlignment: false
 PointerAlignment: Left
+# West const: `const T&` / `const char*`, never `T const&` (clang-format >= 14).
+QualifierAlignment: Left

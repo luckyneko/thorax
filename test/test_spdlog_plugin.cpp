@@ -79,7 +79,7 @@ TEST_CASE("spdlog backend - discoverable as an ILogService provider by name", "[
 	auto providers = thx::plugin::pluginsProviding<thx::log::ILogService>();
 	REQUIRE_FALSE(providers.empty());
 	bool found = false;
-	for (auto const& p : providers)
+	for (const auto& p : providers)
 		if (p.name == kPluginName)
 			found = true;
 	REQUIRE(found);
@@ -99,7 +99,7 @@ TEST_CASE("spdlog backend - single-owner: a host ILogService blocks the plugin's
 	struct HostService : thx::log::ILogService
 	{
 		int count = 0;
-		void write(thx::log::LogRecord const&) override { ++count; }
+		void write(const thx::log::LogRecord&) override { ++count; }
 	};
 	HostService* host = nullptr;
 	REQUIRE(thx::service::registerService<HostService>(

@@ -66,7 +66,7 @@ namespace thx::service
 				m_ptr->thxRetain();
 		}
 
-		ServiceHandle(ServiceHandle const& other) noexcept
+		ServiceHandle(const ServiceHandle& other) noexcept
 			: m_ptr(other.m_ptr)
 		{
 			if (m_ptr)
@@ -85,7 +85,7 @@ namespace thx::service
 				m_ptr->thxRelease();
 		}
 
-		ServiceHandle& operator=(ServiceHandle const& other) noexcept
+		ServiceHandle& operator=(const ServiceHandle& other) noexcept
 		{
 			if (other.m_ptr)
 				other.m_ptr->thxRetain();
@@ -143,12 +143,12 @@ namespace thx::service
 			return ServiceHandle(p, AdoptTag{});
 		}
 
-		friend bool operator==(ServiceHandle const& a, ServiceHandle const& b) noexcept { return a.m_ptr == b.m_ptr; }
-		friend bool operator!=(ServiceHandle const& a, ServiceHandle const& b) noexcept { return a.m_ptr != b.m_ptr; }
-		friend bool operator==(ServiceHandle const& a, std::nullptr_t) noexcept { return a.m_ptr == nullptr; }
-		friend bool operator!=(ServiceHandle const& a, std::nullptr_t) noexcept { return a.m_ptr != nullptr; }
-		friend bool operator==(std::nullptr_t, ServiceHandle const& a) noexcept { return a.m_ptr == nullptr; }
-		friend bool operator!=(std::nullptr_t, ServiceHandle const& a) noexcept { return a.m_ptr != nullptr; }
+		friend bool operator==(const ServiceHandle& a, const ServiceHandle& b) noexcept { return a.m_ptr == b.m_ptr; }
+		friend bool operator!=(const ServiceHandle& a, const ServiceHandle& b) noexcept { return a.m_ptr != b.m_ptr; }
+		friend bool operator==(const ServiceHandle& a, std::nullptr_t) noexcept { return a.m_ptr == nullptr; }
+		friend bool operator!=(const ServiceHandle& a, std::nullptr_t) noexcept { return a.m_ptr != nullptr; }
+		friend bool operator==(std::nullptr_t, const ServiceHandle& a) noexcept { return a.m_ptr == nullptr; }
+		friend bool operator!=(std::nullptr_t, const ServiceHandle& a) noexcept { return a.m_ptr != nullptr; }
 	};
 
 	// ABI lock-down. ServiceHandle and ServiceFactory cross the DSO boundary;

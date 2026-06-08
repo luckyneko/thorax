@@ -17,22 +17,22 @@
 namespace thx::plugin
 {
 
-	Result<void, Error> discover(std::string const& directory, Recursive recursive)
+	Result<void, Error> discover(const std::string& directory, Recursive recursive)
 	{
 		return thx::registry()->pluginManager().discover(directory, recursive);
 	}
 
-	Result<void, Error> forget(std::string const& path)
+	Result<void, Error> forget(const std::string& path)
 	{
 		return thx::registry()->pluginManager().forget(path);
 	}
 
-	Result<void, Error> open(std::string const& path)
+	Result<void, Error> open(const std::string& path)
 	{
 		return thx::registry()->pluginManager().open(path);
 	}
 
-	Result<void, Error> close(std::string const& path)
+	Result<void, Error> close(const std::string& path)
 	{
 		return thx::registry()->pluginManager().close(path);
 	}
@@ -42,27 +42,27 @@ namespace thx::plugin
 		return thx::registry()->pluginManager().closeAllOpened();
 	}
 
-	Result<void, Error> load(std::string const& path)
+	Result<void, Error> load(const std::string& path)
 	{
 		return thx::registry()->pluginManager().load(path);
 	}
 
-	Result<void, Error> unload(std::string const& path)
+	Result<void, Error> unload(const std::string& path)
 	{
 		return thx::registry()->pluginManager().unload(path);
 	}
 
-	Result<void, Error> reload(std::string const& path)
+	Result<void, Error> reload(const std::string& path)
 	{
 		return thx::registry()->pluginManager().reload(path);
 	}
 
-	LoadSummary discoverAndLoad(std::string const& directory, Recursive recursive)
+	LoadSummary discoverAndLoad(const std::string& directory, Recursive recursive)
 	{
 		return thx::registry()->pluginManager().discoverAndLoad(directory, recursive);
 	}
 
-	Result<PluginManifest, Error> inspect(std::string const& dsoPath)
+	Result<PluginManifest, Error> inspect(const std::string& dsoPath)
 	{
 		// Manifestless inspection: open the DSO, instantiate the IPlugin, read
 		// its metadata, tear the IPlugin down, queue the DSO for deferred close.
@@ -116,42 +116,42 @@ namespace thx::plugin
 		return thx::registry()->pluginManager().plugins(state);
 	}
 
-	std::optional<PluginInfo> pluginInfo(std::string const& path)
+	std::optional<PluginInfo> pluginInfo(const std::string& path)
 	{
 		return thx::registry()->pluginManager().pluginInfo(path);
 	}
 
-	bool is(State state, std::string const& path)
+	bool is(State state, const std::string& path)
 	{
 		return thx::registry()->pluginManager().is(state, path);
 	}
 
-	bool isDiscovered(std::string const& path)
+	bool isDiscovered(const std::string& path)
 	{
 		return thx::registry()->pluginManager().isDiscovered(path);
 	}
 
-	bool isOpened(std::string const& path)
+	bool isOpened(const std::string& path)
 	{
 		return thx::registry()->pluginManager().isOpened(path);
 	}
 
-	bool isLoaded(std::string const& path)
+	bool isLoaded(const std::string& path)
 	{
 		return thx::registry()->pluginManager().isLoaded(path);
 	}
 
-	std::vector<PluginInfo> pluginsProviding(std::string const& serviceId)
+	std::vector<PluginInfo> pluginsProviding(const std::string& serviceId)
 	{
 		return thx::registry()->pluginManager().pluginsProviding(serviceId);
 	}
 
-	std::optional<PluginInfo> pluginByName(std::string const& name)
+	std::optional<PluginInfo> pluginByName(const std::string& name)
 	{
 		return thx::registry()->pluginManager().pluginByName(name);
 	}
 
-	LoadSummary loadWithDependencies(std::string const& path)
+	LoadSummary loadWithDependencies(const std::string& path)
 	{
 		return thx::registry()->pluginManager().loadWithDependencies(path);
 	}

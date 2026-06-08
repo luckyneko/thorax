@@ -50,7 +50,7 @@ namespace thx
 		// buffer, valid only while that string lives (same caveat as the
 		// const char* ctor). Mirrors std::string_view's implicit conversion and
 		// spares callers a .c_str() at every StringView-taking API.
-		StringView(std::string const& str) noexcept // NOLINT(google-explicit-constructor)
+		StringView(const std::string& str) noexcept // NOLINT(google-explicit-constructor)
 			: m_data(str.c_str())
 			, m_size(str.size())
 		{
@@ -71,7 +71,7 @@ namespace thx
 			return {m_data, m_size};
 		}
 
-		constexpr bool operator==(StringView const& other) const noexcept
+		constexpr bool operator==(const StringView& other) const noexcept
 		{
 			if (m_size != other.m_size)
 				return false;
@@ -81,12 +81,12 @@ namespace thx
 			return true;
 		}
 
-		constexpr bool operator!=(StringView const& other) const noexcept
+		constexpr bool operator!=(const StringView& other) const noexcept
 		{
 			return !(*this == other);
 		}
 
-		constexpr bool operator<(StringView const& other) const noexcept
+		constexpr bool operator<(const StringView& other) const noexcept
 		{
 			std::size_t n = m_size < other.m_size ? m_size : other.m_size;
 			for (std::size_t i = 0; i < n; ++i)
@@ -99,15 +99,15 @@ namespace thx
 			return m_size < other.m_size;
 		}
 
-		constexpr bool operator<=(StringView const& other) const noexcept
+		constexpr bool operator<=(const StringView& other) const noexcept
 		{
 			return !(other < *this);
 		}
-		constexpr bool operator>(StringView const& other) const noexcept
+		constexpr bool operator>(const StringView& other) const noexcept
 		{
 			return other < *this;
 		}
-		constexpr bool operator>=(StringView const& other) const noexcept
+		constexpr bool operator>=(const StringView& other) const noexcept
 		{
 			return !(*this < other);
 		}

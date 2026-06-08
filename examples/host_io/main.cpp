@@ -31,7 +31,7 @@
 
 namespace
 {
-	thx::Span<const std::uint8_t> bytesOf(std::string const& s)
+	thx::Span<const std::uint8_t> bytesOf(const std::string& s)
 	{
 		return {reinterpret_cast<const std::uint8_t*>(s.data()), s.size()};
 	}
@@ -74,7 +74,7 @@ int main(int argc, char* argv[])
 	// The dispatcher is a discoverable provider — no DSO is mapped to list it.
 	auto providers = thx::plugin::pluginsProviding<thx::io::IIoService>();
 	std::printf("io providers (%zu):\n", providers.size());
-	for (auto const& p : providers)
+	for (const auto& p : providers)
 		std::printf("  %s @ %u.%u.%u\n", p.name.c_str(), p.version.major, p.version.minor, p.version.patch);
 	if (providers.empty())
 	{
@@ -99,7 +99,7 @@ int main(int argc, char* argv[])
 				summary.loaded.size());
 	if (!summary.failed.empty())
 	{
-		for (auto const& [p, err] : summary.failed)
+		for (const auto& [p, err] : summary.failed)
 			std::fprintf(stderr, "load failed: %s: %s\n", p.c_str(), err.message.c_str());
 		thx::shutdown();
 		return 1;

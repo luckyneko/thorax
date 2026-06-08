@@ -24,8 +24,8 @@ namespace
 
 	struct TestService : thx::service::IService
 	{
-		thx::service::ServiceID const m_id;
-		thx::Version const m_version;
+		const thx::service::ServiceID m_id;
+		const thx::Version m_version;
 		bool m_constructResult{true};
 		bool* m_constructed{nullptr};
 		bool* m_destroyed{nullptr};

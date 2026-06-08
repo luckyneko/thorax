@@ -69,9 +69,9 @@ namespace thx
 		explicit operator bool() const noexcept { return isOk(); }
 
 		T& value() { return std::get<0>(m_data); }
-		T const& value() const { return std::get<0>(m_data); }
+		const T& value() const { return std::get<0>(m_data); }
 		E& error() { return std::get<1>(m_data); }
-		E const& error() const { return std::get<1>(m_data); }
+		const E& error() const { return std::get<1>(m_data); }
 
 		// Returns value() if ok, otherwise the supplied fallback.
 		T valueOr(T fallback) const&
@@ -89,9 +89,9 @@ namespace thx
 		// it. The rvalue overload supports move-only T (e.g. unique_ptr) and
 		// avoids a copy when the Result is a temporary.
 		template <typename F>
-		auto map(F&& f) const& -> Result<std::decay_t<std::invoke_result_t<F, T const&>>, E>
+		auto map(F&& f) const& -> Result<std::decay_t<std::invoke_result_t<F, const T&>>, E>
 		{
-			using U = std::decay_t<std::invoke_result_t<F, T const&>>;
+			using U = std::decay_t<std::invoke_result_t<F, const T&>>;
 			if (isErr())
 				return Result<U, E>::err(error());
 			return Result<U, E>::ok(std::forward<F>(f)(value()));

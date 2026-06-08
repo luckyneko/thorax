@@ -35,7 +35,7 @@
 namespace thx::log
 {
 	// Forward `record` to the registered ILogService, else write it to stderr.
-	inline void write(LogRecord const& record)
+	inline void write(const LogRecord& record)
 	{
 		if (auto svc = thx::service::getService<ILogService>())
 		{

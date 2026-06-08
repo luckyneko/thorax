@@ -54,13 +54,13 @@ int main(int argc, char* argv[])
 	auto summary = thx::plugin::loadWithDependencies(decoder->path);
 	if (!summary.failed.empty())
 	{
-		for (auto const& [path, err] : summary.failed)
+		for (const auto& [path, err] : summary.failed)
 			std::fprintf(stderr, "  %s: %s\n", path.c_str(), err.message.c_str());
 		thx::shutdown();
 		return 1;
 	}
 	std::printf("Loaded %zu plugin(s) in dependency order:\n", summary.loaded.size());
-	for (auto const& p : summary.loaded)
+	for (const auto& p : summary.loaded)
 		std::printf("  %s\n", p.c_str());
 
 	int rc = 0;

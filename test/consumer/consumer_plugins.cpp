@@ -34,7 +34,7 @@ int main(int argc, char* argv[])
 	// shutdown() tears it back down before exit.
 	thx::initialise();
 
-	std::string const plugins_dir = argv[1];
+	const std::string plugins_dir = argv[1];
 	auto disc = thx::plugin::discover(plugins_dir);
 	if (!disc)
 	{
@@ -46,7 +46,7 @@ int main(int argc, char* argv[])
 
 	auto found = thx::plugin::plugins(thx::plugin::State::Discovered);
 	std::printf("discovered %zu plugin(s) in %s\n", found.size(), plugins_dir.c_str());
-	for (auto const& info : found)
+	for (const auto& info : found)
 		std::printf("  %s @ %u.%u.%u  (%s)\n",
 					info.name.c_str(),
 					info.version.major, info.version.minor, info.version.patch,
@@ -55,9 +55,9 @@ int main(int argc, char* argv[])
 	// We expect to find at least the two in-tree plugins (spdlog + http).
 	std::vector<std::string> names;
 	names.reserve(found.size());
-	for (auto const& info : found)
+	for (const auto& info : found)
 		names.push_back(info.name);
-	auto has = [&](char const* n)
+	auto has = [&](const char* n)
 	{
 		return std::find(names.begin(), names.end(), n) != names.end();
 	};

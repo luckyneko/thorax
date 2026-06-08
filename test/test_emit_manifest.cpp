@@ -28,7 +28,7 @@
 
 namespace
 {
-	int runEmit(std::string const& dso, std::string const& outPath)
+	int runEmit(const std::string& dso, const std::string& outPath)
 	{
 		// Quote each argument so paths containing spaces survive system().
 		std::ostringstream cmd;
@@ -48,7 +48,7 @@ namespace
 		return std::system(cmd.str().c_str());
 	}
 
-	std::string tempOut(std::string const& tag)
+	std::string tempOut(const std::string& tag)
 	{
 		auto p = std::filesystem::temp_directory_path() / ("thx_test_emit_" + tag + ".thx.json");
 		std::filesystem::remove(p);
@@ -65,7 +65,7 @@ TEST_CASE("thx_emit_manifest - extracts a single-service plugin manifest",
 
 	auto parsed = thx::plugin::parseManifest(outPath);
 	REQUIRE(parsed);
-	auto const& m = parsed.value();
+	const auto& m = parsed.value();
 
 	REQUIRE(m.schema == 1);
 	REQUIRE(m.name == "thx_mock.MockService");
@@ -86,7 +86,7 @@ TEST_CASE("thx_emit_manifest - extracts a multi-service plugin with requirements
 
 	auto parsed = thx::plugin::parseManifest(outPath);
 	REQUIRE(parsed);
-	auto const& m = parsed.value();
+	const auto& m = parsed.value();
 
 	REQUIRE(m.name == "thx.mock.MultiPlugin");
 	REQUIRE(m.version == thx::Version{1, 0, 0});
